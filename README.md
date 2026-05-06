@@ -99,6 +99,24 @@ git merge main
 | 忘了拉取最新更新就動筆寫程式 | 開工前一定要先執行 `git pull`。 |
 | 推送（Push）被拒絕 | 確認你當前是不是在自己的分支，而不是在 `main`。 |
 
+### 💡 8. 實用 Git 常用指令 (Useful Git Commands)
+這裡有一些日常開發非常實用的 Git 指令：
+
+```bash
+# 查看目前有哪些檔案被修改、哪些尚未暫存
+git status
+
+# 查看修改程式碼的詳細差異內容 (比對程式碼修改處)
+git diff
+
+# 查看過去的 commit 提交歷史紀錄
+git log --oneline
+
+# 切換到已經存在的其他分支
+git checkout <分支名稱>
+
+```
+
 ---
 
 ### 📘 完整工作流程範例 (Full Example)
@@ -118,4 +136,5 @@ git commit -m "Implement chatbot panel with message text field"
 git push -u origin feature/chatbot-integration
 
 ```
+
 
