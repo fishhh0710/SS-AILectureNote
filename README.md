@@ -23,3 +23,99 @@
 *   **[`lib/widgets/transcript_panel.dart`](file:///c:/Users/user/NTHU%20projects/software_studio/Lecture_note_app/lib/widgets/transcript_panel.dart)** & **`transcript_accordion.dart`**：課堂錄音逐字稿面板，包含可以點擊展開與收合。
 *   **[`lib/widgets/summary_panel.dart`](file:///c:/Users/user/NTHU%20projects/software_studio/Lecture_note_app/lib/widgets/summary_panel.dart)**：AI 自動課堂總結面板，整理出本課的重點提示與專有名詞。
 *   **[`lib/widgets/chatbot_panel.dart`](file:///c:/Users/user/NTHU%20projects/software_studio/Lecture_note_app/lib/widgets/chatbot_panel.dart)**：AI 助手聊天面板，提供精緻的問答對話泡泡與文字輸入框。
+
+---
+
+## 💻 如何參與貢獻 (How to Contribute)
+
+各位開發者好！這份指南將告訴你如何安全、流暢地提交代碼到本專案。
+
+### 🚗 1. 複製專案 (Clone)
+首先，把專案複製到你的本機電腦上：
+
+```bash
+git clone https://github.com/fishhh0710/SS-AILectureNote.git
+cd Lecture_note_app
+```
+
+確認一下是否有成功下載並處於 `main` 分支：
+```bash
+git branch
+# 應該會看到： * main
+```
+
+### 🌱 2. 建立你自己的分支 (Branch)
+**千萬不要**直接把代碼 push 到 `main`！
+請為你要開發的新功能或修復的 bug 建立專屬分支：
+
+```bash
+git checkout -b feature/chatbot-improvement
+```
+
+**分支命名規範**：
+*   `feature/...` ➔ 開發新功能 (例如：`feature/login-page`)
+*   `fix/...` ➔ 修復 Bug (例如：`fix/reorder-bug`)
+*   `refactor/...` ➔ 程式碼重構、優化 (例如：`refactor/layout-math`)
+
+### ✍️ 3. 修改程式碼並提交 (Commit)
+做完修改後，將檔案暫存並提交。**請好好撰寫有意義的 commit message**：
+
+```bash
+git add .
+git commit -m "Add message input field to chatbot panel"
+```
+
+### ⬆️ 4. 推送分支 (Push)
+將你的分支推送到 GitHub 遠端倉庫（第一次推送請加上 `-u`）：
+
+```bash
+git push -u origin feature/chatbot-improvement
+```
+
+### 🔁 5. 建立 Pull Request (PR)
+1. 前往本專案的 GitHub 頁面。
+2. 你會看到一個黃色提示框顯示：`Compare & pull request` ➔ 點擊它。
+3. 撰寫簡單明瞭的標題與說明（寫下你修改了什麼）。
+4. 點擊 `Create pull request` ➔ 大功告成！🎉
+
+### 🔄 6. 同步最新程式碼
+在開始任何新工作之前，永遠記得更新你的本機 `main` 分支，並合併到你的分支中：
+
+```bash
+# 更新本機 main
+git checkout main
+git pull
+
+# 合併最新 main 到你的開發分支
+git checkout feature/chatbot-improvement
+git merge main
+```
+
+### 💣 7. 避開常見錯誤
+| ❌ 錯誤行為 | ✅ 正確做法 |
+| :--- | :--- |
+| 直接在 `main` 修改程式碼 | 絕對不要！請務必另外開分支。 |
+| PR 合併後留著一堆舊分支 | PR 合併後，請隨手刪除本機與遠端的舊分支。 |
+| 忘了拉取最新更新就動筆寫程式 | 開工前一定要先執行 `git pull`。 |
+| 推送（Push）被拒絕 | 確認你當前是不是在自己的分支，而不是在 `main`。 |
+
+---
+
+### 📘 完整工作流程範例 (Full Example)
+```bash
+# 1. 複製專案並進入資料夾
+git clone https://github.com/fishhh0710/SS-AILectureNote.git
+cd Lecture_note_app
+
+# 2. 建立並切換到你的功能開發分支
+git checkout -b feature/chatbot-integration
+
+# 3. 編輯檔案，然後 commit 提交修改
+git add .
+git commit -m "Implement chatbot panel with message text field"
+
+# 4. 推送到 GitHub
+git push -u origin feature/chatbot-integration
+
+```
+
