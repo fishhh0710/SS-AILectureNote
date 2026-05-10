@@ -1,27 +1,43 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class SlidePage extends StatelessWidget {
   final int pageNumber;
   final Widget child;
+  final double aspectRatio;
 
-  const SlidePage({super.key, required this.pageNumber, required this.child});
+  const SlidePage({
+    super.key,
+    required this.pageNumber,
+    required this.child,
+    required this.aspectRatio,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width * 0.85;
+    final height = width / aspectRatio;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 48),
+
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           // Main Slide Container
           Container(
-            width: double.infinity,
-            height: 480,
+            width: width,
+            height: height,
+
             constraints: const BoxConstraints(maxWidth: 850),
+
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFFEAE7DC), width: 2),
+              border: Border.all(
+                color: const Color(0xFFEAE7DC),
+                width: 2,
+              ),
               boxShadow: const [
                 BoxShadow(
                   color: Colors.black12,
@@ -30,9 +46,11 @@ class SlidePage extends StatelessWidget {
                 ),
               ],
             ),
+            
             child: Stack(
               children: [
-                // Top decoration line
+                Center(child: child),
+                // Top decoration
                 Positioned(
                   top: 0,
                   left: 0,
@@ -48,41 +66,18 @@ class SlidePage extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Content
-                Padding(
-                  padding: const EdgeInsets.all(40.0),
-                  child: Center(child: child),
-                ),
-                // Bottom-right watermark
-                Positioned(
-                  bottom: 32,
-                  right: 48,
-                  child: Row(
-                    children: [
-                      Text(
-                        'Computer Architecture • Autumn 2023'.toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 2.0,
-                          color: Color(0xFFA8A08E),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
 
-          // Left vertical text
+          // left label
           Positioned(
             left: -60,
             top: 40,
             child: RotatedBox(
               quarterTurns: 3,
               child: Text(
-                "SLIDE \${pageNumber.toString().padLeft(2, '0')}",
+                "SLIDE ${pageNumber.toString().padLeft(2, '0')}",
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
