@@ -74,20 +74,11 @@ class _SlidesPanelState extends State<SlidesPanel> {
               itemCount: doc!.pages.length,
 
               itemBuilder: (context, idx) {
-                final page = doc!.pages[idx];
-                final aspectRatio = page.width / page.height;
-
-                return Center(
-                  child: AspectRatio(
-                    aspectRatio: aspectRatio,
-                    child: SlidePage(
-                      pageNumber: idx + 1,
-                      aspectRatio: aspectRatio,
-                      child: PdfPageView(
-                        document: doc!,
-                        pageNumber: idx + 1,
-                      ),
-                    ),
+                return SlidePage(
+                  pageNumber: idx + 1,
+                  child: PdfPageView(
+                    document: doc!,
+                    pageNumber: idx + 1,
                   ),
                 );
               },
