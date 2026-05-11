@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import '../widgets/slides_panel.dart';
 import '../widgets/transcript_panel.dart';
 import '../widgets/summary_panel.dart';
 import '../widgets/chatbot_panel.dart';
+import '../services/speech_service.dart';
 
 class LectureView extends StatefulWidget {
   final String courseId;
@@ -22,6 +25,30 @@ class _LectureViewState extends State<LectureView> {
   bool _showChatbot = false;
   bool _isRecording = false;
   final GlobalKey _panelsAreaKey = GlobalKey();
+
+  late SpeechService _speechService;
+  String _liveTranscript = '';
+  String _currentLanguage = 'en_US';
+  String? _savedFilePath;
+
+  @override
+  void initState() {
+    super.initState();
+    _speechService = SpeechService(
+      onUpdate: (text, listening) {
+        setState(() {
+          _liveTranscript = text;
+          _isRecording = listening;
+        });
+      },
+      onError: (error) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error)));
+      },
+    );
+    _speechService.initialize();
+  }
 
   double _getMinWidth(String id) {
     if (id == 'slides') return 500.0;
@@ -52,58 +79,22 @@ class _LectureViewState extends State<LectureView> {
       return;
     }
 
-    // Check if adding the panel is possible using the actual measured width
-    final RenderBox? box =
-        _panelsAreaKey.currentContext?.findRenderObject() as RenderBox?;
-    final double availableWidth =
-        box?.size.width ?? (MediaQuery.of(context).size.width - 80);
-
-    double minTotal = _getMinWidth(id);
-    if (_showSlides) minTotal += _getMinWidth('slides');
-    if (_showTranscript) minTotal += _getMinWidth('transcript');
-    if (_showSummary) minTotal += _getMinWidth('summary');
-    if (_showChatbot) minTotal += _getMinWidth('chatbot');
-
-    if (minTotal > availableWidth) {
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: const [
-              Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 24),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  "Not enough space to add this panel. Try closing another panel or enlarging your window.",
-                  style: TextStyle(color: Colors.white, fontSize: 14),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: const Color(0xFF3D3D3D),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    } else {
-      setState(() {
-        if (id == 'slides') {
-          _showSlides = true;
-        } else if (id == 'transcript') {
-          _showTranscript = true;
-        } else if (id == 'summary') {
-          _showSummary = true;
-        } else {
-          _showChatbot = true;
-        }
-        // Move the newly added panel to the far right of the layout
-        _layoutOrder.remove(id);
-        _layoutOrder.add(id);
-      });
-    }
+    // Always allow adding the panel, as the UI handles horizontal scrolling
+    // when panels exceed the available width.
+    setState(() {
+      if (id == 'slides') {
+        _showSlides = true;
+      } else if (id == 'transcript') {
+        _showTranscript = true;
+      } else if (id == 'summary') {
+        _showSummary = true;
+      } else {
+        _showChatbot = true;
+      }
+      // Move the newly added panel to the far right of the layout
+      _layoutOrder.remove(id);
+      _layoutOrder.add(id);
+    });
   }
 
   List<String> _layoutOrder = ["slides", "transcript", "summary", "chatbot"];
@@ -318,151 +309,333 @@ class _LectureViewState extends State<LectureView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFAF9F6),
-      body: Row(
+      body: Stack(
         children: [
-          Expanded(
-            key: _panelsAreaKey,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                double totalWeight = 0;
-                for (var id in _layoutOrder) {
-                  if ((id == 'slides' && _showSlides) ||
-                      (id == 'transcript' && _showTranscript) ||
-                      (id == 'summary' && _showSummary) ||
-                      (id == 'chatbot' && _showChatbot)) {
-                    totalWeight += _panelWeights[id]!;
-                  }
-                }
+          Row(
+            children: [
+              Expanded(
+                key: _panelsAreaKey,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    double totalWeight = 0;
+                    for (var id in _layoutOrder) {
+                      if ((id == 'slides' && _showSlides) ||
+                          (id == 'transcript' && _showTranscript) ||
+                          (id == 'summary' && _showSummary) ||
+                          (id == 'chatbot' && _showChatbot)) {
+                        totalWeight += _panelWeights[id]!;
+                      }
+                    }
 
-                if (totalWeight == 0) {
-                  return const Center(child: Text("No panels selected"));
-                }
+                    if (totalWeight == 0) {
+                      return const Center(child: Text("No panels selected"));
+                    }
 
-                // Build visible panels
-                List<String> visibleIds = [];
-                for (var id in _layoutOrder) {
-                  if ((id == 'slides' && _showSlides) ||
-                      (id == 'transcript' && _showTranscript) ||
-                      (id == 'summary' && _showSummary) ||
-                      (id == 'chatbot' && _showChatbot)) {
-                    visibleIds.add(id);
-                  }
-                }
+                    // Build visible panels
+                    List<String> visibleIds = [];
+                    for (var id in _layoutOrder) {
+                      if ((id == 'slides' && _showSlides) ||
+                          (id == 'transcript' && _showTranscript) ||
+                          (id == 'summary' && _showSummary) ||
+                          (id == 'chatbot' && _showChatbot)) {
+                        visibleIds.add(id);
+                      }
+                    }
 
-                // Calculate sum of minimum widths
-                double sumMinW = 0;
-                for (var id in visibleIds) {
-                  sumMinW += _getMinWidth(id);
-                }
+                    // Calculate sum of minimum widths
+                    double sumMinW = 0;
+                    for (var id in visibleIds) {
+                      sumMinW += _getMinWidth(id);
+                    }
 
-                // Calculate actual widths proportionally
-                Map<String, double> calculatedWidths = {};
-                if (constraints.maxWidth <= sumMinW) {
-                  // deal with the condition when user activate split screen. under this circumstance we wouldn't close the panel for him. we would instead let the user scroll the panels horizontally
-                  for (var id in visibleIds) {
-                    calculatedWidths[id] = _getMinWidth(id);
-                  }
-                } else {
-                  double remainingSpace = constraints.maxWidth - sumMinW;
-                  double totalWeightOfVisible = 0;
-                  for (var id in visibleIds) {
-                    totalWeightOfVisible += _panelWeights[id]!;
-                  }
-                  for (var id in visibleIds) {
-                    double extra = totalWeightOfVisible > 0
-                        ? remainingSpace *
-                              (_panelWeights[id]! / totalWeightOfVisible)
-                        : 0;
-                    calculatedWidths[id] = _getMinWidth(id) + extra;
-                  }
-                }
+                    // Calculate actual widths proportionally
+                    Map<String, double> calculatedWidths = {};
+                    if (constraints.maxWidth <= sumMinW) {
+                      // deal with the condition when user activate split screen. under this circumstance we wouldn't close the panel for him. we would instead let the user scroll the panels horizontally
+                      for (var id in visibleIds) {
+                        calculatedWidths[id] = _getMinWidth(id);
+                      }
+                    } else {
+                      double remainingSpace = constraints.maxWidth - sumMinW;
+                      double totalWeightOfVisible = 0;
+                      for (var id in visibleIds) {
+                        totalWeightOfVisible += _panelWeights[id]!;
+                      }
+                      for (var id in visibleIds) {
+                        double extra = totalWeightOfVisible > 0
+                            ? remainingSpace *
+                                  (_panelWeights[id]! / totalWeightOfVisible)
+                            : 0;
+                        calculatedWidths[id] = _getMinWidth(id) + extra;
+                      }
+                    }
 
-                List<Widget> visiblePanels = [];
-                for (int i = 0; i < visibleIds.length; i++) {
-                  String id = visibleIds[i];
-                  String? nextId = (i < visibleIds.length - 1)
-                      ? visibleIds[i + 1]
-                      : null;
-                  double width = calculatedWidths[id]!;
+                    List<Widget> visiblePanels = [];
+                    for (int i = 0; i < visibleIds.length; i++) {
+                      String id = visibleIds[i];
+                      String? nextId = (i < visibleIds.length - 1)
+                          ? visibleIds[i + 1]
+                          : null;
+                      double width = calculatedWidths[id]!;
 
-                  visiblePanels.add(
-                    _buildPanel(
-                      id,
-                      width,
-                      i,
-                      nextId,
-                      totalWeight,
-                      constraints.maxWidth,
+                      visiblePanels.add(
+                        _buildPanel(
+                          id,
+                          width,
+                          i,
+                          nextId,
+                          totalWeight,
+                          constraints.maxWidth,
+                        ),
+                      );
+                    }
+
+                    return ReorderableListView(
+                      scrollDirection: Axis.horizontal,
+                      onReorder: _reorder,
+                      buildDefaultDragHandles: false, // Use our custom handle
+                      children: visiblePanels,
+                    );
+                  },
+                ),
+              ),
+              Container(
+                width: 80,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(left: BorderSide(color: Color(0xFFEAE7DC))),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 24,
+                  horizontal: 12,
+                ),
+                child: CustomScrollView(
+                  slivers: [
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                    IconButton(
+                      icon: const Icon(
+                        Icons.arrow_back,
+                        color: Color(0xFFA8A08E),
+                      ),
+                      onPressed: () =>
+                          context.push('/course/\${widget.courseId}'),
                     ),
-                  );
-                }
-
-                return ReorderableListView(
-                  scrollDirection: Axis.horizontal,
-                  onReorder: _reorder,
-                  buildDefaultDragHandles: false, // Use our custom handle
-                  children: visiblePanels,
-                );
-              },
-            ),
-          ),
-          Container(
-            width: 80,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(left: BorderSide(color: Color(0xFFEAE7DC))),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Color(0xFFA8A08E)),
-                  onPressed: () => context.push('/course/\${widget.courseId}'),
-                ),
-                const SizedBox(height: 32),
-                _buildSidebarButton(
-                  icon: Icons.picture_in_picture,
-                  isActive: _showSlides,
-                  onPressed: () => _togglePanel('slides'),
-                ),
-                const SizedBox(height: 16),
-                _buildSidebarButton(
-                  icon: Icons.subtitles,
-                  isActive: _showTranscript,
-                  onPressed: () => _togglePanel('transcript'),
-                ),
-                const SizedBox(height: 16),
-                _buildSidebarButton(
-                  icon: Icons.auto_awesome,
-                  isActive: _showSummary,
-                  onPressed: () => _togglePanel('summary'),
-                ),
-                const SizedBox(height: 16),
-                _buildSidebarButton(
-                  icon: Icons.chat_bubble_outline,
-                  isActive: _showChatbot,
-                  onPressed: () => _togglePanel('chatbot'),
-                ),
-                const Spacer(),
-                ElevatedButton(
-                  onPressed: () => setState(() => _isRecording = !_isRecording),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    backgroundColor: _isRecording
-                        ? Colors.red.shade50
-                        : const Color(0xFF8E9775),
-                    foregroundColor: _isRecording ? Colors.red : Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                    const SizedBox(height: 32),
+                    _buildSidebarButton(
+                      icon: Icons.picture_in_picture,
+                      isActive: _showSlides,
+                      onPressed: () => _togglePanel('slides'),
                     ),
-                  ),
-                  child: Icon(_isRecording ? Icons.stop : Icons.mic, size: 28),
+                    const SizedBox(height: 16),
+                    _buildSidebarButton(
+                      icon: Icons.subtitles,
+                      isActive: _showTranscript,
+                      onPressed: () => _togglePanel('transcript'),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildSidebarButton(
+                      icon: Icons.auto_awesome,
+                      isActive: _showSummary,
+                      onPressed: () => _togglePanel('summary'),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildSidebarButton(
+                      icon: Icons.chat_bubble_outline,
+                      isActive: _showChatbot,
+                      onPressed: () => _togglePanel('chatbot'),
+                    ),
+                    const Spacer(),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F2EA),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFEAE7DC)),
+                      ),
+                      child: PopupMenuButton<String>(
+                        initialValue: _currentLanguage,
+                        tooltip: 'Select Language',
+                        onSelected: (val) {
+                          setState(() => _currentLanguage = val);
+                          _speechService.setLocale(val);
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'en_US',
+                            child: Text('English'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'zh_TW',
+                            child: Text('中文 (台灣)'),
+                          ),
+                        ],
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Column(
+                            children: [
+                              const Icon(
+                                Icons.language,
+                                color: Color(0xFF8E9775),
+                                size: 20,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _currentLanguage == 'en_US' ? 'EN' : 'TW',
+                                style: const TextStyle(
+                                  color: Color(0xFF8E9775),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: () async {
+                        if (_isRecording) {
+                          _speechService.toggleListening();
+                          final dir = await getApplicationDocumentsDirectory();
+                          final file = File('${dir.path}/transcript_test.json');
+                          await file.writeAsString(
+                            _speechService.getExportJson(),
+                          );
+                          setState(() {
+                            _savedFilePath = file.path;
+                          });
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Saved to ${file.path}')),
+                            );
+                          }
+                        } else {
+                          setState(() {
+                            _savedFilePath = null;
+                            _liveTranscript = '';
+                          });
+                          _speechService.reset();
+                          _speechService.toggleListening();
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        backgroundColor: _isRecording
+                            ? Colors.red.shade50
+                            : const Color(0xFF8E9775),
+                        foregroundColor: _isRecording
+                            ? Colors.red
+                            : Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: Icon(
+                        _isRecording ? Icons.stop : Icons.mic,
+                        size: 28,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+        ),
+      ],
+    ),
+          if (_liveTranscript.isNotEmpty ||
+              _savedFilePath != null ||
+              _isRecording)
+            Positioned(
+              bottom: 24,
+              left: 24,
+              right: 120, // leave space for sidebar
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D2D2D).withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.record_voice_over,
+                          color: Colors.white70,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Live Transcript (Test)',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (_isRecording)
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _liveTranscript.isEmpty && _isRecording
+                          ? 'Listening...'
+                          : _liveTranscript,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        height: 1.4,
+                      ),
+                    ),
+                    if (_savedFilePath != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12.0),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '✅ Exported to: $_savedFilePath',
+                            style: const TextStyle(
+                              color: Colors.greenAccent,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
