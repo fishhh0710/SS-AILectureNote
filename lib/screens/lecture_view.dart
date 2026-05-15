@@ -171,6 +171,8 @@ class _LectureViewState extends State<LectureView> {
           width: width,
           index: index,
           onClose: () => setState(() => _showTranscript = false),
+          isRecording: _isRecording,
+          onStartRecording: () => setState(() => _isRecording = true),
         );
         break;
       case "summary":
@@ -418,7 +420,7 @@ class _LectureViewState extends State<LectureView> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.arrow_back, color: Color(0xFFA8A08E)),
-                  onPressed: () => context.push('/course/\${widget.courseId}'),
+                  onPressed: () => context.pop(),
                 ),
                 const SizedBox(height: 32),
                 _buildSidebarButton(
