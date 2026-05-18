@@ -123,7 +123,7 @@ class _DashboardState extends State<Dashboard>
         child: Container(
           alignment: AlignmentDirectional.topStart,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1100),
+            constraints: const BoxConstraints(maxWidth: 900),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -136,20 +136,26 @@ class _DashboardState extends State<Dashboard>
                   ),
                 ),
                 const SizedBox(height: 24),
-                Wrap(
-                  spacing: 24,
-                  runSpacing: 24,
-                  children: _nodes.isEmpty
-                      ? [
-                          const Text(
-                            '目前沒有任何項目，請點擊右下角新增',
-                            style: TextStyle(color: Color(0xFFA8A08E)),
-                          ),
-                        ]
-                      : _nodes
-                            .map((node) => _buildNodeCard(context, node))
-                            .toList(),
-                ),
+                _nodes.isEmpty
+                    ? const Text(
+                        '目前沒有任何項目，請點擊右下角新增',
+                        style: TextStyle(color: Color(0xFFA8A08E)),
+                      )
+                    : GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              childAspectRatio: 4,
+                              mainAxisSpacing: 16,
+                              crossAxisSpacing: 16,
+                            ),
+                        itemCount: _nodes.length,
+                        itemBuilder: (context, index) {
+                          return _buildFileItem(context, _nodes[index]);
+                        },
+                      ),
               ],
             ),
           ),
@@ -351,102 +357,104 @@ class _DashboardState extends State<Dashboard>
     );
   }
 
-  Widget _buildNodeCard(BuildContext context, AppNode node) {
+  Widget _buildFileItem(BuildContext context, AppNode node) {
+    bool isFolder =
+        node.type == 'system_folder' ||
+        node.type == 'folder' ||
+        node.type == 'course';
+
     IconData icon;
-    if (node.type == 'course') {
-      icon = Icons.menu_book;
-    } else if (node.type == 'folder') {
+    if (isFolder) {
       icon = Icons.folder;
-    } else {
+    } else if (node.type == 'notebook') {
       icon = Icons.book;
+    } else if (node.type == 'recording') {
+      icon = Icons.mic;
+    } else if (node.type == 'ai_note') {
+      icon = Icons.auto_awesome;
+    } else {
+      icon = Icons.description;
     }
 
     return InkWell(
       onTap: () {
-        if (node.type == 'course' || node.type == 'folder') {
+        if (isFolder) {
           context.push('/course/${node.id}');
+        } else {
+          context.push('/lecture/${_databaseRoot?.id}/${node.id}');
         }
       },
       child: Container(
-        width: 320,
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFEAE7DC), width: 2),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFEAE7DC)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFAF9F6),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(icon, color: const Color(0xFF8E9775), size: 28),
-                ),
-                if (node.type != 'system_folder')
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, color: Color(0xFFA8A08E)),
-                    onSelected: (value) {
-                      if (value == 'rename') {
-                        _showRenameDialog(node);
-                      } else if (value == 'delete') {
-                        _showDeleteDialog(node);
-                      }
-                    },
-                    itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                      const PopupMenuItem<String>(
-                        value: 'rename',
-                        child: Text('重新命名'),
-                      ),
-                      const PopupMenuItem<String>(
-                        value: 'delete',
-                        child: Text('刪除', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              node.name,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: Color(0xFF3D3D3D),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              "建立於 ${DateTime.parse(node.createdAt).toLocal().toString().split('.')[0]}",
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFFA8A08E),
-              ),
-            ),
-            const SizedBox(height: 24),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(4),
+                color: isFolder
+                    ? const Color(0xFFF5F2EA)
+                    : const Color(0xFFFAF9F6),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Text(
-                node.type.toUpperCase(),
-                style: TextStyle(
-                  color: Colors.blue.shade500,
-                  fontSize: 8,
-                  fontWeight: FontWeight.bold,
-                ),
+              child: Icon(
+                icon,
+                color: isFolder
+                    ? const Color(0xFF8E9775)
+                    : const Color(0xFFA8A08E),
               ),
             ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    node.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Color(0xFF3D3D3D),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    node.type.toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFA8A08E),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (node.type != 'system_folder')
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, color: Color(0xFFEAE7DC)),
+                onSelected: (value) {
+                  if (value == 'rename') {
+                    _showRenameDialog(node);
+                  } else if (value == 'delete') {
+                    _showDeleteDialog(node);
+                  }
+                },
+                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                  const PopupMenuItem<String>(
+                    value: 'rename',
+                    child: Text('重新命名'),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'delete',
+                    child: Text('刪除', style: TextStyle(color: Colors.red)),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
