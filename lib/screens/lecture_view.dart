@@ -162,6 +162,8 @@ class _LectureViewState extends State<LectureView> {
           width: width,
           index: index,
           onClose: () => setState(() => _showTranscript = false),
+          isRecording: _isRecording,
+          onStartRecording: () => setState(() => _isRecording = true),
         );
         break;
       case "summary":
@@ -416,128 +418,148 @@ class _LectureViewState extends State<LectureView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.arrow_back,
-                        color: Color(0xFFA8A08E),
-                      ),
-                      onPressed: () =>
-                          context.push('/course/\${widget.courseId}'),
-                    ),
-                    const SizedBox(height: 32),
-                    _buildSidebarButton(
-                      icon: Icons.picture_in_picture,
-                      isActive: _showSlides,
-                      onPressed: () => _togglePanel('slides'),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildSidebarButton(
-                      icon: Icons.subtitles,
-                      isActive: _showTranscript,
-                      onPressed: () => _togglePanel('transcript'),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildSidebarButton(
-                      icon: Icons.auto_awesome,
-                      isActive: _showSummary,
-                      onPressed: () => _togglePanel('summary'),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildSidebarButton(
-                      icon: Icons.chat_bubble_outline,
-                      isActive: _showChatbot,
-                      onPressed: () => _togglePanel('chatbot'),
-                    ),
-                    const Spacer(),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF5F2EA),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFEAE7DC)),
-                      ),
-                      child: PopupMenuButton<String>(
-                        initialValue: _currentLanguage,
-                        tooltip: 'Select Language',
-                        onSelected: (val) {
-                          setState(() => _currentLanguage = val);
-                          _speechService.setLocale(val);
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'en_US',
-                            child: Text('English'),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.arrow_back,
+                              color: Color(0xFFA8A08E),
+                            ),
+                            onPressed: () => context.pop(),
                           ),
-                          const PopupMenuItem(
-                            value: 'zh_TW',
-                            child: Text('中文 (台灣)'),
+                          const SizedBox(height: 32),
+                          _buildSidebarButton(
+                            icon: Icons.picture_in_picture,
+                            isActive: _showSlides,
+                            onPressed: () => _togglePanel('slides'),
                           ),
-                        ],
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Column(
-                            children: [
-                              const Icon(
-                                Icons.language,
-                                color: Color(0xFF8E9775),
-                                size: 20,
+                          const SizedBox(height: 16),
+                          _buildSidebarButton(
+                            icon: Icons.subtitles,
+                            isActive: _showTranscript,
+                            onPressed: () => _togglePanel('transcript'),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildSidebarButton(
+                            icon: Icons.auto_awesome,
+                            isActive: _showSummary,
+                            onPressed: () => _togglePanel('summary'),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildSidebarButton(
+                            icon: Icons.chat_bubble_outline,
+                            isActive: _showChatbot,
+                            onPressed: () => _togglePanel('chatbot'),
+                          ),
+                          const Spacer(),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F2EA),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFEAE7DC),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _currentLanguage == 'en_US' ? 'EN' : 'TW',
-                                style: const TextStyle(
-                                  color: Color(0xFF8E9775),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
+                            ),
+                            child: PopupMenuButton<String>(
+                              initialValue: _currentLanguage,
+                              tooltip: 'Select Language',
+                              onSelected: (val) {
+                                setState(() => _currentLanguage = val);
+                                _speechService.setLocale(val);
+                              },
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  value: 'en_US',
+                                  child: Text('English'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'zh_TW',
+                                  child: Text('中文 (台灣)'),
+                                ),
+                              ],
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                child: Column(
+                                  children: [
+                                    const Icon(
+                                      Icons.language,
+                                      color: Color(0xFF8E9775),
+                                      size: 20,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _currentLanguage == 'en_US' ? 'EN' : 'TW',
+                                      style: const TextStyle(
+                                        color: Color(0xFF8E9775),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: () async {
-                        if (_isRecording) {
-                          _speechService.toggleListening();
-                          final dir = await getApplicationDocumentsDirectory();
-                          final file = File('${dir.path}/transcript_test.json');
-                          await file.writeAsString(
-                            _speechService.getExportJson(),
-                          );
-                          setState(() {
-                            _savedFilePath = file.path;
-                          });
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Saved to ${file.path}')),
-                            );
-                          }
-                        } else {
-                          setState(() {
-                            _savedFilePath = null;
-                            _liveTranscript = '';
-                          });
-                          _speechService.reset();
-                          _speechService.toggleListening();
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        backgroundColor: _isRecording
-                            ? Colors.red.shade50
-                            : const Color(0xFF8E9775),
-                        foregroundColor: _isRecording
-                            ? Colors.red
-                            : Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: Icon(
-                        _isRecording ? Icons.stop : Icons.mic,
-                        size: 28,
+                          const SizedBox(height: 12),
+                          ElevatedButton(
+                            onPressed: () async {
+                              if (_isRecording) {
+                                _speechService.toggleListening();
+                                final dir =
+                                    await getApplicationDocumentsDirectory();
+                                final file = File(
+                                  '${dir.path}/transcript_test.json',
+                                );
+                                await file.writeAsString(
+                                  _speechService.getExportJson(),
+                                );
+                                setState(() {
+                                  _savedFilePath = file.path;
+                                });
+                                // if (mounted) {
+                                //   ScaffoldMessenger.of(context).showSnackBar(
+                                //     SnackBar(
+                                //       content: Text('Saved to ${file.path}'),
+                                //     ),
+                                //   );
+                                // }
+
+                                Future.delayed(const Duration(seconds: 3), () {
+                                  if (mounted) {
+                                    setState(() {
+                                      _savedFilePath = null;
+                                      _liveTranscript = '';
+                                    });
+                                  }
+                                });
+                              } else {
+                                setState(() {
+                                  _savedFilePath = null;
+                                  _liveTranscript = '';
+                                });
+                                _speechService.reset();
+                                _speechService.toggleListening();
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 20),
+                              backgroundColor: _isRecording
+                                  ? Colors.red.shade50
+                                  : const Color(0xFF8E9775),
+                              foregroundColor: _isRecording
+                                  ? Colors.red
+                                  : Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: Icon(
+                              _isRecording ? Icons.stop : Icons.mic,
+                              size: 28,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -545,9 +567,6 @@ class _LectureViewState extends State<LectureView> {
               ),
             ],
           ),
-        ),
-      ],
-    ),
           if (_liveTranscript.isNotEmpty ||
               _savedFilePath != null ||
               _isRecording)

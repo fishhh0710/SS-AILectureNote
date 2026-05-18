@@ -31,7 +31,7 @@ class LayoutWrapper extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   const Text(
-                    'AI-LECTURE-NOTE',
+                    'AI LECTURE NOTE',
                     style: TextStyle(
                       fontFamily: 'Serif',
                       fontWeight: FontWeight.bold,
@@ -80,7 +80,7 @@ class LayoutWrapper extends StatelessWidget {
                     ],
                   ),
                   const Text(
-                    '版本 v1.2.0 • AI-Lecture-Note 智慧型工作空間',
+                    '版本 v1.2.0 • AI Lecture Note 智慧型工作空間',
                     style: TextStyle(
                       fontSize: 9,
                       fontWeight: FontWeight.bold,
