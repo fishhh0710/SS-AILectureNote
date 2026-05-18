@@ -24,12 +24,15 @@ class _LectureViewState extends State<LectureView> {
   bool _showSummary = false;
   bool _showChatbot = false;
   bool _isRecording = false;
+  bool _isGeneratingNotes = false;
   final GlobalKey _panelsAreaKey = GlobalKey();
 
   late SpeechService _speechService;
   String _liveTranscript = '';
   String _currentLanguage = 'en_US';
   String? _savedFilePath;
+  String? _notesGenerationError;
+  int _summaryReloadToken = 0;
 
   @override
   void initState() {
@@ -97,6 +100,38 @@ class _LectureViewState extends State<LectureView> {
     });
   }
 
+  void _handleNotesGenerationStarted() {
+    if (!mounted) return;
+
+    setState(() {
+      _isGeneratingNotes = true;
+      _notesGenerationError = null;
+      _showSummary = true;
+      _layoutOrder.remove('summary');
+      _layoutOrder.add('summary');
+    });
+  }
+
+  void _handleNotesGenerationFinished() {
+    if (!mounted) return;
+
+    setState(() {
+      _isGeneratingNotes = false;
+      _notesGenerationError = null;
+      _summaryReloadToken++;
+    });
+  }
+
+  void _handleNotesGenerationFailed(String message) {
+    if (!mounted) return;
+
+    setState(() {
+      _isGeneratingNotes = false;
+      _notesGenerationError = message;
+      _summaryReloadToken++;
+    });
+  }
+
   List<String> _layoutOrder = ["slides", "transcript", "summary", "chatbot"];
 
   final Map<String, double> _panelWeights = {
@@ -154,6 +189,10 @@ class _LectureViewState extends State<LectureView> {
           width: width,
           index: index,
           onClose: () => setState(() => _showSlides = false),
+          fileId: int.tryParse(widget.fileId),
+          onNotesGenerationStarted: _handleNotesGenerationStarted,
+          onNotesGenerationFinished: _handleNotesGenerationFinished,
+          onNotesGenerationFailed: _handleNotesGenerationFailed,
         );
         break;
       case "transcript":
@@ -172,6 +211,10 @@ class _LectureViewState extends State<LectureView> {
           width: width,
           index: index,
           onClose: () => setState(() => _showSummary = false),
+          fileId: int.tryParse(widget.fileId),
+          isLoadingNotes: _isGeneratingNotes,
+          errorMessage: _notesGenerationError,
+          reloadToken: _summaryReloadToken,
         );
         break;
       case "chatbot":
