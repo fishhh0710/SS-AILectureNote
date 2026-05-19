@@ -11,8 +11,13 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from Agent.distraction_agent.distraction_agent import WorkflowInput, detraction_detect
-from Agent.note_agent.lecture_transcript_agent import analyze_transcript_update
+from Agent.note_agent.lecture_transcript_agent import analyze_lecture_transcript
 from Agent.note_agent.note_agent import generate_all_page_notes_json
+from transcript_saver import (
+    TranscriptChunkRequest,
+    get_transcript_session,
+    save_transcript_chunk,
+)
 
 
 app = FastAPI(
@@ -109,11 +114,27 @@ async def notes_from_pdf_path(request: NotesFromPathRequest) -> dict[str, Any]:
 async def transcript_analyze(request: TranscriptAnalyzeRequest) -> dict[str, Any]:
     try:
         return await run_in_threadpool(
-            analyze_transcript_update,
+            analyze_lecture_transcript,
             current_page_note_md=request.current_page_note_md,
             professor_page_number=request.professor_page_number,
             transcript=request.transcript,
         )
+    except Exception as error:
+        raise _to_http_error(error) from error
+
+
+@app.post("/transcript/chunk")
+async def transcript_chunk(request: TranscriptChunkRequest) -> dict[str, Any]:
+    try:
+        return await run_in_threadpool(save_transcript_chunk, request)
+    except Exception as error:
+        raise _to_http_error(error) from error
+
+
+@app.get("/transcript/session/{session_id}")
+async def transcript_session(session_id: str) -> dict[str, Any]:
+    try:
+        return await run_in_threadpool(get_transcript_session, session_id)
     except Exception as error:
         raise _to_http_error(error) from error
 
