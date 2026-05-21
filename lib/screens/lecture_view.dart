@@ -30,6 +30,7 @@ class _LectureViewState extends State<LectureView> {
   String _liveTranscript = '';
   String _currentLanguage = 'en_US';
   String? _savedFilePath;
+  double _soundLevel = 0.0;
 
   @override
   void initState() {
@@ -39,6 +40,11 @@ class _LectureViewState extends State<LectureView> {
         setState(() {
           _liveTranscript = text;
           _isRecording = listening;
+        });
+      },
+      onSoundLevelChange: (level) {
+        setState(() {
+          _soundLevel = level;
         });
       },
       onError: (error) {
@@ -516,13 +522,13 @@ class _LectureViewState extends State<LectureView> {
                                 setState(() {
                                   _savedFilePath = file.path;
                                 });
-                                // if (mounted) {
-                                //   ScaffoldMessenger.of(context).showSnackBar(
-                                //     SnackBar(
-                                //       content: Text('Saved to ${file.path}'),
-                                //     ),
-                                //   );
-                                // }
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Saved to ${file.path}'),
+                                    ),
+                                  );
+                                }
 
                                 Future.delayed(const Duration(seconds: 3), () {
                                   if (mounted) {
@@ -536,6 +542,7 @@ class _LectureViewState extends State<LectureView> {
                                 setState(() {
                                   _savedFilePath = null;
                                   _liveTranscript = '';
+                                  _soundLevel = 0.0;
                                 });
                                 _speechService.reset();
                                 _speechService.toggleListening();
@@ -630,6 +637,41 @@ class _LectureViewState extends State<LectureView> {
                         height: 1.4,
                       ),
                     ),
+                    if (_isRecording) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(Icons.volume_up, color: Colors.white54, size: 14),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: (_soundLevel.abs() / 50.0).clamp(0.0, 1.0),
+                                backgroundColor: Colors.white12,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  _soundLevel.abs() > 10.0 ? Colors.greenAccent : Colors.orangeAccent,
+                                ),
+                                minHeight: 6,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${_soundLevel.toStringAsFixed(1)} dB',
+                            style: const TextStyle(color: Colors.white54, fontSize: 10),
+                          ),
+                        ],
+                      ),
+                      if (_soundLevel.abs() < 5.0)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 6.0),
+                          child: Text(
+                            '💡 Tip: Volume is low. Try moving closer to the speaker or orienting the microphone.',
+                            style: TextStyle(color: Colors.amberAccent, fontSize: 11),
+                          ),
+                        ),
+                    ],
                     if (_savedFilePath != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 12.0),
