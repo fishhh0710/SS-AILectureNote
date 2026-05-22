@@ -1,12 +1,24 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'firebase_options.dart';
 import 'screens/dashboard.dart';
 import 'screens/course_details.dart';
 import 'screens/lecture_view.dart';
 import 'widgets/layout_wrapper.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    if (!e.toString().contains('duplicate-app')) {
+      rethrow;
+    }
+  }
   runApp(const MyApp());
 }
 

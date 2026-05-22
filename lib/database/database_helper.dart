@@ -21,14 +21,25 @@ class DatabaseHelper {
     final path = join(dbPath, filePath);
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _onUpgrade,
       onConfigure: _onConfigure,
     );
   }
 
   Future _onConfigure(Database db) async {
     await db.execute('PRAGMA foreign_keys = ON');
+  }
+
+  Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      try {
+        await db.execute('ALTER TABLE items ADD COLUMN cloudPath TEXT');
+      } catch (e) {
+        // Column may already exist
+      }
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -41,6 +52,7 @@ class DatabaseHelper {
         name TEXT NOT NULL,
         content TEXT,
         filePath TEXT,
+        cloudPath TEXT,
         createdAt TEXT NOT NULL,
         FOREIGN KEY (parentId) REFERENCES items (id) ON DELETE CASCADE
       )
