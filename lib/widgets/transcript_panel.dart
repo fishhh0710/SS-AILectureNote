@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import '../data/transcript_data.dart';
 import 'panel_header.dart';
-import 'transcript_accordion.dart';
 
 class TranscriptPanel extends StatelessWidget {
   final double width;
@@ -9,6 +7,7 @@ class TranscriptPanel extends StatelessWidget {
   final VoidCallback onClose;
   final bool isRecording;
   final VoidCallback onStartRecording;
+  final String liveTranscript;
 
   const TranscriptPanel({
     super.key,
@@ -17,13 +16,15 @@ class TranscriptPanel extends StatelessWidget {
     required this.onClose,
     this.isRecording = false,
     required this.onStartRecording,
+    this.liveTranscript = '',
   });
 
   @override
   Widget build(BuildContext context) {
     Widget content;
 
-    if (!isRecording) {
+    if (!isRecording && liveTranscript.isEmpty) {
+      // No recording, no history — show the "start recording" prompt
       content = Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -63,37 +64,13 @@ class TranscriptPanel extends StatelessWidget {
         ),
       );
     } else {
-      content = Container(child: Text("Transcribing..."));
-      // content = ListView.builder(
-      //   padding: const EdgeInsets.all(24),
-      //   itemCount: chapter4_1TranscriptData.length,
-      //   itemBuilder: (context, idx) {
-      //     final page = chapter4_1TranscriptData[idx];
-      //     return Column(
-      //       crossAxisAlignment: CrossAxisAlignment.start,
-      //       children: [
-      //         Padding(
-      //           padding: const EdgeInsets.symmetric(vertical: 8.0),
-      //           child: Text(
-      //             'Slide ${page.pageNumber}',
-      //             style: const TextStyle(
-      //               fontSize: 12,
-      //               fontWeight: FontWeight.bold,
-      //               color: Color(0xFFA8A08E),
-      //             ),
-      //           ),
-      //         ),
-      //         ...page.sections.map(
-      //           (section) => TranscriptAccordion(
-      //             title: section.title,
-      //             content: section.content,
-      //             defaultOpen: idx == 0,
-      //           ),
-      //         ),
-      //       ],
-      //     );
-      //   },
-      // );
+      // Show the full accumulated transcript as plain readable text.
+      // liveTranscript from SpeechService already contains ALL history
+      // (finalized chunks + current live words), so no local state needed.
+      content = _TranscriptTextView(
+        text: liveTranscript,
+        isRecording: isRecording,
+      );
     }
 
     return SizedBox(
@@ -124,6 +101,113 @@ class TranscriptPanel extends StatelessWidget {
             Expanded(child: content),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// Stateful inner widget to handle auto-scroll as text grows
+class _TranscriptTextView extends StatefulWidget {
+  final String text;
+  final bool isRecording;
+
+  const _TranscriptTextView({required this.text, required this.isRecording});
+
+  @override
+  State<_TranscriptTextView> createState() => _TranscriptTextViewState();
+}
+
+class _TranscriptTextViewState extends State<_TranscriptTextView> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void didUpdateWidget(_TranscriptTextView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Auto-scroll to bottom whenever text updates
+    if (oldWidget.text != widget.text) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.text.isEmpty && widget.isRecording
+                ? 'Listening...'
+                : widget.text,
+            style: const TextStyle(
+              fontSize: 16,
+              height: 1.7,
+              color: Color(0xFF3D3D3D),
+            ),
+          ),
+          // Blinking cursor shown while actively recording
+          if (widget.isRecording)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: _BlinkingCursor(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// Blinking cursor shown while actively recording
+class _BlinkingCursor extends StatefulWidget {
+  const _BlinkingCursor();
+
+  @override
+  State<_BlinkingCursor> createState() => _BlinkingCursorState();
+}
+
+class _BlinkingCursorState extends State<_BlinkingCursor>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _controller,
+      child: Container(
+        width: 2,
+        height: 18,
+        color: const Color(0xFF8E9775),
       ),
     );
   }

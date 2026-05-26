@@ -32,11 +32,13 @@ class SpeechService {
   final Function(String text, bool isListening) onUpdate;
   final Function(String errorMsg) onError;
   final Function(double level)? onSoundLevelChange;
+  final Function(List<TranscriptChunk> chunks)? onChunkSaved;
 
   SpeechService({
     required this.onUpdate,
     required this.onError,
     this.onSoundLevelChange,
+    this.onChunkSaved,
   });
 
   Future<bool> initialize() async {
@@ -55,6 +57,7 @@ class SpeechService {
           text: currentWords.trim(),
         ));
         currentWords = '';
+        onChunkSaved?.call(chunks);
       }
       onUpdate(_getCombinedText(), isListening);
       
@@ -99,6 +102,16 @@ class SpeechService {
       isListening = false;
       onSoundLevelChange?.call(0.0);
       _speech.stop();
+      // Flush any remaining currentWords into chunks so nothing is lost
+      if (currentWords.isNotEmpty && _currentChunkStartTime != null) {
+        chunks.add(TranscriptChunk(
+          startTime: _currentChunkStartTime!,
+          endTime: DateTime.now(),
+          text: currentWords.trim(),
+        ));
+        currentWords = '';
+        onChunkSaved?.call(chunks);
+      }
       onUpdate(_getCombinedText(), isListening);
     }
   }
@@ -112,6 +125,18 @@ class SpeechService {
   }
 
   void _startListening() async {
+    // Defensively save any leftover currentWords before starting a new session.
+    // This prevents text loss if _handleStatus didn't fire or fired late.
+    if (currentWords.isNotEmpty && _currentChunkStartTime != null) {
+      chunks.add(TranscriptChunk(
+        startTime: _currentChunkStartTime!,
+        endTime: DateTime.now(),
+        text: currentWords.trim(),
+      ));
+      currentWords = '';
+      onChunkSaved?.call(chunks);
+    }
+
     bool available = await _speech.initialize(onStatus: _handleStatus, onError: _handleError);
     if (available && _shouldListen) {
       isListening = true;
