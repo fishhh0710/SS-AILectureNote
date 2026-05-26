@@ -170,6 +170,7 @@ class _LectureViewState extends State<LectureView> {
           onClose: () => setState(() => _showTranscript = false),
           isRecording: _isRecording,
           onStartRecording: () => setState(() => _isRecording = true),
+          liveTranscript: _liveTranscript,
         );
         break;
       case "summary":
@@ -534,7 +535,6 @@ class _LectureViewState extends State<LectureView> {
                                   if (mounted) {
                                     setState(() {
                                       _savedFilePath = null;
-                                      _liveTranscript = '';
                                     });
                                   }
                                 });
@@ -574,129 +574,6 @@ class _LectureViewState extends State<LectureView> {
               ),
             ],
           ),
-          if (_liveTranscript.isNotEmpty ||
-              _savedFilePath != null ||
-              _isRecording)
-            Positioned(
-              bottom: 24,
-              left: 24,
-              right: 120, // leave space for sidebar
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2D2D2D).withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black26,
-                      blurRadius: 8,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.record_voice_over,
-                          color: Colors.white70,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Live Transcript (Test)',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Spacer(),
-                        if (_isRecording)
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _liveTranscript.isEmpty && _isRecording
-                          ? 'Listening...'
-                          : _liveTranscript,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        height: 1.4,
-                      ),
-                    ),
-                    if (_isRecording) ...[
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          const Icon(Icons.volume_up, color: Colors.white54, size: 14),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: (_soundLevel.abs() / 50.0).clamp(0.0, 1.0),
-                                backgroundColor: Colors.white12,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  _soundLevel.abs() > 10.0 ? Colors.greenAccent : Colors.orangeAccent,
-                                ),
-                                minHeight: 6,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${_soundLevel.toStringAsFixed(1)} dB',
-                            style: const TextStyle(color: Colors.white54, fontSize: 10),
-                          ),
-                        ],
-                      ),
-                      if (_soundLevel.abs() < 5.0)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 6.0),
-                          child: Text(
-                            '💡 Tip: Volume is low. Try moving closer to the speaker or orienting the microphone.',
-                            style: TextStyle(color: Colors.amberAccent, fontSize: 11),
-                          ),
-                        ),
-                    ],
-                    if (_savedFilePath != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12.0),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '✅ Exported to: $_savedFilePath',
-                            style: const TextStyle(
-                              color: Colors.greenAccent,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );
