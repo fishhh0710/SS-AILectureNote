@@ -144,6 +144,18 @@ class _LectureViewState extends State<LectureView> {
     });
   }
 
+  void _startRecording() {
+    if (_isRecording) return;
+
+    setState(() {
+      _savedFilePath = null;
+      _liveTranscript = '';
+      _soundLevel = 0.0;
+    });
+    _speechService.reset();
+    _speechService.toggleListening();
+  }
+
   Widget _buildPanel(
     String id,
     double width,
@@ -160,6 +172,7 @@ class _LectureViewState extends State<LectureView> {
           width: width,
           index: index,
           onClose: () => setState(() => _showSlides = false),
+          fileId: widget.fileId,
         );
         break;
       case "transcript":
@@ -169,7 +182,7 @@ class _LectureViewState extends State<LectureView> {
           index: index,
           onClose: () => setState(() => _showTranscript = false),
           isRecording: _isRecording,
-          onStartRecording: () => setState(() => _isRecording = true),
+          onStartRecording: _startRecording,
         );
         break;
       case "summary":
@@ -539,13 +552,7 @@ class _LectureViewState extends State<LectureView> {
                                   }
                                 });
                               } else {
-                                setState(() {
-                                  _savedFilePath = null;
-                                  _liveTranscript = '';
-                                  _soundLevel = 0.0;
-                                });
-                                _speechService.reset();
-                                _speechService.toggleListening();
+                                _startRecording();
                               }
                             },
                             style: ElevatedButton.styleFrom(

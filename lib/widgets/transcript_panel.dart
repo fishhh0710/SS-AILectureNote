@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import '../data/transcript_data.dart';
 import 'panel_header.dart';
-import 'transcript_accordion.dart';
 
 class TranscriptPanel extends StatelessWidget {
   final double width;
@@ -63,7 +61,7 @@ class TranscriptPanel extends StatelessWidget {
         ),
       );
     } else {
-      content = Container(child: Text("Transcribing..."));
+      content = const Center(child: Text("Transcribing..."));
       // content = ListView.builder(
       //   padding: const EdgeInsets.all(24),
       //   itemCount: chapter4_1TranscriptData.length,

@@ -1,7 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
+import '../database/database_helper.dart';
+import '../database/models.dart';
 import 'panel_header.dart';
 import 'slide_page.dart';
 
@@ -9,12 +15,14 @@ class SlidesPanel extends StatefulWidget {
   final double width;
   final int index;
   final VoidCallback onClose;
+  final String fileId;
 
   const SlidesPanel({
     super.key,
     required this.width,
     required this.index,
     required this.onClose,
+    required this.fileId,
   });
 
   @override
@@ -24,11 +32,65 @@ class SlidesPanel extends StatefulWidget {
 class _SlidesPanelState extends State<SlidesPanel> {
   PdfDocument? doc;
   bool _isLoading = false;
+  String? _errorMessage;
+
+  int? get _nodeId => int.tryParse(widget.fileId);
 
   @override
   void initState() {
     super.initState();
-    // Do not load PDF automatically anymore to show empty state
+    _loadSavedPdf();
+  }
+
+  @override
+  void didUpdateWidget(covariant SlidesPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.fileId != widget.fileId) {
+      doc?.dispose();
+      doc = null;
+      _loadSavedPdf();
+    }
+  }
+
+  Future<void> _loadSavedPdf() async {
+    final nodeId = _nodeId;
+    if (nodeId == null) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final node = await DatabaseHelper.instance.getNodeById(nodeId);
+      final savedPath = node?.filePath;
+
+      if (savedPath == null || savedPath.isEmpty) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+        return;
+      }
+
+      if (!await File(savedPath).exists()) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'Saved PDF not found. Please upload it again.';
+          });
+        }
+        return;
+      }
+
+      await _openPdf(savedPath);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Failed to load saved PDF: $e';
+        });
+      }
+    }
   }
 
   Future<void> pickAndLoadPdf() async {
@@ -41,26 +103,82 @@ class _SlidesPanelState extends State<SlidesPanel> {
       if (result != null && result.files.single.path != null) {
         setState(() {
           _isLoading = true;
+          _errorMessage = null;
         });
 
-        pdfrxFlutterInitialize();
-
-        final loaded = await PdfDocument.openFile(result.files.single.path!);
-
-        if (mounted) {
-          setState(() {
-            doc = loaded;
-            _isLoading = false;
-          });
-        }
+        final savedPath = await _copyPdfToAppStorage(result.files.single.path!);
+        await _savePdfPath(savedPath);
+        await _openPdf(savedPath);
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _errorMessage = 'Failed to upload PDF: $e';
         });
       }
     }
+  }
+
+  Future<String> _copyPdfToAppStorage(String sourcePath) async {
+    final appDir = await getApplicationDocumentsDirectory();
+    final slidesDir = Directory(p.join(appDir.path, 'lecture_slides'));
+    await slidesDir.create(recursive: true);
+
+    final destinationPath = p.join(slidesDir.path, '${widget.fileId}.pdf');
+    final sourceFile = File(sourcePath);
+    final destinationFile = File(destinationPath);
+
+    if (sourceFile.absolute.path != destinationFile.absolute.path) {
+      await sourceFile.copy(destinationPath);
+    }
+
+    return destinationPath;
+  }
+
+  Future<void> _savePdfPath(String filePath) async {
+    final nodeId = _nodeId;
+    if (nodeId == null) {
+      throw Exception('Cannot save PDF because fileId is invalid.');
+    }
+
+    final node = await DatabaseHelper.instance.getNodeById(nodeId);
+    if (node == null) {
+      throw Exception(
+        'Cannot save PDF because the lecture item does not exist.',
+      );
+    }
+
+    await DatabaseHelper.instance.updateItem(
+      AppNode(
+        id: node.id,
+        parentId: node.parentId,
+        type: node.type,
+        name: node.name,
+        content: node.content,
+        filePath: filePath,
+        createdAt: node.createdAt,
+      ),
+    );
+  }
+
+  Future<void> _openPdf(String filePath) async {
+    pdfrxFlutterInitialize();
+    final loaded = await PdfDocument.openFile(filePath);
+    final oldDoc = doc;
+
+    if (!mounted) {
+      loaded.dispose();
+      return;
+    }
+
+    setState(() {
+      doc = loaded;
+      _isLoading = false;
+      _errorMessage = null;
+    });
+
+    oldDoc?.dispose();
   }
 
   @override
@@ -114,6 +232,21 @@ class _SlidesPanelState extends State<SlidesPanel> {
               '或是搭配手寫筆與平板進行即時速記',
               style: TextStyle(fontSize: 12, color: Color(0xFFA8A08E)),
             ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  _errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.redAccent,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       );
@@ -138,6 +271,20 @@ class _SlidesPanelState extends State<SlidesPanel> {
             title: '課堂教材', // Changed title based on UI
             icon: Icons.picture_in_picture,
             onClose: widget.onClose,
+            actions: [
+              InkWell(
+                onTap: _isLoading ? null : pickAndLoadPdf,
+                borderRadius: BorderRadius.circular(12),
+                child: const Padding(
+                  padding: EdgeInsets.all(4.0),
+                  child: Icon(
+                    Icons.upload_file,
+                    size: 14,
+                    color: Color(0xFFA8A08E),
+                  ),
+                ),
+              ),
+            ],
             index: widget.index,
           ),
           Expanded(child: content),
