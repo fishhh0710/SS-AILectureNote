@@ -4,6 +4,7 @@ import '../widgets/slides_panel.dart';
 import '../widgets/transcript_panel.dart';
 import '../widgets/summary_panel.dart';
 import '../widgets/chatbot_panel.dart';
+import '../services/note_generation_service.dart';
 import '../services/speech_service.dart';
 
 class LectureView extends StatefulWidget {
@@ -23,11 +24,17 @@ class _LectureViewState extends State<LectureView> {
   bool _showChatbot = false;
   bool _isRecording = false;
   final GlobalKey _panelsAreaKey = GlobalKey();
+  final NoteGenerationService _noteGenerationService = NoteGenerationService();
 
   late SpeechService _speechService;
   String _liveTranscript = '';
   String _currentLanguage = 'en_US';
   String? _savedStatusText;
+  List<AiPageNote> _pageNotes = const [];
+  bool _isGeneratingNotes = false;
+  String? _notesError;
+  String? _lastPdfPath;
+  int _noteGenerationRequestId = 0;
 
   @override
   void initState() {
@@ -54,6 +61,14 @@ class _LectureViewState extends State<LectureView> {
       },
     );
     _initializeSpeechService();
+    _loadSavedAiNotes();
+  }
+
+  @override
+  void dispose() {
+    _noteGenerationRequestId++;
+    _noteGenerationService.dispose();
+    super.dispose();
   }
 
   Future<void> _initializeSpeechService() async {
@@ -64,6 +79,23 @@ class _LectureViewState extends State<LectureView> {
       });
     }
     await _speechService.initialize();
+  }
+
+  Future<void> _loadSavedAiNotes() async {
+    try {
+      final notes = await _noteGenerationService.loadSavedNotes(widget.fileId);
+      if (!mounted) return;
+
+      setState(() {
+        _pageNotes = notes;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _notesError = 'Failed to load saved AI notes: $e';
+      });
+    }
   }
 
   double _getMinWidth(String id) {
@@ -168,6 +200,47 @@ class _LectureViewState extends State<LectureView> {
     _speechService.toggleListening();
   }
 
+  Future<void> _handlePdfUploaded(String pdfPath) async {
+    final requestId = ++_noteGenerationRequestId;
+
+    setState(() {
+      _showSummary = true;
+      _layoutOrder.remove('summary');
+      _layoutOrder.add('summary');
+      _lastPdfPath = pdfPath;
+      _pageNotes = const [];
+      _isGeneratingNotes = true;
+      _notesError = null;
+    });
+
+    try {
+      await _noteGenerationService.clearSavedNotes(widget.fileId);
+      final notes = await _noteGenerationService.generateNotesFromPdf(pdfPath);
+      await _noteGenerationService.saveNotes(widget.fileId, notes);
+
+      if (!mounted || requestId != _noteGenerationRequestId) return;
+
+      setState(() {
+        _pageNotes = notes;
+        _isGeneratingNotes = false;
+      });
+    } catch (e) {
+      if (!mounted || requestId != _noteGenerationRequestId) return;
+
+      setState(() {
+        _isGeneratingNotes = false;
+        _notesError = e.toString();
+      });
+    }
+  }
+
+  void _retryGeneratingNotes() {
+    final pdfPath = _lastPdfPath;
+    if (pdfPath == null || _isGeneratingNotes) return;
+
+    _handlePdfUploaded(pdfPath);
+  }
+
   Widget _buildPanel(
     String id,
     double width,
@@ -185,6 +258,7 @@ class _LectureViewState extends State<LectureView> {
           index: index,
           onClose: () => setState(() => _showSlides = false),
           fileId: widget.fileId,
+          onPdfUploaded: _handlePdfUploaded,
         );
         break;
       case "transcript":
@@ -205,6 +279,10 @@ class _LectureViewState extends State<LectureView> {
           width: width,
           index: index,
           onClose: () => setState(() => _showSummary = false),
+          notes: _pageNotes,
+          isGenerating: _isGeneratingNotes,
+          errorMessage: _notesError,
+          onRetry: _lastPdfPath == null ? null : _retryGeneratingNotes,
         );
         break;
       case "chatbot":

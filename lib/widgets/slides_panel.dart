@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ class SlidesPanel extends StatefulWidget {
   final int index;
   final VoidCallback onClose;
   final String fileId;
+  final Future<void> Function(String filePath)? onPdfUploaded;
 
   const SlidesPanel({
     super.key,
@@ -23,6 +25,7 @@ class SlidesPanel extends StatefulWidget {
     required this.index,
     required this.onClose,
     required this.fileId,
+    this.onPdfUploaded,
   });
 
   @override
@@ -109,6 +112,10 @@ class _SlidesPanelState extends State<SlidesPanel> {
         final savedPath = await _copyPdfToAppStorage(result.files.single.path!);
         await _savePdfPath(savedPath);
         await _openPdf(savedPath);
+        final onPdfUploaded = widget.onPdfUploaded;
+        if (onPdfUploaded != null) {
+          unawaited(onPdfUploaded(savedPath));
+        }
       }
     } catch (e) {
       if (mounted) {
