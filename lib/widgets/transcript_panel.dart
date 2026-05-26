@@ -6,6 +6,8 @@ class TranscriptPanel extends StatelessWidget {
   final int index;
   final VoidCallback onClose;
   final bool isRecording;
+  final String transcriptText;
+  final String? savedStatusText;
   final VoidCallback onStartRecording;
 
   const TranscriptPanel({
@@ -14,14 +16,17 @@ class TranscriptPanel extends StatelessWidget {
     required this.index,
     required this.onClose,
     this.isRecording = false,
+    required this.transcriptText,
+    this.savedStatusText,
     required this.onStartRecording,
   });
 
   @override
   Widget build(BuildContext context) {
     Widget content;
+    final hasTranscript = transcriptText.trim().isNotEmpty;
 
-    if (!isRecording) {
+    if (!isRecording && !hasTranscript) {
       content = Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -61,37 +66,63 @@ class TranscriptPanel extends StatelessWidget {
         ),
       );
     } else {
-      content = const Center(child: Text("Transcribing..."));
-      // content = ListView.builder(
-      //   padding: const EdgeInsets.all(24),
-      //   itemCount: chapter4_1TranscriptData.length,
-      //   itemBuilder: (context, idx) {
-      //     final page = chapter4_1TranscriptData[idx];
-      //     return Column(
-      //       crossAxisAlignment: CrossAxisAlignment.start,
-      //       children: [
-      //         Padding(
-      //           padding: const EdgeInsets.symmetric(vertical: 8.0),
-      //           child: Text(
-      //             'Slide ${page.pageNumber}',
-      //             style: const TextStyle(
-      //               fontSize: 12,
-      //               fontWeight: FontWeight.bold,
-      //               color: Color(0xFFA8A08E),
-      //             ),
-      //           ),
-      //         ),
-      //         ...page.sections.map(
-      //           (section) => TranscriptAccordion(
-      //             title: section.title,
-      //             content: section.content,
-      //             defaultOpen: idx == 0,
-      //           ),
-      //         ),
-      //       ],
-      //     );
-      //   },
-      // );
+      content = Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 18, 24, 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: isRecording ? Colors.red : const Color(0xFF8E9775),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  isRecording
+                      ? 'Recording'
+                      : (savedStatusText ?? 'Transcript ready'),
+                  style: const TextStyle(
+                    color: Color(0xFFA8A08E),
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFFEAE7DC)),
+          Expanded(
+            child: hasTranscript
+                ? ListView(
+                    padding: const EdgeInsets.all(24),
+                    children: [
+                      Text(
+                        transcriptText,
+                        style: const TextStyle(
+                          color: Color(0xFF3D3D3D),
+                          fontSize: 16,
+                          height: 1.6,
+                        ),
+                      ),
+                    ],
+                  )
+                : const Center(
+                    child: Text(
+                      'Listening...',
+                      style: TextStyle(
+                        color: Color(0xFF3D3D3D),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+          ),
+        ],
+      );
     }
 
     return SizedBox(
@@ -116,6 +147,21 @@ class TranscriptPanel extends StatelessWidget {
               title: '即時逐字稿',
               icon: Icons.subtitles,
               onClose: onClose,
+              actions: [
+                if (!isRecording && hasTranscript)
+                  InkWell(
+                    onTap: onStartRecording,
+                    borderRadius: BorderRadius.circular(12),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4.0),
+                      child: Icon(
+                        Icons.mic,
+                        size: 14,
+                        color: Color(0xFFA8A08E),
+                      ),
+                    ),
+                  ),
+              ],
               index: index,
             ),
             const Divider(height: 1, color: Color(0xFFEAE7DC)),
