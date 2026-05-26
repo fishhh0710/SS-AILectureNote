@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:io';
@@ -7,6 +8,7 @@ import '../widgets/transcript_panel.dart';
 import '../widgets/summary_panel.dart';
 import '../widgets/chatbot_panel.dart';
 import '../services/speech_service.dart';
+import '../services/transcript_export_service.dart';
 
 class LectureView extends StatefulWidget {
   final String courseId;
@@ -32,6 +34,10 @@ class _LectureViewState extends State<LectureView> {
   String? _savedFilePath;
   double _soundLevel = 0.0;
 
+  // 10-second export service
+  TranscriptExportService? _exportService;
+  Timer? _exportTimer;
+
   @override
   void initState() {
     super.initState();
@@ -41,6 +47,8 @@ class _LectureViewState extends State<LectureView> {
           _liveTranscript = text;
           _isRecording = listening;
         });
+        // Feed the latest transcript to the export service on every update
+        _exportService?.tick(text);
       },
       onSoundLevelChange: (level) {
         setState(() {
@@ -511,22 +519,23 @@ class _LectureViewState extends State<LectureView> {
                           ElevatedButton(
                             onPressed: () async {
                               if (_isRecording) {
+                                // --- STOP RECORDING ---
                                 _speechService.toggleListening();
-                                final dir =
-                                    await getApplicationDocumentsDirectory();
-                                final file = File(
-                                  '${dir.path}/transcript_test.json',
-                                );
-                                await file.writeAsString(
-                                  _speechService.getExportJson(),
-                                );
+
+                                // Cancel the 10-second export timer and flush
+                                _exportTimer?.cancel();
+                                _exportTimer = null;
+                                await _exportService?.stop(_liveTranscript);
+                                final savedDir = _exportService?.sessionDirPath ?? '';
+                                _exportService = null;
+
                                 setState(() {
-                                  _savedFilePath = file.path;
+                                  _savedFilePath = savedDir;
                                 });
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Saved to ${file.path}'),
+                                      content: Text('Transcript saved to: $savedDir'),
                                     ),
                                   );
                                 }
@@ -539,12 +548,36 @@ class _LectureViewState extends State<LectureView> {
                                   }
                                 });
                               } else {
+                                // --- START RECORDING ---
                                 setState(() {
                                   _savedFilePath = null;
                                   _liveTranscript = '';
                                   _soundLevel = 0.0;
                                 });
                                 _speechService.reset();
+
+                                // Build a session name from current timestamp
+                                final now = DateTime.now();
+                                final sessionName =
+                                    'lecture_${now.year}${now.month.toString().padLeft(2,'0')}${now.day.toString().padLeft(2,'0')}'
+                                    '_${now.hour.toString().padLeft(2,'0')}${now.minute.toString().padLeft(2,'0')}${now.second.toString().padLeft(2,'0')}';
+
+                                // fileId is the DB id of the current course item
+                                // used as parentId so the recording is linked to it.
+                                final parentId = int.tryParse(widget.fileId) ?? 0;
+
+                                _exportService = TranscriptExportService(
+                                  courseItemParentId: parentId,
+                                  sessionName: sessionName,
+                                );
+                                await _exportService!.start();
+
+                                // Fire every 10 seconds to write a new segment
+                                _exportTimer = Timer.periodic(
+                                  const Duration(seconds: 10),
+                                  (_) => _exportService?.exportSegment(),
+                                );
+
                                 _speechService.toggleListening();
                               }
                             },
