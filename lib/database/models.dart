@@ -6,6 +6,7 @@ class AppNode {
   final String name;
   final String? content;  // Transcript for recordings, text for AI notes/notebooks
   final String? filePath; // Physical path for recordings/PDFs
+  final String? cloudPath; // Path in Firebase Storage
   final String createdAt;
 
   AppNode({
@@ -15,6 +16,7 @@ class AppNode {
     required this.name,
     this.content,
     this.filePath,
+    this.cloudPath,
     required this.createdAt,
   });
 
@@ -25,6 +27,7 @@ class AppNode {
     'name': name,
     'content': content,
     'filePath': filePath,
+    'cloudPath': cloudPath,
     'createdAt': createdAt,
   };
 
@@ -35,6 +38,7 @@ class AppNode {
     name: map['name'],
     content: map['content'],
     filePath: map['filePath'],
+    cloudPath: map['cloudPath'],
     createdAt: map['createdAt'],
   );
 }

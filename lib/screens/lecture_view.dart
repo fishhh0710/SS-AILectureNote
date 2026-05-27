@@ -167,6 +167,7 @@ class _LectureViewState extends State<LectureView> {
           key: const ValueKey("slides"),
           width: width,
           index: index,
+          fileId: widget.fileId,
           onClose: () => setState(() => _showSlides = false),
         );
         break;

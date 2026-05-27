@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../database/database_helper.dart';
 import '../database/models.dart';
+import '../services/firebase_upload_service.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -19,6 +20,11 @@ class _DashboardState extends State<Dashboard>
 
   List<AppNode> _nodes = [];
   AppNode? _databaseRoot;
+
+  bool _isBackingUp = false;
+  String _backupStatus = '';
+  double _backupProgress = 0.0;
+  StateSetter? _dialogSetState;
 
   @override
   void initState() {
@@ -113,6 +119,119 @@ class _DashboardState extends State<Dashboard>
     });
   }
 
+  Future<void> _uploadToFirebase() async {
+
+    setState(() {
+      _isBackingUp = true;
+      _backupStatus = '正在準備...';
+      _backupProgress = 0.0;
+    });
+
+    _showBackupProgressDialog();
+
+    try {
+      await FirebaseUploadService.uploadAllFiles(
+        userId: 'jenny',
+        onProgress: (status, progress) {
+          if (mounted) {
+            setState(() {
+              _backupStatus = status;
+              _backupProgress = progress;
+            });
+            _dialogSetState?.call(() {});
+          }
+        },
+      );
+      await Future.delayed(const Duration(milliseconds: 800));
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress dialog
+        _showErrorSnackBar(e.toString());
+        print(e.toString());
+      }
+      setState(() {
+        _isBackingUp = false;
+      });
+      return;
+    }
+
+    if (mounted) {
+      Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_backupStatus),
+          backgroundColor: const Color(0xFF8E9775),
+        ),
+      );
+    }
+
+    setState(() {
+      _isBackingUp = false;
+    });
+    _loadData();
+  }
+
+
+
+  void _showBackupProgressDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            _dialogSetState = setDialogState;
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('備份至 Firebase'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 12),
+                  CircularProgressIndicator(
+                    value: _backupProgress <= 0.0 || _backupProgress >= 1.0 ? null : _backupProgress,
+                    color: const Color(0xFF8E9775),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    _backupStatus,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF3D3D3D),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${(_backupProgress * 100).toInt()}%',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFFA8A08E),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    ).then((_) {
+      if (mounted) {
+        _dialogSetState = null;
+      }
+    });
+  }
+
+  void _showErrorSnackBar(String errorMsg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('備份失敗: $errorMsg'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -127,13 +246,44 @@ class _DashboardState extends State<Dashboard>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  '目前課程',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontFamily: 'Serif',
-                    color: Color(0xFF3D3D3D),
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      '目前課程',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontFamily: 'Serif',
+                        color: Color(0xFF3D3D3D),
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: _isBackingUp ? null : _uploadToFirebase,
+                      icon: _isBackingUp 
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.cloud_upload, size: 18),
+                      label: const Text(
+                        '備份至 Firebase',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF8E9775),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 24),
                 _nodes.isEmpty

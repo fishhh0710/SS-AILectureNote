@@ -1,6 +1,12 @@
+import 'dart:io';
+import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:file_picker/file_picker.dart';
+
+import '../database/database_helper.dart';
+import '../database/models.dart';
 
 import 'panel_header.dart';
 import 'slide_page.dart';
@@ -8,12 +14,14 @@ import 'slide_page.dart';
 class SlidesPanel extends StatefulWidget {
   final double width;
   final int index;
+  final String fileId;
   final VoidCallback onClose;
 
   const SlidesPanel({
     super.key,
     required this.width,
     required this.index,
+    required this.fileId,
     required this.onClose,
   });
 
@@ -28,7 +36,40 @@ class _SlidesPanelState extends State<SlidesPanel> {
   @override
   void initState() {
     super.initState();
-    // Do not load PDF automatically anymore to show empty state
+    _loadExistingPdf();
+  }
+
+  Future<void> _loadExistingPdf() async {
+    final nodeId = int.tryParse(widget.fileId);
+    if (nodeId == null) return;
+    
+    final node = await DatabaseHelper.instance.getNodeById(nodeId);
+    if (node != null && node.filePath != null) {
+      final file = File(node.filePath!);
+      if (await file.exists()) {
+        setState(() {
+          _isLoading = true;
+        });
+
+        pdfrxFlutterInitialize();
+
+        try {
+          final loaded = await PdfDocument.openFile(node.filePath!);
+          if (mounted) {
+            setState(() {
+              doc = loaded;
+              _isLoading = false;
+            });
+          }
+        } catch (e) {
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+          }
+        }
+      }
+    }
   }
 
   Future<void> pickAndLoadPdf() async {
@@ -43,9 +84,35 @@ class _SlidesPanelState extends State<SlidesPanel> {
           _isLoading = true;
         });
 
+        // Copy file to application documents directory
+        final dir = await getApplicationDocumentsDirectory();
+        final originalFile = File(result.files.single.path!);
+        final fileName = basename(originalFile.path);
+        final newPath = '${dir.path}/${widget.fileId}_$fileName';
+        await originalFile.copy(newPath);
+
+        // Update database
+        final nodeId = int.tryParse(widget.fileId);
+        if (nodeId != null) {
+          final node = await DatabaseHelper.instance.getNodeById(nodeId);
+          if (node != null) {
+            final updatedNode = AppNode(
+              id: node.id,
+              parentId: node.parentId,
+              type: node.type,
+              name: node.name,
+              content: node.content,
+              filePath: newPath,
+              cloudPath: node.cloudPath,
+              createdAt: node.createdAt,
+            );
+            await DatabaseHelper.instance.updateItem(updatedNode);
+          }
+        }
+
         pdfrxFlutterInitialize();
 
-        final loaded = await PdfDocument.openFile(result.files.single.path!);
+        final loaded = await PdfDocument.openFile(newPath);
 
         if (mounted) {
           setState(() {
