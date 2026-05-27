@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:io';
@@ -7,6 +8,7 @@ import '../widgets/transcript_panel.dart';
 import '../widgets/summary_panel.dart';
 import '../widgets/chatbot_panel.dart';
 import '../services/speech_service.dart';
+import '../services/transcript_export_service.dart';
 
 class LectureView extends StatefulWidget {
   final String courseId;
@@ -30,6 +32,11 @@ class _LectureViewState extends State<LectureView> {
   String _liveTranscript = '';
   String _currentLanguage = 'en_US';
   String? _savedFilePath;
+  double _soundLevel = 0.0;
+
+  // 10-second export service
+  TranscriptExportService? _exportService;
+  Timer? _exportTimer;
 
   @override
   void initState() {
@@ -39,6 +46,13 @@ class _LectureViewState extends State<LectureView> {
         setState(() {
           _liveTranscript = text;
           _isRecording = listening;
+        });
+        // Feed the latest transcript to the export service on every update
+        _exportService?.tick(text);
+      },
+      onSoundLevelChange: (level) {
+        setState(() {
+          _soundLevel = level;
         });
       },
       onError: (error) {
@@ -165,6 +179,7 @@ class _LectureViewState extends State<LectureView> {
           onClose: () => setState(() => _showTranscript = false),
           isRecording: _isRecording,
           onStartRecording: () => setState(() => _isRecording = true),
+          liveTranscript: _liveTranscript,
         );
         break;
       case "summary":
@@ -505,40 +520,65 @@ class _LectureViewState extends State<LectureView> {
                           ElevatedButton(
                             onPressed: () async {
                               if (_isRecording) {
+                                // --- STOP RECORDING ---
                                 _speechService.toggleListening();
-                                final dir =
-                                    await getApplicationDocumentsDirectory();
-                                final file = File(
-                                  '${dir.path}/transcript_test.json',
-                                );
-                                await file.writeAsString(
-                                  _speechService.getExportJson(),
-                                );
+
+                                // Cancel the 10-second export timer and flush
+                                _exportTimer?.cancel();
+                                _exportTimer = null;
+                                await _exportService?.stop(_liveTranscript);
+                                final savedDir = _exportService?.sessionDirPath ?? '';
+                                _exportService = null;
+
                                 setState(() {
-                                  _savedFilePath = file.path;
+                                  _savedFilePath = savedDir;
                                 });
-                                // if (mounted) {
-                                //   ScaffoldMessenger.of(context).showSnackBar(
-                                //     SnackBar(
-                                //       content: Text('Saved to ${file.path}'),
-                                //     ),
-                                //   );
-                                // }
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Transcript saved to: $savedDir'),
+                                    ),
+                                  );
+                                }
 
                                 Future.delayed(const Duration(seconds: 3), () {
                                   if (mounted) {
                                     setState(() {
                                       _savedFilePath = null;
-                                      _liveTranscript = '';
                                     });
                                   }
                                 });
                               } else {
+                                // --- START RECORDING ---
                                 setState(() {
                                   _savedFilePath = null;
                                   _liveTranscript = '';
+                                  _soundLevel = 0.0;
                                 });
                                 _speechService.reset();
+
+                                // Build a session name from current timestamp
+                                final now = DateTime.now();
+                                final sessionName =
+                                    'lecture_${now.year}${now.month.toString().padLeft(2,'0')}${now.day.toString().padLeft(2,'0')}'
+                                    '_${now.hour.toString().padLeft(2,'0')}${now.minute.toString().padLeft(2,'0')}${now.second.toString().padLeft(2,'0')}';
+
+                                // fileId is the DB id of the current course item
+                                // used as parentId so the recording is linked to it.
+                                final parentId = int.tryParse(widget.fileId) ?? 0;
+
+                                _exportService = TranscriptExportService(
+                                  courseItemParentId: parentId,
+                                  sessionName: sessionName,
+                                );
+                                await _exportService!.start();
+
+                                // Fire every 10 seconds to write a new segment
+                                _exportTimer = Timer.periodic(
+                                  const Duration(seconds: 10),
+                                  (_) => _exportService?.exportSegment(),
+                                );
+
                                 _speechService.toggleListening();
                               }
                             },
@@ -568,94 +608,6 @@ class _LectureViewState extends State<LectureView> {
               ),
             ],
           ),
-          if (_liveTranscript.isNotEmpty ||
-              _savedFilePath != null ||
-              _isRecording)
-            Positioned(
-              bottom: 24,
-              left: 24,
-              right: 120, // leave space for sidebar
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2D2D2D).withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black26,
-                      blurRadius: 8,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.record_voice_over,
-                          color: Colors.white70,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Live Transcript (Test)',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Spacer(),
-                        if (_isRecording)
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _liveTranscript.isEmpty && _isRecording
-                          ? 'Listening...'
-                          : _liveTranscript,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        height: 1.4,
-                      ),
-                    ),
-                    if (_savedFilePath != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12.0),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '✅ Exported to: $_savedFilePath',
-                            style: const TextStyle(
-                              color: Colors.greenAccent,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );

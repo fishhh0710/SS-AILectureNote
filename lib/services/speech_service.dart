@@ -31,8 +31,13 @@ class SpeechService {
   // Callbacks
   final Function(String text, bool isListening) onUpdate;
   final Function(String errorMsg) onError;
+  final Function(double level)? onSoundLevelChange;
 
-  SpeechService({required this.onUpdate, required this.onError});
+  SpeechService({
+    required this.onUpdate,
+    required this.onError,
+    this.onSoundLevelChange,
+  });
 
   Future<bool> initialize() async {
     await [Permission.microphone, Permission.speech].request();
@@ -42,6 +47,7 @@ class SpeechService {
   void _handleStatus(String val) {
     if (val == 'done' || val == 'notListening') {
       isListening = false;
+      onSoundLevelChange?.call(0.0);
       if (currentWords.isNotEmpty && _currentChunkStartTime != null) {
         chunks.add(TranscriptChunk(
           startTime: _currentChunkStartTime!,
@@ -62,6 +68,7 @@ class SpeechService {
 
   void _handleError(dynamic val) {
     isListening = false;
+    onSoundLevelChange?.call(0.0);
     
     // In continuous listening mode (e.g. whole class recording), 
     // the system might throw timeout errors (sometimes marked as permanent)
@@ -90,6 +97,7 @@ class SpeechService {
     } else {
       _shouldListen = false;
       isListening = false;
+      onSoundLevelChange?.call(0.0);
       _speech.stop();
       onUpdate(_getCombinedText(), isListening);
     }
@@ -112,7 +120,24 @@ class SpeechService {
         onResult: (val) {
           currentWords = val.recognizedWords;
           if (val.hasConfidenceRating && val.confidence > 0) confidence = val.confidence;
+
+          // When the recognizer finalizes a sentence within a session,
+          // immediately save it as a chunk so the next partial result
+          // appends rather than overwrites it.
+          if (val.finalResult && currentWords.trim().isNotEmpty) {
+            chunks.add(TranscriptChunk(
+              startTime: _currentChunkStartTime ?? DateTime.now(),
+              endTime: DateTime.now(),
+              text: currentWords.trim(),
+            ));
+            currentWords = '';
+            _currentChunkStartTime = DateTime.now();
+          }
+
           onUpdate(_getCombinedText(), isListening);
+        },
+        onSoundLevelChange: (level) {
+          onSoundLevelChange?.call(level);
         },
         localeId: currentLocaleId,
         listenFor: const Duration(hours: 24),
@@ -137,6 +162,7 @@ class SpeechService {
   void reset() {
     chunks.clear();
     currentWords = '';
+    onSoundLevelChange?.call(0.0);
     onUpdate('', isListening);
   }
 }
