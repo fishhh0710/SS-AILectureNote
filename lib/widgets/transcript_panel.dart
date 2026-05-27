@@ -6,6 +6,8 @@ class TranscriptPanel extends StatefulWidget {
   final int index;
   final VoidCallback onClose;
   final bool isRecording;
+  final String transcriptText;
+  final String? savedStatusText;
   final VoidCallback onStartRecording;
   final String liveTranscript;
 
@@ -15,6 +17,8 @@ class TranscriptPanel extends StatefulWidget {
     required this.index,
     required this.onClose,
     this.isRecording = false,
+    required this.transcriptText,
+    this.savedStatusText,
     required this.onStartRecording,
     this.liveTranscript = '',
   });
@@ -89,6 +93,7 @@ class _TranscriptPanelState extends State<TranscriptPanel> {
             : '${_fullTranscript.trimRight()} ${widget.liveTranscript.trimLeft()}';
 
     Widget content;
+    final hasTranscript = transcriptText.trim().isNotEmpty;
 
     if (!widget.isRecording && displayText.isEmpty) {
       // No recording, no history — show the "start recording" prompt
