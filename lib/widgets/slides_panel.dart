@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'dart:io';
+import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:file_picker/file_picker.dart';
@@ -9,12 +12,14 @@ import 'package:path_provider/path_provider.dart';
 
 import '../database/database_helper.dart';
 import '../database/models.dart';
+
 import 'panel_header.dart';
 import 'slide_page.dart';
 
 class SlidesPanel extends StatefulWidget {
   final double width;
   final int index;
+  final String fileId;
   final VoidCallback onClose;
   final String fileId;
   final Future<void> Function(String filePath)? onPdfUploaded;
@@ -23,6 +28,7 @@ class SlidesPanel extends StatefulWidget {
     super.key,
     required this.width,
     required this.index,
+    required this.fileId,
     required this.onClose,
     required this.fileId,
     this.onPdfUploaded,

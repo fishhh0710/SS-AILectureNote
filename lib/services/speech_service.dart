@@ -153,10 +153,22 @@ class SpeechService {
       onUpdate(_getCombinedText(), isListening);
       _speech.listen(
         onResult: (val) {
-          _upsertCurrentChunk(val.recognizedWords);
-          if (val.hasConfidenceRating && val.confidence > 0) {
-            confidence = val.confidence;
+          currentWords = val.recognizedWords;
+          if (val.hasConfidenceRating && val.confidence > 0) confidence = val.confidence;
+
+          // When the recognizer finalizes a sentence within a session,
+          // immediately save it as a chunk so the next partial result
+          // appends rather than overwrites it.
+          if (val.finalResult && currentWords.trim().isNotEmpty) {
+            chunks.add(TranscriptChunk(
+              startTime: _currentChunkStartTime ?? DateTime.now(),
+              endTime: DateTime.now(),
+              text: currentWords.trim(),
+            ));
+            currentWords = '';
+            _currentChunkStartTime = DateTime.now();
           }
+
           onUpdate(_getCombinedText(), isListening);
         },
         onSoundLevelChange: (level) {
