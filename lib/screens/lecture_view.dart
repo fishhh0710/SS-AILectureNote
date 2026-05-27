@@ -75,6 +75,7 @@ class _LectureViewState extends State<LectureView> {
   @override
   void dispose() {
     _noteGenerationRequestId++;
+    _exportTimer?.cancel();
     _noteGenerationService.dispose();
     super.dispose();
   }
@@ -199,12 +200,75 @@ class _LectureViewState extends State<LectureView> {
     });
   }
 
-  void _startRecording() {
-    if (_isRecording) return;
+  Future<void> _handleRecordingToggle() async {
+    if (_isRecording) {
+      _speechService.toggleListening();
+
+      _exportTimer?.cancel();
+      _exportTimer = null;
+
+      final exportService = _exportService;
+      final savedDir = exportService?.sessionDirPath ?? '';
+      await exportService?.stop(_liveTranscript);
+      _exportService = null;
+
+      if (!mounted) return;
+
+      setState(() {
+        _savedStatusText = savedDir.isEmpty
+            ? 'Transcript saved locally'
+            : 'Transcript saved to: $savedDir';
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_savedStatusText!)));
+
+      Future.delayed(const Duration(seconds: 3), () {
+        if (!mounted) return;
+        setState(() {
+          _savedStatusText = null;
+        });
+      });
+      return;
+    }
 
     setState(() {
       _savedStatusText = null;
+      _liveTranscript = '';
     });
+    _speechService.reset();
+
+    final now = DateTime.now();
+    final sessionName =
+        'lecture_${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
+        '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+    final parentId = int.tryParse(widget.fileId) ?? 0;
+
+    final exportService = TranscriptExportService(
+      courseItemParentId: parentId,
+      sessionName: sessionName,
+    );
+    _exportService = exportService;
+
+    try {
+      await exportService.start();
+    } catch (e) {
+      _exportService = null;
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to start recording: $e')));
+      return;
+    }
+
+    if (!mounted) return;
+
+    _exportTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _exportService?.exportSegment(),
+    );
+
     _speechService.toggleListening();
   }
 
@@ -266,7 +330,6 @@ class _LectureViewState extends State<LectureView> {
           index: index,
           fileId: widget.fileId,
           onClose: () => setState(() => _showSlides = false),
-          fileId: widget.fileId,
           onPdfUploaded: _handlePdfUploaded,
         );
         break;
@@ -277,7 +340,10 @@ class _LectureViewState extends State<LectureView> {
           index: index,
           onClose: () => setState(() => _showTranscript = false),
           isRecording: _isRecording,
-          onStartRecording: () => setState(() => _isRecording = true),
+          savedStatusText: _savedStatusText,
+          onStartRecording: () {
+            unawaited(_handleRecordingToggle());
+          },
           liveTranscript: _liveTranscript,
         );
         break;
@@ -622,68 +688,7 @@ class _LectureViewState extends State<LectureView> {
                           const SizedBox(height: 12),
                           ElevatedButton(
                             onPressed: () {
-                              if (_isRecording) {
-                                // --- STOP RECORDING ---
-                                _speechService.toggleListening();
-
-                                // Cancel the 10-second export timer and flush
-                                _exportTimer?.cancel();
-                                _exportTimer = null;
-                                await _exportService?.stop(_liveTranscript);
-                                final savedDir = _exportService?.sessionDirPath ?? '';
-                                _exportService = null;
-
-                                setState(() {
-                                  _savedFilePath = savedDir;
-                                });
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Transcript saved to: $savedDir'),
-                                    ),
-                                  );
-                                }
-
-                                Future.delayed(const Duration(seconds: 3), () {
-                                  if (mounted) {
-                                    setState(() {
-                                      _savedFilePath = null;
-                                    });
-                                  }
-                                });
-                              } else {
-                                // --- START RECORDING ---
-                                setState(() {
-                                  _savedFilePath = null;
-                                  _liveTranscript = '';
-                                  _soundLevel = 0.0;
-                                });
-                                _speechService.reset();
-
-                                // Build a session name from current timestamp
-                                final now = DateTime.now();
-                                final sessionName =
-                                    'lecture_${now.year}${now.month.toString().padLeft(2,'0')}${now.day.toString().padLeft(2,'0')}'
-                                    '_${now.hour.toString().padLeft(2,'0')}${now.minute.toString().padLeft(2,'0')}${now.second.toString().padLeft(2,'0')}';
-
-                                // fileId is the DB id of the current course item
-                                // used as parentId so the recording is linked to it.
-                                final parentId = int.tryParse(widget.fileId) ?? 0;
-
-                                _exportService = TranscriptExportService(
-                                  courseItemParentId: parentId,
-                                  sessionName: sessionName,
-                                );
-                                await _exportService!.start();
-
-                                // Fire every 10 seconds to write a new segment
-                                _exportTimer = Timer.periodic(
-                                  const Duration(seconds: 10),
-                                  (_) => _exportService?.exportSegment(),
-                                );
-
-                                _speechService.toggleListening();
-                              }
+                              unawaited(_handleRecordingToggle());
                             },
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 20),

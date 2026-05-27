@@ -21,14 +21,12 @@ class SlidesPanel extends StatefulWidget {
   final int index;
   final String fileId;
   final VoidCallback onClose;
-  final String fileId;
   final Future<void> Function(String filePath)? onPdfUploaded;
 
   const SlidesPanel({
     super.key,
     required this.width,
     required this.index,
-    required this.fileId,
     required this.onClose,
     required this.fileId,
     this.onPdfUploaded,
