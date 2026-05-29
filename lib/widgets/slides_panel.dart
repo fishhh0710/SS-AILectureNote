@@ -1,9 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'dart:io';
-import 'package:path/path.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:file_picker/file_picker.dart';
@@ -12,9 +9,11 @@ import 'package:path_provider/path_provider.dart';
 
 import '../database/database_helper.dart';
 import '../database/models.dart';
+import '../services/annotation_manager.dart';
 
 import 'panel_header.dart';
 import 'slide_page.dart';
+import 'annotation_test_controls.dart';
 
 class SlidesPanel extends StatefulWidget {
   final double width;
@@ -40,6 +39,7 @@ class _SlidesPanelState extends State<SlidesPanel> {
   PdfDocument? doc;
   bool _isLoading = false;
   String? _errorMessage;
+  PageAnnotationManager? _annotationManager;
 
   int? get _nodeId => int.tryParse(widget.fileId);
 
@@ -55,14 +55,20 @@ class _SlidesPanelState extends State<SlidesPanel> {
     if (oldWidget.fileId != widget.fileId) {
       doc?.dispose();
       doc = null;
+      _annotationManager?.dispose();
+      _annotationManager = null;
       _loadSavedPdf();
     }
   }
 
   Future<void> _loadSavedPdf() async {
     final nodeId = _nodeId;
-    if (nodeId == null) return;
+    if (nodeId == null) {
+      print('DEBUG: _loadSavedPdf returned early because _nodeId is null');
+      return;
+    }
 
+    print('DEBUG: _loadSavedPdf started, nodeId: $nodeId');
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -71,15 +77,19 @@ class _SlidesPanelState extends State<SlidesPanel> {
     try {
       final node = await DatabaseHelper.instance.getNodeById(nodeId);
       final savedPath = node?.filePath;
+      print('DEBUG: Database node fetched, filePath: $savedPath');
 
       if (savedPath == null || savedPath.isEmpty) {
+        print('DEBUG: savedPath is null or empty, setting _isLoading = false');
         if (mounted) {
           setState(() => _isLoading = false);
         }
         return;
       }
 
-      if (!await File(savedPath).exists()) {
+      final fileExists = await File(savedPath).exists();
+      print('DEBUG: file exists: $fileExists');
+      if (!fileExists) {
         if (mounted) {
           setState(() {
             _isLoading = false;
@@ -89,8 +99,12 @@ class _SlidesPanelState extends State<SlidesPanel> {
         return;
       }
 
+      print('DEBUG: calling _openPdf');
       await _openPdf(savedPath);
-    } catch (e) {
+      print('DEBUG: _openPdf call finished successfully');
+    } catch (e, stack) {
+      print('DEBUG: _loadSavedPdf caught error: $e');
+      print('DEBUG: StackTrace: $stack');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -174,27 +188,48 @@ class _SlidesPanelState extends State<SlidesPanel> {
   }
 
   Future<void> _openPdf(String filePath) async {
-    pdfrxFlutterInitialize();
-    final loaded = await PdfDocument.openFile(filePath);
-    final oldDoc = doc;
+    print('DEBUG: _openPdf started with filePath: $filePath');
+    try {
+      pdfrxFlutterInitialize();
+      print('DEBUG: pdfrxFlutterInitialize completed');
+      
+      final loaded = await PdfDocument.openFile(filePath);
+      print('DEBUG: PdfDocument.openFile completed successfully');
+      
+      final oldDoc = doc;
 
-    if (!mounted) {
-      loaded.dispose();
-      return;
+      if (!mounted) {
+        print('DEBUG: _openPdf returned early because widget is not mounted');
+        loaded.dispose();
+        return;
+      }
+
+      setState(() {
+        doc = loaded;
+        _isLoading = false;
+        _errorMessage = null;
+        final nodeId = _nodeId;
+        print('DEBUG: _openPdf setState running, nodeId: $nodeId');
+        if (nodeId != null) {
+          _annotationManager?.dispose();
+          _annotationManager = PageAnnotationManager(nodeId);
+          print('DEBUG: _annotationManager initialized');
+        }
+      });
+
+      oldDoc?.dispose();
+      print('DEBUG: _openPdf completed successfully');
+    } catch (e, stack) {
+      print('DEBUG: _openPdf encountered error: $e');
+      print('DEBUG: StackTrace: $stack');
+      rethrow;
     }
-
-    setState(() {
-      doc = loaded;
-      _isLoading = false;
-      _errorMessage = null;
-    });
-
-    oldDoc?.dispose();
   }
 
   @override
   void dispose() {
     doc?.dispose();
+    _annotationManager?.dispose();
     super.dispose();
   }
 
@@ -266,9 +301,11 @@ class _SlidesPanelState extends State<SlidesPanel> {
         padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
         itemCount: doc!.pages.length,
         itemBuilder: (context, idx) {
+          final pageNum = idx + 1;
           return SlidePage(
-            pageNumber: idx + 1,
-            child: PdfPageView(document: doc!, pageNumber: idx + 1),
+            pageNumber: pageNum,
+            annotationListenable: _annotationManager?.getPageNotifier(pageNum),
+            child: PdfPageView(document: doc!, pageNumber: pageNum),
           );
         },
       );
@@ -298,7 +335,19 @@ class _SlidesPanelState extends State<SlidesPanel> {
             ],
             index: widget.index,
           ),
-          Expanded(child: content),
+          Expanded(
+            child: Stack(
+              children: [
+                content,
+                if (_annotationManager != null)
+                  Positioned(
+                    bottom: 16,
+                    right: 16,
+                    child: SlideAnnotationTestControls(manager: _annotationManager!),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
