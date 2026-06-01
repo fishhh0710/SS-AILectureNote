@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 32,
+  "text": "initialization,那譬如說從第一個element,第二個element,第三個element,這樣sequentially的去,去去做initialization,所以當你第一個element被access到的話,",
+  "is_empty": false
+}

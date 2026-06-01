@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 103,
+  "text": "你要的data沒有在cache的話,你就要額外花一個miss penalty。所以嚴格講起來,如果今天產生miss的話,你總共要花多少時間才可以",
+  "is_empty": false
+}

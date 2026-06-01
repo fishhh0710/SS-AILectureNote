@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:27:45.000Z",
+  "duration_seconds": 10,
+  "segment_index": 233,
+  "text": "\u9084\u6709\u4f60\u7684 OS \u7684 scheduling \u7684\u65b9\u6cd5,\u90fd\u6703\u8b93\u4f60\u771f\u6b63\u7684\u9019\u500b\u5e73\u5747\u7684 seek time \u53ef\u4ee5\u518d\u6bd4\u5ee0\u5546\u7d66\u4f60\u7684\u90a3\u500b seek time \u8981\u4f86\u5f97\u66f4\u77ed\u4e00\u9ede\u3002 \u597d\u55ce?\u56e0\u70ba\u6709\u6642\u5019\u8cc7\u6599 locality\u3002",
+  "is_empty": false
+}

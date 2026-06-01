@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 176,
+  "text": "不能出現在cache,除非什麼?除非它有出現在你的主記憶體。 所以如果今天有一個資料在cache裡面,然後它沒有在主記憶體,這個是不可能出現的。",
+  "is_empty": false
+}

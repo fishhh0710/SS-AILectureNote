@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 109,
+  "text": "第一個問題是,一個block如果要被放到這個upper level,假設放到cache裡面來,那到底要放在cache裡面的什麼地方?",
+  "is_empty": false
+}

@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 16,
+  "text": "那個address space包含那個程式它自己的code,還有那個程式會用到的一些global的變數,還有",
+  "is_empty": false
+}

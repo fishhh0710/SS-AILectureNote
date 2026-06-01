@@ -50,6 +50,7 @@ dependencies:
   firebase_core: ^4.9.0
   firebase_storage: ^13.4.1
   crypto: ^3.0.7
+  firebase_ai: ^3.12.1
 
 dev_dependencies:
   flutter_test:
@@ -69,6 +70,7 @@ dev_dependencies:
 flutter:
   assets:
     - assets/sample_pdf.pdf
+    - .env
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

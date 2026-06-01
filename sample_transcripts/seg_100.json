@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 100,
+  "text": "那這個要花時間,換句話講,你要把你data,你的data所在那個block copy到,從記憶體copy到cache的時間,以及",
+  "is_empty": false
+}

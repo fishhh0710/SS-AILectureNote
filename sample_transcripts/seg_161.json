@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 161,
+  "text": "就發現那個指令沒有在instruction cache裡面,那我就到memory裡面去把那行指令,還有它後面三行指令,同一個block,就一起copy到cache來。",
+  "is_empty": false
+}

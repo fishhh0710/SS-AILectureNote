@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 68,
+  "text": "假設我現在看這兩個level的hierarchy,連續兩個level的hierarchy。上面這個level是cache,下面是你的主記憶體,main memory好了。",
+  "is_empty": false
+}

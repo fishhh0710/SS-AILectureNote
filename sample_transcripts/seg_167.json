@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 167,
+  "text": "能夠越快越好,那換句話講,我們希望cache access時間是最快,那main memory的access時間是次之,那最慢的是在disk上面。",
+  "is_empty": false
+}

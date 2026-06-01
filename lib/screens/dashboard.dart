@@ -297,7 +297,7 @@ class _DashboardState extends State<Dashboard>
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: 2,
-                              childAspectRatio: 4,
+                              childAspectRatio: 3,
                               mainAxisSpacing: 16,
                               crossAxisSpacing: 16,
                             ),
@@ -562,10 +562,12 @@ class _DashboardState extends State<Dashboard>
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     node.name,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,

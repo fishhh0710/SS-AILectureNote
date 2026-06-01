@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 131,
+  "text": "我們把它叫做page。 那一般我們採用這種方式,我們採用,在主記憶體跟跟disk之間的這個,這個這兩個level的hierarchy,我們用的是一個一種一種技巧叫paging的技巧。",
+  "is_empty": false
+}

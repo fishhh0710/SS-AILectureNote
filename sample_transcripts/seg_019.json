@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 19,
+  "text": "好,那根據這樣的現象,我們可以觀察兩種locality。第一種叫temporal locality。temporal指的是時間上面的locality,",
+  "is_empty": false
+}

@@ -93,7 +93,7 @@ class _TranscriptPanelState extends State<TranscriptPanel> {
             : '${_fullTranscript.trimRight()} ${widget.liveTranscript.trimLeft()}';
 
     Widget content;
-    final hasTranscript = transcriptText.trim().isNotEmpty;
+    final hasTranscript = widget.transcriptText.trim().isNotEmpty;
 
     if (!widget.isRecording && displayText.isEmpty) {
       // No recording, no history — show the "start recording" prompt

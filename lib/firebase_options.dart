@@ -25,10 +25,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
         return windows;
       case TargetPlatform.linux:
@@ -44,37 +41,47 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAMvSjLUvmjb5sZqYTN98FFPZgrNxSDvCM',
-    appId: '1:446763545044:web:df42fb9c66ff100bc16641',
-    messagingSenderId: '446763545044',
-    projectId: 'ailecturenote-48907',
-    authDomain: 'ailecturenote-48907.firebaseapp.com',
-    storageBucket: 'ailecturenote-48907.appspot.com',
+    apiKey: 'AIzaSyCESxiQAOC5gSZ5JQTGdbMvk0PVZ-xp1Dk',
+    appId: '1:565463920399:web:ab3f87d07ad3f126ae987a',
+    messagingSenderId: '565463920399',
+    projectId: 'speech-recognition-7d363',
+    authDomain: 'speech-recognition-7d363.firebaseapp.com',
+    storageBucket: 'speech-recognition-7d363.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBpeyyY8S0jUzaxNJNGonsbvOUBLNfDDKc',
-    appId: '1:446763545044:android:eca75a05e463b90ac16641',
-    messagingSenderId: '446763545044',
-    projectId: 'ailecturenote-48907',
-    storageBucket: 'ailecturenote-48907.appspot.com',
+    apiKey: 'AIzaSyChZ0OO05Aix89IT-OdEjfxHHXZBOniH6o',
+    appId: '1:565463920399:android:04d1912f7f95faf4ae987a',
+    messagingSenderId: '565463920399',
+    projectId: 'speech-recognition-7d363',
+    storageBucket: 'speech-recognition-7d363.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCo4L0Ka0SB5QY5wyUYKTKFThi0agkBFIM',
-    appId: '1:446763545044:ios:a3145dc6d7b098f4c16641',
-    messagingSenderId: '446763545044',
-    projectId: 'ailecturenote-48907',
-    storageBucket: 'ailecturenote-48907.appspot.com',
+    apiKey: 'AIzaSyBMZVYaSayqPeNjhTVXQoE9R_pScs0tXno',
+    appId: '1:565463920399:ios:ff275a2ac7022c7fae987a',
+    messagingSenderId: '565463920399',
+    projectId: 'speech-recognition-7d363',
+    storageBucket: 'speech-recognition-7d363.firebasestorage.app',
     iosBundleId: 'com.example.lectureNoteApp',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyAMvSjLUvmjb5sZqYTN98FFPZgrNxSDvCM',
-    appId: '1:446763545044:web:dee8ed5a65658373c16641',
-    messagingSenderId: '446763545044',
-    projectId: 'ailecturenote-48907',
-    authDomain: 'ailecturenote-48907.firebaseapp.com',
-    storageBucket: 'ailecturenote-48907.appspot.com',
+    apiKey: 'AIzaSyCESxiQAOC5gSZ5JQTGdbMvk0PVZ-xp1Dk',
+    appId: '1:565463920399:web:6d3eac9ce972a429ae987a',
+    messagingSenderId: '565463920399',
+    projectId: 'speech-recognition-7d363',
+    authDomain: 'speech-recognition-7d363.firebaseapp.com',
+    storageBucket: 'speech-recognition-7d363.firebasestorage.app',
   );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyBMZVYaSayqPeNjhTVXQoE9R_pScs0tXno',
+    appId: '1:565463920399:ios:ff275a2ac7022c7fae987a',
+    messagingSenderId: '565463920399',
+    projectId: 'speech-recognition-7d363',
+    storageBucket: 'speech-recognition-7d363.firebasestorage.app',
+    iosBundleId: 'com.example.lectureNoteApp',
+  );
+
 }

@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 122,
+  "text": "你除了對cache上面的copy做update,那你對在記憶體,主記憶體裡面那個,那個copy要不要做update?這個會牽扯到你你的write的strategy,好嗎?所以一般來講,",
+  "is_empty": false
+}

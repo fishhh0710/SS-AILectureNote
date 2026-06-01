@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 75,
+  "text": "當然你CPU如果需要這個資料,它到cache裡面找,cache沒有就到主記憶體找,那主記憶體找到以後就把那個資料copy到cache來。 OK。",
+  "is_empty": false
+}

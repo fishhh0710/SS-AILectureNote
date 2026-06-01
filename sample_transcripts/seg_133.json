@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 133,
+  "text": "一個block可能譬如說可能是四個word,16個byte。 那一個page的話,通常會比一個block要來得大,一個page也許是譬如1024個byte。",
+  "is_empty": false
+}

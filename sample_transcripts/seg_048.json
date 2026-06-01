@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 48,
+  "text": "你的DRAM裡面把那些最近被access到的那些data或指令,包含它旁邊的那些item,也都把它copy到",
+  "is_empty": false
+}

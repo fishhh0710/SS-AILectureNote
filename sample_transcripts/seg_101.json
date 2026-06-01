@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 101,
+  "text": "你要把這個block裡面的data,把它deliver到你的process要花的時間,這個都是叫miss penalty,就是額外的。如果今天你是產生hit的話,",
+  "is_empty": false
+}

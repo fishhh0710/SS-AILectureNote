@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 137,
+  "text": "譬如說,如果今天我要找的資料不在主記憶體裡頭,那我就要到disk裡面去找,那所以這個你可以把這個block把它改成page好了。",
+  "is_empty": false
+}

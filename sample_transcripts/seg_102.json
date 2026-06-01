@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 102,
+  "text": "假設你要的data有在cache裡面,你就產生hit,如果是hit的話,就不會有這裡的所謂的miss penalty出現。可是如果你要產生的",
+  "is_empty": false
+}

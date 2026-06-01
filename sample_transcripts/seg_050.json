@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 50,
+  "text": "這個memory的hierarchy。 由上而下,假設CPU在最上面,那由上而下分別會是你的cache,",
+  "is_empty": false
+}

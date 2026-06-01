@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 93,
+  "text": "可能要把一個block,要把它置換掉,要把你現在要access的那個data所在的block,你讓它從你的lower level把它copy到upper level來。",
+  "is_empty": false
+}

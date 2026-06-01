@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 164,
+  "text": "利用spatial locality,就是你為什麼要用block,就是你要的data所在的那個block,它鄰近的data也一起把它copy進來。",
+  "is_empty": false
+}

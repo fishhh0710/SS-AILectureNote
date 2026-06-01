@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 34,
+  "text": "recap一下,就是temporal locality指的是,如果最近被access到的指令也好或data也好,",
+  "is_empty": false
+}

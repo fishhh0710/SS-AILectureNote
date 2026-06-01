@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:27:45.000Z",
+  "duration_seconds": 10,
+  "segment_index": 234,
+  "text": "\u6211\u5011\u525b\u770b\u5230\u6709\u6240\u8b02\u7684 spatial locality,\u6709 temporal locality,\u56e0\u70ba\u9019\u6a23\u7684\u6548\u61c9\u53ef\u80fd\u6703\u8b93\u4f60\u7684\u9019\u500b\u771f\u6b63 seek time \u6703\u8b8a\u5f97\u66f4\u77ed\u3002 \u90a3\u53e6\u5916\u9019\u500b disk \u672c\u8eab\u6703\u6709\u4e00\u4e9b hardware \u7684 hardware \u5728\u63a7\u5236\u9019\u500b disk,\u6211\u5011\u628a\u5b83\u53eb controller\u3002",
+  "is_empty": false
+}

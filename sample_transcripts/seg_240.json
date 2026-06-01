@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:27:45.000Z",
+  "duration_seconds": 10,
+  "segment_index": 240,
+  "text": "physical \u7684 sector \u662f\u4f60\u771f\u6b63\u5728\u78c1\u789f\u4e0a\u9762\u6240\u653e\u7684\u90a3\u4e9b sector,\u53eb physical sector\u3002 \u90a3 logical sector \u6307\u7684\u662f\u4f60\u7684 program \u770b\u5230\u7684, program \u770b\u5230\u7684\u90a3\u4e9b data\u3002",
+  "is_empty": false
+}

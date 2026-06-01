@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 171,
+  "text": "儲存data的容量是一樣的,所以我希望,我不管要access指令也好,access data也好,我希望透過這個memory hierarchy,create一個,create一個一個一個一個假像出來,就是我要拿的資料也好,拿的指令也好,都可以從cache裡面拿到。",
+  "is_empty": false
+}

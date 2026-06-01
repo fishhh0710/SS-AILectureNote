@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 25,
+  "text": "目前這個iteration,這個指令被access到,那下一個iteration它又被access到,所以你會看到",
+  "is_empty": false
+}

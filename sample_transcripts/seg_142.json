@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 142,
+  "text": "那如果沒有在主記憶體的話,你就要到disk上面去把它copy進來。 好,那如果現在你的主記憶體滿了,那到底是哪一個page要被丟出去?所以這個牽扯到replacement的機制,可以嗎?",
+  "is_empty": false
+}

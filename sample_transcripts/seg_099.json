@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 99,
+  "text": "那如果,如果你要放的那個block的位置目前是空的,那沒有人需要被取代掉,你就可以從cache,從記憶體,你要的那個data所在的block copy到cache來。",
+  "is_empty": false
+}

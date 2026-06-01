@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 149,
+  "text": "可是你的主記憶體可以很小。 你並不需要把整支程式都copy到主記憶體才有辦法被執行,不需要。我只要一次copy一個page進來就好了。",
+  "is_empty": false
+}

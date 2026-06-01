@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 104,
+  "text": "拿到你要的data?首先你要,你要花一個hit time的時間,因為那個hit time是到cache裡面去找,你要的data在不在裡面,所以不管是hit或miss,你都要花一個hit time。",
+  "is_empty": false
+}

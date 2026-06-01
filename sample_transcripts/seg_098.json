@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 98,
+  "text": "你現在miss的那個data,它的block如果要被放到cache的話,可以放在什麼位置?如果那個位置現在被別人佔了,那當然就要把佔據那個位置把它踢掉就對了。",
+  "is_empty": false
+}

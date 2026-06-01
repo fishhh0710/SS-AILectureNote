@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 124,
+  "text": "如何被copy到cache來,要放在cache的什麼位置?還有怎麼去找到一個block有沒有出現在cache裡面?",
+  "is_empty": false
+}

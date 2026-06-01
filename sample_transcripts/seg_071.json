@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 71,
+  "text": "譬如說我可能講一個cache block,或者講一個cache line,指的是說,如果我要把資料從主記憶體放到cache的話,",
+  "is_empty": false
+}

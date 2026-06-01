@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 106,
+  "text": "那如果你今天要找的data有在cache裡面的話,那你花的的時間就只有hit time,可以嗎? 如果今天是cache hit,你就花hit time就找到你的data,如果今天你產生cache miss的話,那你總共要花",
+  "is_empty": false
+}

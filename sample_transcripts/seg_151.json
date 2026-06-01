@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 151,
+  "text": "第一個指令所在的block,從你的主記憶體copy到cache,那我就CPU就可以從cache裡面拿到第一行指令,可以嗎? 我並不需要把整支程式都copy到主記憶體。",
+  "is_empty": false
+}

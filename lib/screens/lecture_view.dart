@@ -6,7 +6,7 @@ import '../widgets/transcript_panel.dart';
 import '../widgets/summary_panel.dart';
 import '../widgets/chatbot_panel.dart';
 import '../services/note_generation_service.dart';
-import '../services/speech_service.dart';
+import '../services/gemini_live_speech_service.dart';
 import '../services/transcript_export_service.dart';
 
 class LectureView extends StatefulWidget {
@@ -28,10 +28,12 @@ class _LectureViewState extends State<LectureView> {
   final GlobalKey _panelsAreaKey = GlobalKey();
   final NoteGenerationService _noteGenerationService = NoteGenerationService();
 
-  late SpeechService _speechService;
+  late GeminiLiveSpeechService _speechService;
   String _liveTranscript = '';
   String _currentLanguage = 'en_US';
   String? _savedStatusText;
+  String? _savedFilePath;
+  double _soundLevel = 0.0;
   List<AiPageNote> _pageNotes = const [];
   bool _isGeneratingNotes = false;
   String? _notesError;
@@ -45,7 +47,7 @@ class _LectureViewState extends State<LectureView> {
   @override
   void initState() {
     super.initState();
-    _speechService = SpeechService(
+    _speechService = GeminiLiveSpeechService(
       onUpdate: (text, listening) {
         if (!mounted) return;
         setState(() {
@@ -59,6 +61,12 @@ class _LectureViewState extends State<LectureView> {
         if (!mounted) return;
         setState(() {
           _savedStatusText = 'Transcript saved locally';
+        });
+      },
+      onSoundLevelChange: (level) {
+        if (!mounted) return;
+        setState(() {
+          _soundLevel = level;
         });
       },
       onError: (error) {
@@ -76,6 +84,7 @@ class _LectureViewState extends State<LectureView> {
   void dispose() {
     _noteGenerationRequestId++;
     _noteGenerationService.dispose();
+    _speechService.dispose();
     super.dispose();
   }
 
@@ -260,15 +269,15 @@ class _LectureViewState extends State<LectureView> {
     Widget panel;
     switch (id) {
       case "slides":
-        panel = SlidesPanel(
-          key: const ValueKey("slides"),
-          width: width,
-          index: index,
-          fileId: widget.fileId,
-          onClose: () => setState(() => _showSlides = false),
-          fileId: widget.fileId,
-          onPdfUploaded: _handlePdfUploaded,
-        );
+        panel = SizedBox.shrink();
+        // panel = SlidesPanel(
+        //   key: const ValueKey("slides"),
+        //   width: width,
+        //   index: index,
+        //   fileId: widget.fileId,
+        //   onClose: () => setState(() => _showSlides = false),
+        //   onPdfUploaded: _handlePdfUploaded,
+        // );
         break;
       case "transcript":
         panel = TranscriptPanel(
@@ -277,6 +286,8 @@ class _LectureViewState extends State<LectureView> {
           index: index,
           onClose: () => setState(() => _showTranscript = false),
           isRecording: _isRecording,
+          transcriptText: _liveTranscript,
+          savedStatusText: _savedStatusText,
           onStartRecording: () => setState(() => _isRecording = true),
           liveTranscript: _liveTranscript,
         );
@@ -621,7 +632,7 @@ class _LectureViewState extends State<LectureView> {
                           ),
                           const SizedBox(height: 12),
                           ElevatedButton(
-                            onPressed: () {
+                            onPressed: () async {
                               if (_isRecording) {
                                 // --- STOP RECORDING ---
                                 _speechService.toggleListening();
@@ -663,18 +674,19 @@ class _LectureViewState extends State<LectureView> {
                                 // Build a session name from current timestamp
                                 final now = DateTime.now();
                                 final sessionName =
-                                    'lecture_${now.year}${now.month.toString().padLeft(2,'0')}${now.day.toString().padLeft(2,'0')}'
-                                    '_${now.hour.toString().padLeft(2,'0')}${now.minute.toString().padLeft(2,'0')}${now.second.toString().padLeft(2,'0')}';
+                                    'lecture_${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
+                                    '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
 
                                 // fileId is the DB id of the current course item
                                 // used as parentId so the recording is linked to it.
                                 final parentId = int.tryParse(widget.fileId) ?? 0;
 
-                                _exportService = TranscriptExportService(
+                                final exportSvc = TranscriptExportService(
                                   courseItemParentId: parentId,
                                   sessionName: sessionName,
                                 );
-                                await _exportService!.start();
+                                _exportService = exportSvc;
+                                await exportSvc.start();
 
                                 // Fire every 10 seconds to write a new segment
                                 _exportTimer = Timer.periodic(

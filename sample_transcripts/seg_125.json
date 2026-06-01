@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 125,
+  "text": "以及如果今天我要找的資料不在cache裡面的話,那佔據掉它位置的那些人,哪一個block要被replace掉?那以及如果今天對一個data做write的話,",
+  "is_empty": false
+}

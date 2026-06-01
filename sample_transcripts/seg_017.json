@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 17,
+  "text": "這支程式可能將來會去dynamic allocate data有一塊hip的area,那另外還有stack的那塊記憶體,記得嗎?我們每一支程式",
+  "is_empty": false
+}

@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 130,
+  "text": "最基本的單位是一個block,一個block可能包含好幾個word,depend on cache怎麼設計。 好,那在主記憶體跟disk之間的最最少單位的的一個資料量的傳遞,",
+  "is_empty": false
+}

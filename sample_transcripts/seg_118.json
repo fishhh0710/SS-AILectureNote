@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 118,
+  "text": "那最後一個問題是,如果你今天對那個data做一個write的動作,那這個write應該要怎麼實現,要怎麼去實作這個write?假設",
+  "is_empty": false
+}

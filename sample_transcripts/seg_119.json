@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 119,
+  "text": "我今天做一個SD的指令,要對data memory裡面某個data做,做更新的話,我要把register裡面的值把它load到,把它load到這個data memory裡面去。",
+  "is_empty": false
+}

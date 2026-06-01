@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 156,
+  "text": "我希望大部分最近被access到的,盡量把它放在cache,那這是temporal locality,因為我認為",
+  "is_empty": false
+}

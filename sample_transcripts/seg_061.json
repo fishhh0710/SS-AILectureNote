@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 61,
+  "text": "或你可能要去把資料做更新,那你就可以透過SD的指令做store,所以你對資料做,不管是read還是write,都是在對資料在做access就對了。",
+  "is_empty": false
+}

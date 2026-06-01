@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 141,
+  "text": "好像是倒數第二題,手寫作業的倒數第二題,有有幾個指令,其中有一個指令目前碰到page fault。page fault的意思就是說,你要的資料沒有在主記憶體。",
+  "is_empty": false
+}

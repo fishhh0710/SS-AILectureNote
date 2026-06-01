@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 121,
+  "text": "假設它有在cache裡面,那我就對那個data做,在cache裡面的copy做update,那memory那個update,那個在主記憶體的那個copy要不要update?",
+  "is_empty": false
+}

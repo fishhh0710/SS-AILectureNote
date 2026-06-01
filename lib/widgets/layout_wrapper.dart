@@ -54,40 +54,53 @@ class LayoutWrapper extends StatelessWidget {
                 color: Color(0xFFFDFCF8),
                 border: Border(top: BorderSide(color: Color(0xFFEAE7DC))),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final bool showVersion = constraints.maxWidth > 550;
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF8E9775),
-                          shape: BoxShape.circle,
+                      Expanded(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF8E9775),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'AI 教學助手：Jenny 的個人資料已啟用',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFA8A08E),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'AI 教學助手：Jenny 的個人資料已啟用',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFFA8A08E),
+                      if (showVersion) ...[
+                        const SizedBox(width: 16),
+                        const Text(
+                          '版本 v1.2.0 • AI Lecture Note 智慧型工作空間',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFA8A08E),
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ),
-                  const Text(
-                    '版本 v1.2.0 • AI Lecture Note 智慧型工作空間',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFA8A08E),
-                    ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
     );

@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 134,
+  "text": "剛剛一個block可能只有16個byte,可是現在一個page就是1024個byte,舉例來講。 那我們在這門課談的是採用的是這種paging的方式,所以",
+  "is_empty": false
+}

@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 177,
+  "text": "因為cache裡面的所有的資料都是來自於主記憶體。 所以如果一個資料沒有出現在cache的話,沒有出現在cache的話,它不能出現在cache,除非什麼?",
+  "is_empty": false
+}

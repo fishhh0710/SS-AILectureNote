@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 97,
+  "text": "然後使得你可以把你那個data所在的block可以從你的主記憶體copy到cache來。 那這個replacement會不會發生?就depend on",
+  "is_empty": false
+}

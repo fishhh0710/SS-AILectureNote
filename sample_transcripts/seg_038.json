@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 38,
+  "text": "好,那利用這兩種locality,我們就可以build這種所謂的memory的hierarchy出來。那這個memory hierarchy基本上是這樣,",
+  "is_empty": false
+}

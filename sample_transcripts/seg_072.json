@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 72,
+  "text": "那那個資料量是以block為單位在算,一個block可能是幾個word,或者是幾個byte,depend on你要怎麼設計你的cache。",
+  "is_empty": false
+}

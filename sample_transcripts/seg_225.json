@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:27:45.000Z",
+  "duration_seconds": 10,
+  "segment_index": 225,
+  "text": "\u597d,\u662f idle\u3002 \u597d,\u90a3\u6211\u5011\u4f86\u770b\u770b,\u6211\u8981\u62ff\u4e00\u500b512\u500b byte \u7684\u8cc7\u6599,\u8981\u82b1\u591a\u5c11\u6642\u9593? \u90a3\u9996\u5148\u5b83\u61c9\u8a72\u82b1 \u56db\u500b millisecond \u7684 seek time,\u627e\u5230\u90a3\u500b sector \u6240\u5728\u7684\u90a3\u500b track\u3002",
+  "is_empty": false
+}

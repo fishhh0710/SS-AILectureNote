@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 73,
+  "text": "好,所以這個block就是你cache跟你的主記憶體之間要要傳遞的那個,要要傳遞的那個最小的資料量的單位。",
+  "is_empty": false
+}

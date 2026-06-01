@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 112,
+  "text": "那當然跟你的block placement有關嘛,你你當初被你copy到cache裡面來,你有一套方法把它放在cache裡面的某個位置。",
+  "is_empty": false
+}

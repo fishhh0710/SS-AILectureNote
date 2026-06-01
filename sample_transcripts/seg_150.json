@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 150,
+  "text": "我在執行程式的時候,我可以從disk上面把程式的檔案打開,然後把第一個page copy到主記憶體,然後再把,再把你的指令所在的",
+  "is_empty": false
+}

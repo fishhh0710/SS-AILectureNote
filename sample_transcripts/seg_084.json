@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 84,
+  "text": "它沒有在你的upper level,或者沒有在cache裡面,那就叫miss。 那如果碰到miss的話,你要怎麼辦?假設你要找的資料沒有在cache裡面,",
+  "is_empty": false
+}

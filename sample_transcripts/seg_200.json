@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 200,
+  "text": "你要去找一筆資料出來,不管那個資料放在什麼位置,他們大致上的時間是一樣的,所以叫random access。 假設一個,一個SRAM給你,一個cache給你,",
+  "is_empty": false
+}

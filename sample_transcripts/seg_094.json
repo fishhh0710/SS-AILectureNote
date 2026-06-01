@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 94,
+  "text": "我大概講一下,就是當你,你你要的資料不在cache裡面,那你就要到主記憶體,把你那個資料所在的block,",
+  "is_empty": false
+}

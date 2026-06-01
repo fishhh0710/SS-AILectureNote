@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 18,
+  "text": "它的address的space有包含這些東西。 好,所以在那個時間點,你的程式只會去使用到它address space裡頭的一小部分。",
+  "is_empty": false
+}

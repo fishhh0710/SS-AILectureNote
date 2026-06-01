@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 83,
+  "text": "指的就是,不管你是cache hit還是cache miss要花的時間,就叫hit time。 好,那你有可能沒有找到,那沒有找到的話就叫miss,所以如果你要找的資料,",
+  "is_empty": false
+}

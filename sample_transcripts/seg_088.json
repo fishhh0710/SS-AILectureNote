@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 88,
+  "text": "你miss多少次,你把miss的數量除以你access的總數,就是你的miss rate。那miss rate當然也可以寫成一減掉你的hit rate,可以嗎?",
+  "is_empty": false
+}

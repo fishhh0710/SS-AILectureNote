@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 163,
+  "text": "那等到這行指令進到下一個cycle,那我第二個指令又可以從cache裡面去找,這次就會找到了,懂我意思嗎? 所以這是一個",
+  "is_empty": false
+}

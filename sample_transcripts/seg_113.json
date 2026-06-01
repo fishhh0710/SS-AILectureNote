@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 113,
+  "text": "那那個block placement當然就會影響到你怎麼去找到你的block在cache裡面的位置。 好,那這個第二個問題就是,如果它在cache裡面或者在upper level裡面,那這個block是怎麼被找到的?那這個就是牽扯到所謂的block identification的問題。",
+  "is_empty": false
+}

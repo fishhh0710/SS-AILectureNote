@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 173,
+  "text": "你不可能所有要的資料都在cache裡面找到,你還是得有一些cache會miss嘛。 所以我們當然希望什麼?我們希望這個hit rate能夠越高越好,如果你的hit rate可以100%,那表示什麼?表示你要的資料全部都在cache裡面可以找到。",
+  "is_empty": false
+}

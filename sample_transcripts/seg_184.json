@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 184,
+  "text": "使得CPU可以去,要去拿資料的時間能夠越快越好,同時放data的那個容量也越大越好,這樣聽懂我意思嗎? 但前提當然是你的hit rate要高,你的hit rate如果越高,那基本上這個illusion就會越越貼近你要的結果。",
+  "is_empty": false
+}

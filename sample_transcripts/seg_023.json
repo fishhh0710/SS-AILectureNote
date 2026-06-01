@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 23,
+  "text": "有可能在很快的時間又被access到,所以這個是時間上面所謂的locality。 那譬如說,一個loop裡面的這些指令,",
+  "is_empty": false
+}

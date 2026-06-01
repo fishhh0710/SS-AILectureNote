@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 148,
+  "text": "你的程式所看到的那個address的space,都是一個virtual space,都是假的。 你的程式可以很大,",
+  "is_empty": false
+}

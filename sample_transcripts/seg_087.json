@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 87,
+  "text": "那一樣跟hit rate一樣,我們這邊有定義一個miss rate,那miss rate就是你總共做了多少次的access,假設你cache做了100次的data的access,然後",
+  "is_empty": false
+}

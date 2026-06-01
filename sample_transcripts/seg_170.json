@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 170,
+  "text": "那個那個裝置所花的存取時間,那換句話講,我希望每一次都是cache都hit就對了,我希望每次要找的資料都可以在cache裡面找到。 那同時呢,我又希望儲存data的那個容量,可以跟我的最底層那個level的",
+  "is_empty": false
+}

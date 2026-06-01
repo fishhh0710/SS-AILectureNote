@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 24,
+  "text": "在loop,因為一個loop可能要執行多次的iteration,所以loop裡面的指令",
+  "is_empty": false
+}

@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 132,
+  "text": "叫paging。 在paging這個技巧下面,主記憶體跟disk之間的基本的傳送的那個資料的單位容量就叫page,一個page可能譬如說,我舉例來講,一個block,",
+  "is_empty": false
+}

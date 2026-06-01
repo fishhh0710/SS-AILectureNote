@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 181,
+  "text": "那另外他們那個什麼,他們的速度,越靠近CPU的就越快,越遠離CPU的速度就越慢。 好,所以我剛才講,我們希望透過這個memory hierarchy,create一個illusion,就是什麼樣的意思?就是讓process誤以為說,它有一個,它對data要去做存取的話,",
+  "is_empty": false
+}

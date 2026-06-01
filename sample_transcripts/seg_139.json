@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 139,
+  "text": "那它應該出現在主記憶體的什麼地方?那第三個問題是,如果我今天我要的資料不在主記憶體,產生一個miss,事實上在主記憶體這種我們不叫miss,我們把它叫page fault。",
+  "is_empty": false
+}

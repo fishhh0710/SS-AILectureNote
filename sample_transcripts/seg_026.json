@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 26,
+  "text": "最近被access到的這些item,它在很快的時間又會被access到的機率很高,這個叫temporal的locality。",
+  "is_empty": false
+}

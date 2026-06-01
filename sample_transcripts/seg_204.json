@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 204,
+  "text": "讀出來的時間是一樣的。你同樣要去寫資料進去,假設在A這邊update一個,write一個時間,在B這邊又write一個data,這兩個write的時間是一樣的,好嗎? 好,這樣聽懂我意思嗎?random access的意思就是你到哪裡去access時間都一樣,但是讀跟寫是可以不一樣的,好嗎?那一樣,",
+  "is_empty": false
+}

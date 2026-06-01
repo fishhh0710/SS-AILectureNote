@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 145,
+  "text": "好,所以我想這一章主要兩個重要的,這個memory hierarchy有兩個重點,第一個是介紹cache要怎麼設計,第二個是去探討你的主記憶體跟你的",
+  "is_empty": false
+}

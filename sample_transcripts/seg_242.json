@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:27:45.000Z",
+  "duration_seconds": 10,
+  "segment_index": 242,
+  "text": "\u90a3 \u57fa\u672c\u4e0a\u4f60\u7684,\u4f60\u7684\u90a3\u500b\u4ec0\u9ebc?\u4f60\u7684,\u4f60\u7684 disk controller \u7d66 OS \u9019\u908a\u770b\u5230\u7684\u90fd\u662f logical sector\u3002 logical sector,\u6211\u8b1b\u904e,\u90a3 logical sector \u8ddf physical sector \u5b83\u4e0d\u898b\u5f97\u662f\u9023\u5728\u4e00\u8d77,\u4e0d\u4e00\u5b9a\u3002\u90a3\u770b\u4f60\u7684 disk controller \u8981\u600e\u9ebc,\u600e\u9ebc\u4f86\u7ba1\u7406\u9019\u4e9b,\u9019\u4e9b\u8cc7\u6599\u5c31\u5c0d\u4e86\u3002",
+  "is_empty": false
+}

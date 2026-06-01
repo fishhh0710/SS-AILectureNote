@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 33,
+  "text": "那很快的,第一個加一,第一個加二個element也會access到,所以這個叫spatial locality。 好,所以我再很快的再",
+  "is_empty": false
+}

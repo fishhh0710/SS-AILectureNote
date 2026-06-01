@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 174,
+  "text": "然後你要的資料全部cache都裝得下,對不對? 可以嗎? 好,那另外這邊有一個名詞叫true memory hierarchy,它指的是說,如果你的data不能在level i出現,除非",
+  "is_empty": false
+}

@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 114,
+  "text": "好,那第三個是說,如果我今天產生一個miss,你要的data不在cache裡面,那哪一個block應該要被取代掉,",
+  "is_empty": false
+}

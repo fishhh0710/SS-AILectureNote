@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 110,
+  "text": "那這個問題叫block placement的問題,就是我要把它擺到cache,那應該擺在cache裡面的什麼位置? 好,那第二個問題是,",
+  "is_empty": false
+}

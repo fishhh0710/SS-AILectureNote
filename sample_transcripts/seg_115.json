@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 115,
+  "text": "然後騰出空間來,使得你可以把你data從記憶體,把那個block copy到這個空間來,所以這邊牽扯到的是block replacement,如果我今天產生一個miss,",
+  "is_empty": false
+}

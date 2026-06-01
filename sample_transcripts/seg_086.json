@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 86,
+  "text": "把你那個資料所在的block,把它從主記憶體copy到cache來。 然後一旦在cache的話,你的CPU就可以從cache去去access那筆資料了。",
+  "is_empty": false
+}

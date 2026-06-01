@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 135,
+  "text": "主記憶體跟你的disk之間的基本的這個這個這個傳遞的data的量就叫一個page。 那我想你們將來如果三年級去學OS的話,你們可能會介紹除了paging以外,又會介紹別的方式,主記憶體跟disk之間,除了有paging這種做法,還有別種方式,那我想這門課我們的focus在paging這種方式,這種做法。",
+  "is_empty": false
+}

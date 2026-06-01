@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 155,
+  "text": "越長最近被access到的那些data也好或指令也好,盡量把它放在比較靠近CPU的那個level的memory,那基本上就放在cache。",
+  "is_empty": false
+}

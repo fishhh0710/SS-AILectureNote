@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 95,
+  "text": "把它copy到cache來。 可是你的cache可能沒有空間可以放你要copy進來那個block。那這個時候你就必須要在cache裡面把一個block把它",
+  "is_empty": false
+}

@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:37:22.000Z",
+  "duration_seconds": 10,
+  "segment_index": 77,
+  "text": "你要找的那個資料是有出現在cache裡面的話,那我說這是一個cache的hit,有打中,有打中,叫hit。",
+  "is_empty": false
+}

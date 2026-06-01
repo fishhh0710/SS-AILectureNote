@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-06-01T08:27:45.000Z",
+  "duration_seconds": 10,
+  "segment_index": 239,
+  "text": "\u5b83\u4f60\u9700\u8981\u7684\u6642\u5019,\u5c31\u76f4\u63a5\u5f9e\u5b83\u88e1\u9762\u7684 cache \u628a\u5b83 copy \u5230 disk \u5c31\u597d\u4e86\u3002 \u597d,\u90a3\u53e6\u5916,\u53e6\u5916\u4e00\u822c\u4f86\u8b1b,\u6211\u5011\u7684 sector \u6709 physical \u7684 sector \u8ddf logical \u7684 sector\u3002",
+  "is_empty": false
+}
