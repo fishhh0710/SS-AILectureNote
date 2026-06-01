@@ -83,6 +83,7 @@ class _LectureViewState extends State<LectureView> {
   @override
   void dispose() {
     _noteGenerationRequestId++;
+    _exportTimer?.cancel();
     _noteGenerationService.dispose();
     _speechService.dispose();
     super.dispose();
@@ -208,12 +209,75 @@ class _LectureViewState extends State<LectureView> {
     });
   }
 
-  void _startRecording() {
-    if (_isRecording) return;
+  Future<void> _handleRecordingToggle() async {
+    if (_isRecording) {
+      _speechService.toggleListening();
+
+      _exportTimer?.cancel();
+      _exportTimer = null;
+
+      final exportService = _exportService;
+      final savedDir = exportService?.sessionDirPath ?? '';
+      await exportService?.stop(_liveTranscript);
+      _exportService = null;
+
+      if (!mounted) return;
+
+      setState(() {
+        _savedStatusText = savedDir.isEmpty
+            ? 'Transcript saved locally'
+            : 'Transcript saved to: $savedDir';
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_savedStatusText!)));
+
+      Future.delayed(const Duration(seconds: 3), () {
+        if (!mounted) return;
+        setState(() {
+          _savedStatusText = null;
+        });
+      });
+      return;
+    }
 
     setState(() {
       _savedStatusText = null;
+      _liveTranscript = '';
     });
+    _speechService.reset();
+
+    final now = DateTime.now();
+    final sessionName =
+        'lecture_${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
+        '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+    final parentId = int.tryParse(widget.fileId) ?? 0;
+
+    final exportService = TranscriptExportService(
+      courseItemParentId: parentId,
+      sessionName: sessionName,
+    );
+    _exportService = exportService;
+
+    try {
+      await exportService.start();
+    } catch (e) {
+      _exportService = null;
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to start recording: $e')));
+      return;
+    }
+
+    if (!mounted) return;
+
+    _exportTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _exportService?.exportSegment(),
+    );
+
     _speechService.toggleListening();
   }
 
@@ -269,15 +333,14 @@ class _LectureViewState extends State<LectureView> {
     Widget panel;
     switch (id) {
       case "slides":
-        panel = SizedBox.shrink();
-        // panel = SlidesPanel(
-        //   key: const ValueKey("slides"),
-        //   width: width,
-        //   index: index,
-        //   fileId: widget.fileId,
-        //   onClose: () => setState(() => _showSlides = false),
-        //   onPdfUploaded: _handlePdfUploaded,
-        // );
+        panel = SlidesPanel(
+          key: const ValueKey("slides"),
+          width: width,
+          index: index,
+          fileId: widget.fileId,
+          onClose: () => setState(() => _showSlides = false),
+          onPdfUploaded: _handlePdfUploaded,
+        );
         break;
       case "transcript":
         panel = TranscriptPanel(
@@ -286,9 +349,10 @@ class _LectureViewState extends State<LectureView> {
           index: index,
           onClose: () => setState(() => _showTranscript = false),
           isRecording: _isRecording,
-          transcriptText: _liveTranscript,
           savedStatusText: _savedStatusText,
-          onStartRecording: () => setState(() => _isRecording = true),
+          onStartRecording: () {
+            unawaited(_handleRecordingToggle());
+          },
           liveTranscript: _liveTranscript,
         );
         break;
@@ -696,6 +760,8 @@ class _LectureViewState extends State<LectureView> {
 
                                 _speechService.toggleListening();
                               }
+                            onPressed: () {
+                              unawaited(_handleRecordingToggle());
                             },
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 20),

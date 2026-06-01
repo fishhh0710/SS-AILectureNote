@@ -13,21 +13,21 @@
 // import 'panel_header.dart';
 // import 'slide_page.dart';
 
-// class SlidesPanel extends StatefulWidget {
-//   final double width;
-//   final int index;
-//   final String fileId;
-//   final VoidCallback onClose;
-//   final Future<void> Function(String filePath)? onPdfUploaded;
+class SlidesPanel extends StatefulWidget {
+  final double width;
+  final int index;
+  final String fileId;
+  final VoidCallback onClose;
+  final Future<void> Function(String filePath)? onPdfUploaded;
 
-//   const SlidesPanel({
-//     super.key,
-//     required this.width,
-//     required this.index,
-//     required this.fileId,
-//     required this.onClose,
-//     this.onPdfUploaded,
-//   });
+  const SlidesPanel({
+    super.key,
+    required this.width,
+    required this.index,
+    required this.onClose,
+    required this.fileId,
+    this.onPdfUploaded,
+  });
 
 //   @override
 //   State<SlidesPanel> createState() => _SlidesPanelState();

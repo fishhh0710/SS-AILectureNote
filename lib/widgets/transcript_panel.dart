@@ -6,7 +6,6 @@ class TranscriptPanel extends StatefulWidget {
   final int index;
   final VoidCallback onClose;
   final bool isRecording;
-  final String transcriptText;
   final String? savedStatusText;
   final VoidCallback onStartRecording;
   final String liveTranscript;
@@ -17,7 +16,6 @@ class TranscriptPanel extends StatefulWidget {
     required this.index,
     required this.onClose,
     this.isRecording = false,
-    required this.transcriptText,
     this.savedStatusText,
     required this.onStartRecording,
     this.liveTranscript = '',
@@ -31,10 +29,6 @@ class _TranscriptPanelState extends State<TranscriptPanel> {
   /// Permanently stores all text that has already been finalized.
   /// This only ever grows — never cleared during a session.
   String _fullTranscript = '';
-
-  /// The last known value of liveTranscript, used to detect when a new
-  /// chunk has started (i.e., when liveTranscript becomes shorter).
-  String _lastLive = '';
 
   final ScrollController _scrollController = ScrollController();
 
@@ -59,8 +53,6 @@ class _TranscriptPanelState extends State<TranscriptPanel> {
     if (newLive.isEmpty && !widget.isRecording) {
       _fullTranscript = '';
     }
-
-    _lastLive = newLive;
 
     // Auto-scroll to bottom when text changes
     if (newLive != oldLive) {
@@ -89,8 +81,8 @@ class _TranscriptPanelState extends State<TranscriptPanel> {
     final String displayText = _fullTranscript.isEmpty
         ? widget.liveTranscript
         : widget.liveTranscript.isEmpty
-            ? _fullTranscript
-            : '${_fullTranscript.trimRight()} ${widget.liveTranscript.trimLeft()}';
+        ? _fullTranscript
+        : '${_fullTranscript.trimRight()} ${widget.liveTranscript.trimLeft()}';
 
     Widget content;
     final hasTranscript = widget.transcriptText.trim().isNotEmpty;
@@ -228,11 +220,7 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _controller,
-      child: Container(
-        width: 2,
-        height: 18,
-        color: const Color(0xFF8E9775),
-      ),
+      child: Container(width: 2, height: 18, color: const Color(0xFF8E9775)),
     );
   }
 }
