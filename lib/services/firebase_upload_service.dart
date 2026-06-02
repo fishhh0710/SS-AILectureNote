@@ -50,7 +50,7 @@ class FirebaseUploadService {
   }
 
   /// Uploads all files to Firebase Storage.
-  /// 
+  ///
   /// Only uploads files that have been modified (MD5 hash mismatch) or
   /// do not have their [cloudPath] populated in the database.
   /// Folder nodes (e.g. 'system_folder', 'folder', 'course') are ignored.
@@ -71,12 +71,16 @@ class FirebaseUploadService {
     onProgress("正在讀取資料庫節點...", 0.1);
     final db = await DatabaseHelper.instance.database;
     final List<Map<String, dynamic>> maps = await db.query('items');
-    final List<AppNode> allNodes = maps.map((map) => AppNode.fromMap(map)).toList();
+    final List<AppNode> allNodes = maps
+        .map((map) => AppNode.fromMap(map))
+        .toList();
 
     // 4. Filter nodes that have physical files
     // Ignore nodes that represent folders/directories and those with empty filePath
     final nodesToUpload = allNodes.where((node) {
-      if (node.type == 'system_folder' || node.type == 'folder' || node.type == 'course') {
+      if (node.type == 'system_folder' ||
+          node.type == 'folder' ||
+          node.type == 'course') {
         return false;
       }
       return node.filePath != null && node.filePath!.isNotEmpty;

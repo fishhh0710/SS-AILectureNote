@@ -81,20 +81,20 @@ class DatabaseHelper {
     ''');
 
     final now = DateTime.now().toIso8601String();
-    
+
     // 1. Create the absolute root system folders (Home level)
     await db.insert('items', {
       'parentId': null,
       'type': 'system_folder',
       'name': 'Database',
-      'createdAt': now
+      'createdAt': now,
     });
 
     await db.insert('items', {
       'parentId': null,
       'type': 'system_folder',
       'name': 'Temp',
-      'createdAt': now
+      'createdAt': now,
     });
 
     await db.execute('''
@@ -136,7 +136,12 @@ class DatabaseHelper {
     final whereString = parentId == null ? 'parentId IS NULL' : 'parentId = ?';
     final args = parentId == null ? [] : [parentId];
 
-    final result = await db.query('items', where: whereString, whereArgs: args, orderBy: 'createdAt DESC');
+    final result = await db.query(
+      'items',
+      where: whereString,
+      whereArgs: args,
+      orderBy: 'createdAt DESC',
+    );
     return result.map((map) => AppNode.fromMap(map)).toList();
   }
 
@@ -148,7 +153,12 @@ class DatabaseHelper {
 
   Future<int> updateItem(AppNode item) async {
     final db = await instance.database;
-    return await db.update('items', item.toMap(), where: 'id = ?', whereArgs: [item.id]);
+    return await db.update(
+      'items',
+      item.toMap(),
+      where: 'id = ?',
+      whereArgs: [item.id],
+    );
   }
 
   // ================= 2. Specialized Operations =================
@@ -156,7 +166,7 @@ class DatabaseHelper {
   // Create a Course and automatically generate its nested system folders
   Future<int> insertCourse(AppNode course) async {
     final db = await instance.database;
-    
+
     // Ensure the item type is course
     if (course.type != 'course') {
       throw Exception('Item type must be "course"');
@@ -170,7 +180,7 @@ class DatabaseHelper {
       'parentId': courseId,
       'type': 'system_folder',
       'name': 'Recordings',
-      'createdAt': now
+      'createdAt': now,
     });
 
     // Auto-create "AI notes" system folder inside this course
@@ -178,7 +188,7 @@ class DatabaseHelper {
       'parentId': courseId,
       'type': 'system_folder',
       'name': 'AI notes',
-      'createdAt': now
+      'createdAt': now,
     });
 
     return courseId;
@@ -187,7 +197,11 @@ class DatabaseHelper {
   // Helper to fetch the root "Database" folder id easily
   Future<AppNode?> getDatabaseRootFolder() async {
     final db = await instance.database;
-    final result = await db.query('items', where: 'parentId IS NULL AND name = ?', whereArgs: ['Database']);
+    final result = await db.query(
+      'items',
+      where: 'parentId IS NULL AND name = ?',
+      whereArgs: ['Database'],
+    );
     if (result.isNotEmpty) {
       return AppNode.fromMap(result.first);
     }
@@ -197,7 +211,11 @@ class DatabaseHelper {
   // Helper to fetch the root "Temp" folder id easily
   Future<AppNode?> getTempRootFolder() async {
     final db = await instance.database;
-    final result = await db.query('items', where: 'parentId IS NULL AND name = ?', whereArgs: ['Temp']);
+    final result = await db.query(
+      'items',
+      where: 'parentId IS NULL AND name = ?',
+      whereArgs: ['Temp'],
+    );
     if (result.isNotEmpty) {
       return AppNode.fromMap(result.first);
     }
@@ -219,7 +237,7 @@ class DatabaseHelper {
   // 建立一個新的對話 Session (回傳 conversationId)
   Future<int> createConversation(int notebookId) async {
     final db = await instance.database;
-    
+
     return await db.insert('conversations', {
       'courseId': notebookId,
       'createdAt': DateTime.now().toIso8601String(),
@@ -254,11 +272,7 @@ class DatabaseHelper {
       orderBy: 'sequenceNumber DESC',
       limit: 10,
     );
-    return result
-        .map((e) => ChatMessage.fromMap(e))
-        .toList()
-        .reversed
-        .toList();
+    return result.map((e) => ChatMessage.fromMap(e)).toList().reversed.toList();
   }
 
   // 獲取下一個對話的順序編號 (sequenceNumber)
@@ -284,9 +298,9 @@ class DatabaseHelper {
       where: 'courseId = ?',
       whereArgs: [notebookId],
       orderBy: 'id DESC', // 讓最新的 Session 排在最上面
-      limit: 1,           // 只取最新的一筆
+      limit: 1, // 只取最新的一筆
     );
-    
+
     if (result.isNotEmpty) {
       return result.first['id'] as int;
     }
@@ -298,7 +312,7 @@ class DatabaseHelper {
   // 自動撈取該課程資料夾下，所有分頁的 AI 筆記並組合成單一字串
   Future<String> getCombinedAiNotes(int courseId) async {
     final db = await instance.database;
-    
+
     // 1. 先找到該課程底下的 "AI notes" 系統資料夾節點取得其 ID
     final folderResult = await db.query(
       'items',
@@ -325,7 +339,7 @@ class DatabaseHelper {
   // 自動撈取該課程資料夾下，所有錄音檔的逐字稿並組合成單一字串
   Future<String> getCombinedTranscripts(int courseId) async {
     final db = await instance.database;
-    
+
     // 1. 先找到該課程底下的 "Recordings" 系統資料夾節點取得其 ID
     final folderResult = await db.query(
       'items',

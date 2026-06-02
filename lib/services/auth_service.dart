@@ -15,10 +15,14 @@ class AzureAuthService {
         if (data['token'] != null) {
           return data['token'];
         } else {
-          throw Exception('Backend did not return a token. Response: ${response.body}');
+          throw Exception(
+            'Backend did not return a token. Response: ${response.body}',
+          );
         }
       } else {
-        throw Exception('Failed to fetch Azure token. Status Code: ${response.statusCode}');
+        throw Exception(
+          'Failed to fetch Azure token. Status Code: ${response.statusCode}',
+        );
       }
     } catch (e) {
       debugPrint('Error fetching Azure token: $e');

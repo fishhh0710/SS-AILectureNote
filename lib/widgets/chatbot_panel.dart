@@ -1,17 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import '../viewmodels/chat_view_model.dart';
 import 'panel_header.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../database/database_helper.dart';
-import '../database/models.dart';
 
 class ChatbotPanel extends StatefulWidget {
   final double width;
   final int index;
   final VoidCallback onClose;
-  final int notebookId; // 補上漏掉的課程 ID，讓 State 類別可以讀取
-  final String aiNotes; // 接收外層的真實筆記
-  final String transcript; // 接收外層的真實逐字稿
+  final int notebookId;
+  final String aiNotes;
+  final String transcript;
 
   const ChatbotPanel({
     super.key,
@@ -30,162 +30,80 @@ class ChatbotPanel extends StatefulWidget {
 class _ChatbotPanelState extends State<ChatbotPanel> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
 
-  List<ChatMessage> messages = [];
-  bool loading = false;
-  int? currentConversationId; // 儲存目前的對話 Session ID
-
-  String loadedAiNotes = "";
-  String loadedTranscript = "";
+  late ChatViewModel _viewModel;
 
   @override
   void initState() {
     super.initState();
-    _loadChatHistory();
+    _viewModel = _createViewModel();
+    unawaited(_viewModel.load());
   }
 
-  Future<void> _loadChatHistory() async {
-    setState(() => loading = true);
-    try {
-      int? convId = await _dbHelper.getLatestConversationId(widget.notebookId);
+  @override
+  void didUpdateWidget(ChatbotPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
 
-      // 如果 convId 是 null，代表是這堂課的第一次對話，這時才新建一個 Session
-      convId ??= await _dbHelper.createConversation(widget.notebookId);
-      final conversationId = convId;
-
-      currentConversationId = conversationId;
-
-      // 帶入傳進來的筆記與逐字稿
-      loadedAiNotes = widget.aiNotes;
-      loadedTranscript = widget.transcript;
-
-      // 根據這個歷史或既有的 convId，去資料庫撈出所有的歷史對話訊息
-      final history = await _dbHelper.getConversationMessages(conversationId);
-
-      setState(() {
-        messages = history;
-        // 如果連舊的 Session 裡都沒有任何訊息（例如新建的空白 Session），才放歡迎詞
-        if (messages.isEmpty) {
-          messages.add(
-            ChatMessage(
-              conversationId: conversationId,
-              role: "assistant",
-              content:
-                  "Hi! I am your AI study assistant. Ask me anything about this lecture!",
-              sequenceNumber: 1,
-              createdAt: DateTime.now().toIso8601String(),
-            ),
-          );
-        }
-        loading = false;
-      });
-      _scrollToBottom();
-    } catch (e) {
-      setState(() => loading = false);
-      debugPrint("Failed to initialize chat history: $e");
+    if (oldWidget.notebookId != widget.notebookId) {
+      _viewModel
+        ..removeListener(_handleChatStateChanged)
+        ..dispose();
+      _viewModel = _createViewModel();
+      unawaited(_viewModel.load());
+      return;
     }
+
+    _viewModel.updateLectureContext(
+      notebookId: widget.notebookId,
+      aiNotes: widget.aiNotes,
+      transcript: widget.transcript,
+    );
+  }
+
+  @override
+  void dispose() {
+    _viewModel
+      ..removeListener(_handleChatStateChanged)
+      ..dispose();
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  ChatViewModel _createViewModel() {
+    final viewModel = ChatViewModel(
+      notebookId: widget.notebookId,
+      aiNotes: widget.aiNotes,
+      transcript: widget.transcript,
+    );
+    viewModel.addListener(_handleChatStateChanged);
+    return viewModel;
+  }
+
+  void _handleChatStateChanged() {
+    if (!mounted) return;
+    setState(() {});
+    _scrollToBottom();
   }
 
   void _scrollToBottom() {
     Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
+      if (!_scrollController.hasClients) return;
+
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     });
   }
 
-  Future<void> sendMessage() async {
+  Future<void> _sendMessage() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || currentConversationId == null) return;
+    if (text.isEmpty || _viewModel.isBusy) return;
 
-    final convId = currentConversationId!;
-    final nowStr = DateTime.now().toIso8601String();
-
-    try {
-      // 取得這筆新訊息應有的順序編號 (Sequence)
-      final userSeq = await _dbHelper.getNextSequence(convId);
-
-      // 實體化 User 的 ChatMessage 物件
-      final userMessage = ChatMessage(
-        conversationId: convId,
-        role: "user",
-        content: text,
-        sequenceNumber: userSeq,
-        createdAt: nowStr,
-      );
-
-      // 先把 User 訊息存入本地 SQLite 資料庫
-      await _dbHelper.insertMessage(userMessage);
-
-      setState(() {
-        messages.add(userMessage);
-        loading = true;
-      });
-
-      _controller.clear();
-      _scrollToBottom();
-
-      // 撈取「最新 5 輪」歷史紀錄格式化為字串，餵給 AI
-      final recentDbMessages = await _dbHelper.getRecentMessages(convId);
-      final historyString = recentDbMessages
-          .map((e) => "${e.role}: ${e.content}")
-          .join("\n");
-
-      final response = await http.post(
-        Uri.parse("http://10.0.2.2:8000/chat"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "notes": widget.aiNotes, // 真實筆記內容
-          "transcript": widget.transcript, // 真實逐字稿內容
-          "history": historyString, // 資料庫撈出的 5 輪歷史
-          "question": text,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final aiReply = data["answer"] ?? "無法解析回覆";
-
-        // 計算 AI 回覆的順序編號，並存入本地 SQLite
-        final aiSeq = await _dbHelper.getNextSequence(convId);
-        final aiMessage = ChatMessage(
-          conversationId: convId,
-          role: "assistant",
-          content: aiReply,
-          sequenceNumber: aiSeq,
-          createdAt: DateTime.now().toIso8601String(),
-        );
-        await _dbHelper.insertMessage(aiMessage);
-
-        setState(() {
-          messages.add(aiMessage);
-          loading = false;
-        });
-      } else {
-        throw Exception("伺服器錯誤 ${response.statusCode}");
-      }
-
-      _scrollToBottom();
-    } catch (e) {
-      setState(() {
-        loading = false;
-        messages.add(
-          ChatMessage(
-            conversationId: convId,
-            role: "assistant",
-            content: "Error: $e",
-            sequenceNumber: 999,
-            createdAt: nowStr,
-          ),
-        );
-      });
-      _scrollToBottom();
-    }
+    _controller.clear();
+    await _viewModel.sendMessage(text);
   }
 
   @override
@@ -219,17 +137,17 @@ class _ChatbotPanelState extends State<ChatbotPanel> {
               child: ListView.builder(
                 controller: _scrollController,
                 padding: const EdgeInsets.all(24),
-                itemCount: messages.length,
+                itemCount: _viewModel.messages.length,
                 itemBuilder: (context, index) {
-                  final msg = messages[index];
+                  final message = _viewModel.messages[index];
                   return _buildChatMessage(
-                    isUser: msg.role == "user",
-                    message: msg.content,
+                    isUser: message.role == 'user',
+                    message: message.content,
                   );
                 },
               ),
             ),
-            if (loading)
+            if (_viewModel.isBusy)
               const Padding(
                 padding: EdgeInsets.only(bottom: 8.0),
                 child: CircularProgressIndicator(
@@ -273,13 +191,19 @@ class _ChatbotPanelState extends State<ChatbotPanel> {
                         filled: true,
                         fillColor: Colors.white,
                       ),
-                      onSubmitted: (_) => sendMessage(),
+                      onSubmitted: (_) {
+                        unawaited(_sendMessage());
+                      },
                     ),
                   ),
                   const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.send, color: Color(0xFF8E9775)),
-                    onPressed: loading ? null : sendMessage,
+                    onPressed: _viewModel.isBusy
+                        ? null
+                        : () {
+                            unawaited(_sendMessage());
+                          },
                   ),
                 ],
               ),

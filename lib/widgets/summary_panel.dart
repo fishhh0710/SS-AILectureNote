@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
-import '../services/note_generation_service.dart';
+import '../models/ai_page_note.dart';
 import 'panel_header.dart';
 
 class SummaryPanel extends StatelessWidget {

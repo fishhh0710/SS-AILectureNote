@@ -5,34 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-class AiPageNote {
-  final int pageNumber;
-  final String markdown;
-
-  const AiPageNote({required this.pageNumber, required this.markdown});
-
-  factory AiPageNote.fromJson(Map<String, dynamic> json) {
-    final pageValue = json['page_number'] ?? json['pageNumber'];
-    final pageNumber = pageValue is int
-        ? pageValue
-        : int.tryParse(pageValue.toString());
-
-    if (pageNumber == null) {
-      throw const FormatException('Missing page_number in AI note response.');
-    }
-
-    final markdown = json['markdown'];
-    if (markdown is! String) {
-      throw const FormatException('Missing markdown in AI note response.');
-    }
-
-    return AiPageNote(pageNumber: pageNumber, markdown: markdown.trim());
-  }
-
-  Map<String, dynamic> toJson() {
-    return {'page_number': pageNumber, 'markdown': markdown};
-  }
-}
+import '../models/ai_page_note.dart';
+import 'api_base_url.dart';
 
 class NoteGenerationException implements Exception {
   final String message;
@@ -46,21 +20,10 @@ class NoteGenerationException implements Exception {
 class NoteGenerationService {
   NoteGenerationService({http.Client? client, String? baseUrl})
     : _client = client ?? http.Client(),
-      baseUrl = baseUrl ?? _defaultBaseUrl();
+      baseUrl = baseUrl ?? defaultLocalApiBaseUrl();
 
   final http.Client _client;
   final String baseUrl;
-
-  static String _defaultBaseUrl() {
-    const configured = String.fromEnvironment('PYTHON_API_BASE_URL');
-    if (configured.isNotEmpty) return configured;
-
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8000';
-    }
-
-    return 'http://127.0.0.1:8000';
-  }
 
   Future<List<AiPageNote>> generateNotesFromPdf(String pdfPath) async {
     final file = File(pdfPath);

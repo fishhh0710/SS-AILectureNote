@@ -1,10 +1,13 @@
 // models.dart
 class AppNode {
   final int? id;
-  final int? parentId; // null indicates it's at the absolute root (e.g. Database, Temp)
-  final String type;   // 'system_folder', 'folder', 'course', 'notebook', 'recording', 'ai_note'
+  final int?
+  parentId; // null indicates it's at the absolute root (e.g. Database, Temp)
+  final String
+  type; // 'system_folder', 'folder', 'course', 'notebook', 'recording', 'ai_note'
   final String name;
-  final String? content;  // Transcript for recordings, text for AI notes/notebooks
+  final String?
+  content; // Transcript for recordings, text for AI notes/notebooks
   final String? filePath; // Physical path for recordings/PDFs
   final String? cloudPath; // Path in Firebase Storage
   final String createdAt;

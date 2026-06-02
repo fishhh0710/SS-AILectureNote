@@ -84,5 +84,4 @@ class DefaultFirebaseOptions {
     storageBucket: 'speech-recognition-7d363.firebasestorage.app',
     iosBundleId: 'com.example.lectureNoteApp',
   );
-
 }
