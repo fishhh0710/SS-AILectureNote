@@ -42,3 +42,44 @@ class AppNode {
     createdAt: map['createdAt'],
   );
 }
+
+// AI chatbot
+class ChatMessage {
+  final int? id;
+  final int conversationId;
+  final String role;
+  final String content;
+  final int sequenceNumber;
+  final String createdAt;
+
+  ChatMessage({
+    this.id,
+    required this.conversationId,
+    required this.role,
+    required this.content,
+    required this.sequenceNumber,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'conversationId': conversationId,
+      'role': role,
+      'content': content,
+      'sequenceNumber': sequenceNumber,
+      'createdAt': createdAt,
+    };
+  }
+
+  factory ChatMessage.fromMap(Map<String, dynamic> map) {
+    return ChatMessage(
+      id: map['id'],
+      conversationId: map['conversationId'],
+      role: map['role'],
+      content: map['content'],
+      sequenceNumber: map['sequenceNumber'],
+      createdAt: map['createdAt'],
+    );
+  }
+}
