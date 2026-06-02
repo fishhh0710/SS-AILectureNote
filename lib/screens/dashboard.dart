@@ -89,10 +89,9 @@ class _DashboardState extends State<Dashboard>
                   await DatabaseHelper.instance.insertItem(newNode);
                 }
 
-                if (mounted) {
-                  Navigator.pop(context);
-                  _loadData();
-                }
+                if (!context.mounted) return;
+                Navigator.pop(context);
+                _loadData();
               }
             },
             child: const Text('建立'),
@@ -120,6 +119,8 @@ class _DashboardState extends State<Dashboard>
   }
 
   Future<void> _uploadToFirebase() async {
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     setState(() {
       _isBackingUp = true;
@@ -145,10 +146,11 @@ class _DashboardState extends State<Dashboard>
       await Future.delayed(const Duration(milliseconds: 800));
     } catch (e) {
       if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress dialog
+        rootNavigator.pop(); // Dismiss progress dialog
         _showErrorSnackBar(e.toString());
-        print(e.toString());
+        debugPrint(e.toString());
       }
+      if (!mounted) return;
       setState(() {
         _isBackingUp = false;
       });
@@ -156,8 +158,8 @@ class _DashboardState extends State<Dashboard>
     }
 
     if (mounted) {
-      Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress dialog
-      ScaffoldMessenger.of(context).showSnackBar(
+      rootNavigator.pop(); // Dismiss progress dialog
+      scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text(_backupStatus),
           backgroundColor: const Color(0xFF8E9775),
@@ -165,13 +167,12 @@ class _DashboardState extends State<Dashboard>
       );
     }
 
+    if (!mounted) return;
     setState(() {
       _isBackingUp = false;
     });
     _loadData();
   }
-
-
 
   void _showBackupProgressDialog() {
     showDialog(
@@ -182,14 +183,18 @@ class _DashboardState extends State<Dashboard>
           builder: (context, setDialogState) {
             _dialogSetState = setDialogState;
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               title: const Text('備份至 Firebase'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const SizedBox(height: 12),
                   CircularProgressIndicator(
-                    value: _backupProgress <= 0.0 || _backupProgress >= 1.0 ? null : _backupProgress,
+                    value: _backupProgress <= 0.0 || _backupProgress >= 1.0
+                        ? null
+                        : _backupProgress,
                     color: const Color(0xFF8E9775),
                   ),
                   const SizedBox(height: 24),
@@ -225,10 +230,7 @@ class _DashboardState extends State<Dashboard>
 
   void _showErrorSnackBar(String errorMsg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('備份失敗: $errorMsg'),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: Text('備份失敗: $errorMsg'), backgroundColor: Colors.red),
     );
   }
 
@@ -259,7 +261,7 @@ class _DashboardState extends State<Dashboard>
                     ),
                     ElevatedButton.icon(
                       onPressed: _isBackingUp ? null : _uploadToFirebase,
-                      icon: _isBackingUp 
+                      icon: _isBackingUp
                           ? const SizedBox(
                               width: 16,
                               height: 16,
@@ -277,7 +279,10 @@ class _DashboardState extends State<Dashboard>
                         backgroundColor: const Color(0xFF8E9775),
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -405,7 +410,7 @@ class _DashboardState extends State<Dashboard>
             borderRadius: BorderRadius.circular(8),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -464,13 +469,13 @@ class _DashboardState extends State<Dashboard>
                   name: textController.text,
                   content: node.content,
                   filePath: node.filePath,
+                  cloudPath: node.cloudPath,
                   createdAt: node.createdAt,
                 );
                 await DatabaseHelper.instance.updateItem(updatedNode);
-                if (mounted) {
-                  Navigator.pop(context);
-                  _loadData();
-                }
+                if (!context.mounted) return;
+                Navigator.pop(context);
+                _loadData();
               }
             },
             child: const Text('儲存'),
@@ -495,10 +500,9 @@ class _DashboardState extends State<Dashboard>
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
               await DatabaseHelper.instance.deleteItem(node.id!);
-              if (mounted) {
-                Navigator.pop(context);
-                _loadData();
-              }
+              if (!context.mounted) return;
+              Navigator.pop(context);
+              _loadData();
             },
             child: const Text('刪除', style: TextStyle(color: Colors.white)),
           ),

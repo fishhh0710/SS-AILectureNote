@@ -105,10 +105,9 @@ class _CourseDetailsState extends State<CourseDetails>
                   await DatabaseHelper.instance.insertItem(newNode);
                 }
 
-                if (mounted) {
-                  Navigator.pop(context);
-                  _loadData();
-                }
+                if (!context.mounted) return;
+                Navigator.pop(context);
+                _loadData();
               }
             },
             child: const Text('建立'),
@@ -213,7 +212,7 @@ class _CourseDetailsState extends State<CourseDetails>
             borderRadius: BorderRadius.circular(8),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -272,13 +271,13 @@ class _CourseDetailsState extends State<CourseDetails>
                   name: textController.text,
                   content: node.content,
                   filePath: node.filePath,
+                  cloudPath: node.cloudPath,
                   createdAt: node.createdAt,
                 );
                 await DatabaseHelper.instance.updateItem(updatedNode);
-                if (mounted) {
-                  Navigator.pop(context);
-                  _loadData();
-                }
+                if (!context.mounted) return;
+                Navigator.pop(context);
+                _loadData();
               }
             },
             child: const Text('儲存'),
@@ -303,10 +302,9 @@ class _CourseDetailsState extends State<CourseDetails>
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
               await DatabaseHelper.instance.deleteItem(node.id!);
-              if (mounted) {
-                Navigator.pop(context);
-                _loadData();
-              }
+              if (!context.mounted) return;
+              Navigator.pop(context);
+              _loadData();
             },
             child: const Text('刪除', style: TextStyle(color: Colors.white)),
           ),
@@ -334,7 +332,11 @@ class _CourseDetailsState extends State<CourseDetails>
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.arrow_back, size: 14, color: Color(0xFFA8A08E)),
+                      Icon(
+                        Icons.arrow_back,
+                        size: 14,
+                        color: Color(0xFFA8A08E),
+                      ),
                       SizedBox(width: 8),
                       Text(
                         '返回上層',
@@ -412,16 +414,17 @@ class _CourseDetailsState extends State<CourseDetails>
         node.type == 'course';
 
     IconData icon;
-    if (isFolder)
+    if (isFolder) {
       icon = Icons.folder;
-    else if (node.type == 'notebook')
+    } else if (node.type == 'notebook') {
       icon = Icons.book;
-    else if (node.type == 'recording')
+    } else if (node.type == 'recording') {
       icon = Icons.mic;
-    else if (node.type == 'ai_note')
+    } else if (node.type == 'ai_note') {
       icon = Icons.auto_awesome;
-    else
+    } else {
       icon = Icons.description;
+    }
 
     return InkWell(
       onTap: () {

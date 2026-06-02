@@ -32,8 +32,6 @@ class _LectureViewState extends State<LectureView> {
   String _liveTranscript = '';
   String _currentLanguage = 'en_US';
   String? _savedStatusText;
-  String? _savedFilePath;
-  double _soundLevel = 0.0;
   List<AiPageNote> _pageNotes = const [];
   bool _isGeneratingNotes = false;
   String? _notesError;
@@ -61,12 +59,6 @@ class _LectureViewState extends State<LectureView> {
         if (!mounted) return;
         setState(() {
           _savedStatusText = 'Transcript saved locally';
-        });
-      },
-      onSoundLevelChange: (level) {
-        if (!mounted) return;
-        setState(() {
-          _soundLevel = level;
         });
       },
       onError: (error) {
@@ -369,15 +361,17 @@ class _LectureViewState extends State<LectureView> {
         );
         break;
       case "chatbot":
-        final notesString = _pageNotes.map((page) => page.markdown).join("\n\n");
-        
+        final notesString = _pageNotes
+            .map((page) => page.markdown)
+            .join("\n\n");
+
         panel = ChatbotPanel(
           key: const ValueKey("chatbot"),
           width: width,
           index: index,
           onClose: () => setState(() => _showChatbot = false),
           notebookId: int.tryParse(widget.fileId) ?? 0,
-          aiNotes: notesString,        // 目前畫面上最新最真實的筆記內容
+          aiNotes: notesString, // 目前畫面上最新最真實的筆記內容
           transcript: _liveTranscript, // 目前最新錄製的即時逐字稿
         );
         break;
@@ -701,70 +695,6 @@ class _LectureViewState extends State<LectureView> {
                           ),
                           const SizedBox(height: 12),
                           ElevatedButton(
-                            onPressed: () async {
-                              if (_isRecording) {
-                                // --- STOP RECORDING ---
-                                _speechService.toggleListening();
-
-                                // Cancel the 10-second export timer and flush
-                                _exportTimer?.cancel();
-                                _exportTimer = null;
-                                await _exportService?.stop(_liveTranscript);
-                                final savedDir = _exportService?.sessionDirPath ?? '';
-                                _exportService = null;
-
-                                setState(() {
-                                  _savedFilePath = savedDir;
-                                });
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Transcript saved to: $savedDir'),
-                                    ),
-                                  );
-                                }
-
-                                Future.delayed(const Duration(seconds: 3), () {
-                                  if (mounted) {
-                                    setState(() {
-                                      _savedFilePath = null;
-                                    });
-                                  }
-                                });
-                              } else {
-                                // --- START RECORDING ---
-                                setState(() {
-                                  _savedFilePath = null;
-                                  _liveTranscript = '';
-                                  _soundLevel = 0.0;
-                                });
-                                _speechService.reset();
-
-                                // Build a session name from current timestamp
-                                final now = DateTime.now();
-                                final sessionName =
-                                    'lecture_${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
-                                    '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
-
-                                // fileId is the DB id of the current course item
-                                // used as parentId so the recording is linked to it.
-                                final parentId = int.tryParse(widget.fileId) ?? 0;
-
-                                final exportSvc = TranscriptExportService(
-                                  courseItemParentId: parentId,
-                                  sessionName: sessionName,
-                                );
-                                _exportService = exportSvc;
-                                await exportSvc.start();
-
-                                // Fire every 10 seconds to write a new segment
-                                _exportTimer = Timer.periodic(
-                                  const Duration(seconds: 10),
-                                  (_) => _exportService?.exportSegment(),
-                                );
-
-                                _speechService.toggleListening();
-                              }
                             onPressed: () {
                               unawaited(_handleRecordingToggle());
                             },

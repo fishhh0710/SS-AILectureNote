@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'panel_header.dart';
 
 class TranscriptPanel extends StatefulWidget {
@@ -26,44 +27,20 @@ class TranscriptPanel extends StatefulWidget {
 }
 
 class _TranscriptPanelState extends State<TranscriptPanel> {
-  /// Permanently stores all text that has already been finalized.
-  /// This only ever grows — never cleared during a session.
-  String _fullTranscript = '';
-
   final ScrollController _scrollController = ScrollController();
 
   @override
-  void didUpdateWidget(TranscriptPanel oldWidget) {
+  void didUpdateWidget(covariant TranscriptPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final newLive = widget.liveTranscript;
-    final oldLive = oldWidget.liveTranscript;
-
-    // Detect a chunk boundary: if the incoming text is shorter than what
-    // was previously shown, it means the speech service started a fresh
-    // partial for a new sentence. Preserve the previous full text first.
-    if (oldLive.isNotEmpty && newLive.length < oldLive.length) {
-      _fullTranscript = _fullTranscript.isEmpty
-          ? oldLive.trimRight()
-          : '${_fullTranscript.trimRight()} ${oldLive.trimRight()}';
-    }
-
-    // If the user explicitly resets (liveTranscript goes to '' while not
-    // recording), also clear our buffer so the panel returns to idle state.
-    if (newLive.isEmpty && !widget.isRecording) {
-      _fullTranscript = '';
-    }
-
-    // Auto-scroll to bottom when text changes
-    if (newLive != oldLive) {
+    if (widget.liveTranscript != oldWidget.liveTranscript) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-          );
-        }
+        if (!_scrollController.hasClients) return;
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
       });
     }
   }
@@ -76,85 +53,7 @@ class _TranscriptPanelState extends State<TranscriptPanel> {
 
   @override
   Widget build(BuildContext context) {
-    // Combine permanently saved text with the current live partial.
-    // _fullTranscript only grows; liveTranscript is the latest rolling partial.
-    final String displayText = _fullTranscript.isEmpty
-        ? widget.liveTranscript
-        : widget.liveTranscript.isEmpty
-        ? _fullTranscript
-        : '${_fullTranscript.trimRight()} ${widget.liveTranscript.trimLeft()}';
-
-    Widget content;
-    final hasTranscript = widget.transcriptText.trim().isNotEmpty;
-
-    if (!widget.isRecording && displayText.isEmpty) {
-      // No recording, no history — show the "start recording" prompt
-      content = Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            InkWell(
-              onTap: widget.onStartRecording,
-              borderRadius: BorderRadius.circular(24),
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xFFEAE7DC), width: 2),
-                ),
-                child: const Icon(
-                  Icons.mic,
-                  size: 48,
-                  color: Color(0xFF8E9775),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              '開始錄音吧',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF3D3D3D),
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '點擊上方圖示或右下角按鈕開始紀錄課程',
-              style: TextStyle(fontSize: 12, color: Color(0xFFA8A08E)),
-            ),
-          ],
-        ),
-      );
-    } else {
-      content = SingleChildScrollView(
-        controller: _scrollController,
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              // Show "Listening..." only if we have absolutely no text yet
-              displayText.isEmpty && widget.isRecording
-                  ? 'Listening...'
-                  : displayText,
-              style: const TextStyle(
-                fontSize: 16,
-                height: 1.7,
-                color: Color(0xFF3D3D3D),
-              ),
-            ),
-            // Blinking cursor while recording
-            if (widget.isRecording)
-              const Padding(
-                padding: EdgeInsets.only(top: 4),
-                child: _BlinkingCursor(),
-              ),
-          ],
-        ),
-      );
-    }
+    final displayText = widget.liveTranscript.trim();
 
     return SizedBox(
       width: widget.width,
@@ -175,13 +74,23 @@ class _TranscriptPanelState extends State<TranscriptPanel> {
         child: Column(
           children: [
             PanelHeader(
-              title: '即時逐字稿',
+              title: 'Transcript',
               icon: Icons.subtitles,
               onClose: widget.onClose,
               index: widget.index,
             ),
             const Divider(height: 1, color: Color(0xFFEAE7DC)),
-            Expanded(child: content),
+            if (widget.savedStatusText != null)
+              _StatusBanner(text: widget.savedStatusText!),
+            Expanded(
+              child: displayText.isEmpty && !widget.isRecording
+                  ? _EmptyTranscript(onStartRecording: widget.onStartRecording)
+                  : _TranscriptBody(
+                      controller: _scrollController,
+                      text: displayText,
+                      isRecording: widget.isRecording,
+                    ),
+            ),
           ],
         ),
       ),
@@ -189,7 +98,115 @@ class _TranscriptPanelState extends State<TranscriptPanel> {
   }
 }
 
-// Simple blinking cursor shown while actively recording
+class _StatusBanner extends StatelessWidget {
+  final String text;
+
+  const _StatusBanner({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF5F2EA),
+        border: Border(bottom: BorderSide(color: Color(0xFFEAE7DC))),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 12,
+          color: Color(0xFF6F735E),
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyTranscript extends StatelessWidget {
+  final VoidCallback onStartRecording;
+
+  const _EmptyTranscript({required this.onStartRecording});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          InkWell(
+            onTap: onStartRecording,
+            borderRadius: BorderRadius.circular(24),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: const Color(0xFFEAE7DC), width: 2),
+              ),
+              child: const Icon(Icons.mic, size: 48, color: Color(0xFF8E9775)),
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Start recording',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF3D3D3D),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Tap the microphone to start live transcription.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: Color(0xFFA8A08E)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TranscriptBody extends StatelessWidget {
+  final ScrollController controller;
+  final String text;
+  final bool isRecording;
+
+  const _TranscriptBody({
+    required this.controller,
+    required this.text,
+    required this.isRecording,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      controller: controller,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            text.isEmpty && isRecording ? 'Listening...' : text,
+            style: const TextStyle(
+              fontSize: 16,
+              height: 1.7,
+              color: Color(0xFF3D3D3D),
+            ),
+          ),
+          if (isRecording)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: _BlinkingCursor(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BlinkingCursor extends StatefulWidget {
   const _BlinkingCursor();
 

@@ -16,7 +16,8 @@ class TranscriptAccordion extends StatefulWidget {
   State<TranscriptAccordion> createState() => _TranscriptAccordionState();
 }
 
-class _TranscriptAccordionState extends State<TranscriptAccordion> with SingleTickerProviderStateMixin {
+class _TranscriptAccordionState extends State<TranscriptAccordion>
+    with SingleTickerProviderStateMixin {
   late bool _isOpen;
   late AnimationController _controller;
   late Animation<double> _iconTurns;
@@ -25,7 +26,10 @@ class _TranscriptAccordionState extends State<TranscriptAccordion> with SingleTi
   void initState() {
     super.initState();
     _isOpen = widget.defaultOpen;
-    _controller = AnimationController(duration: const Duration(milliseconds: 300), vsync: this);
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
     _iconTurns = Tween<double>(begin: 0.0, end: 0.25).animate(_controller);
     if (_isOpen) {
       _controller.value = 1.0;
@@ -51,7 +55,10 @@ class _TranscriptAccordionState extends State<TranscriptAccordion> with SingleTi
 
   @override
   Widget build(BuildContext context) {
-    final paragraphs = widget.content.split(RegExp(r'\n\n+')).where((p) => p.trim().isNotEmpty).toList();
+    final paragraphs = widget.content
+        .split(RegExp(r'\n\n+'))
+        .where((p) => p.trim().isNotEmpty)
+        .toList();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -60,7 +67,13 @@ class _TranscriptAccordionState extends State<TranscriptAccordion> with SingleTi
         borderRadius: BorderRadius.circular(32),
         border: Border.all(color: const Color(0xFFEAE7DC)),
         boxShadow: _isOpen
-            ? [const BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))]
+            ? [
+                const BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ]
             : [],
       ),
       child: Column(
@@ -80,14 +93,20 @@ class _TranscriptAccordionState extends State<TranscriptAccordion> with SingleTi
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: _isOpen ? const Color(0xFF8E9775) : const Color(0xFF3D3D3D),
+                        color: _isOpen
+                            ? const Color(0xFF8E9775)
+                            : const Color(0xFF3D3D3D),
                         height: 1.5,
                       ),
                     ),
                   ),
                   RotationTransition(
                     turns: _iconTurns,
-                    child: const Icon(Icons.chevron_right, color: Color(0xFF8E9775), size: 18),
+                    child: const Icon(
+                      Icons.chevron_right,
+                      color: Color(0xFF8E9775),
+                      size: 18,
+                    ),
                   ),
                 ],
               ),
@@ -108,7 +127,9 @@ class _TranscriptAccordionState extends State<TranscriptAccordion> with SingleTi
                           Container(
                             width: 4,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF8E9775).withOpacity(0.1),
+                              color: const Color(
+                                0xFF8E9775,
+                              ).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
@@ -131,7 +152,9 @@ class _TranscriptAccordionState extends State<TranscriptAccordion> with SingleTi
                 }).toList(),
               ),
             ),
-            crossFadeState: _isOpen ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            crossFadeState: _isOpen
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
             duration: const Duration(milliseconds: 300),
           ),
         ],

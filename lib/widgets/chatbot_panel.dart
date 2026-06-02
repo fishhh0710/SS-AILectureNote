@@ -10,7 +10,7 @@ class ChatbotPanel extends StatefulWidget {
   final int index;
   final VoidCallback onClose;
   final int notebookId; // 補上漏掉的課程 ID，讓 State 類別可以讀取
-  final String aiNotes;    // 接收外層的真實筆記
+  final String aiNotes; // 接收外層的真實筆記
   final String transcript; // 接收外層的真實逐字稿
 
   const ChatbotPanel({
@@ -32,7 +32,7 @@ class _ChatbotPanelState extends State<ChatbotPanel> {
   final ScrollController _scrollController = ScrollController();
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
 
-  List<ChatMessage> messages = []; 
+  List<ChatMessage> messages = [];
   bool loading = false;
   int? currentConversationId; // 儲存目前的對話 Session ID
 
@@ -51,37 +51,39 @@ class _ChatbotPanelState extends State<ChatbotPanel> {
       int? convId = await _dbHelper.getLatestConversationId(widget.notebookId);
 
       // 如果 convId 是 null，代表是這堂課的第一次對話，這時才新建一個 Session
-      if (convId == null) {
-        convId = await _dbHelper.createConversation(widget.notebookId);
-      }
-      
-      currentConversationId = convId;
+      convId ??= await _dbHelper.createConversation(widget.notebookId);
+      final conversationId = convId;
+
+      currentConversationId = conversationId;
 
       // 帶入傳進來的筆記與逐字稿
       loadedAiNotes = widget.aiNotes;
       loadedTranscript = widget.transcript;
 
       // 根據這個歷史或既有的 convId，去資料庫撈出所有的歷史對話訊息
-      final history = await _dbHelper.getConversationMessages(convId);
-      
+      final history = await _dbHelper.getConversationMessages(conversationId);
+
       setState(() {
         messages = history;
         // 如果連舊的 Session 裡都沒有任何訊息（例如新建的空白 Session），才放歡迎詞
         if (messages.isEmpty) {
-          messages.add(ChatMessage(
-            conversationId: convId!,
-            role: "assistant",
-            content: "Hi! I am your AI study assistant. Ask me anything about this lecture!",
-            sequenceNumber: 1,
-            createdAt: DateTime.now().toIso8601String(),
-          ));
+          messages.add(
+            ChatMessage(
+              conversationId: conversationId,
+              role: "assistant",
+              content:
+                  "Hi! I am your AI study assistant. Ask me anything about this lecture!",
+              sequenceNumber: 1,
+              createdAt: DateTime.now().toIso8601String(),
+            ),
+          );
         }
         loading = false;
       });
       _scrollToBottom();
     } catch (e) {
       setState(() => loading = false);
-      print("初始化歷史紀錄失敗: $e");
+      debugPrint("Failed to initialize chat history: $e");
     }
   }
 
@@ -130,15 +132,17 @@ class _ChatbotPanelState extends State<ChatbotPanel> {
 
       // 撈取「最新 5 輪」歷史紀錄格式化為字串，餵給 AI
       final recentDbMessages = await _dbHelper.getRecentMessages(convId);
-      final historyString = recentDbMessages.map((e) => "${e.role}: ${e.content}").join("\n");
+      final historyString = recentDbMessages
+          .map((e) => "${e.role}: ${e.content}")
+          .join("\n");
 
       final response = await http.post(
         Uri.parse("http://10.0.2.2:8000/chat"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
-          "notes": widget.aiNotes,       // 真實筆記內容
+          "notes": widget.aiNotes, // 真實筆記內容
           "transcript": widget.transcript, // 真實逐字稿內容
-          "history": historyString,       // 資料庫撈出的 5 輪歷史
+          "history": historyString, // 資料庫撈出的 5 輪歷史
           "question": text,
         }),
       );
@@ -165,19 +169,20 @@ class _ChatbotPanelState extends State<ChatbotPanel> {
       } else {
         throw Exception("伺服器錯誤 ${response.statusCode}");
       }
-      
-      _scrollToBottom();
 
+      _scrollToBottom();
     } catch (e) {
       setState(() {
         loading = false;
-        messages.add(ChatMessage(
-          conversationId: convId,
-          role: "assistant",
-          content: "Error: $e",
-          sequenceNumber: 999,
-          createdAt: nowStr,
-        ));
+        messages.add(
+          ChatMessage(
+            conversationId: convId,
+            role: "assistant",
+            content: "Error: $e",
+            sequenceNumber: 999,
+            createdAt: nowStr,
+          ),
+        );
       });
       _scrollToBottom();
     }
@@ -194,7 +199,11 @@ class _ChatbotPanelState extends State<ChatbotPanel> {
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: const Color(0xFFEAE7DC)),
           boxShadow: const [
-            BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 4,
+              offset: Offset(0, 2),
+            ),
           ],
         ),
         child: Column(
@@ -241,17 +250,26 @@ class _ChatbotPanelState extends State<ChatbotPanel> {
                         hintStyle: const TextStyle(color: Color(0xFFA8A08E)),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: Color(0xFFEAE7DC)),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFEAE7DC),
+                          ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: Color(0xFFEAE7DC)),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFEAE7DC),
+                          ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: Color(0xFF8E9775)),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF8E9775),
+                          ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
                         filled: true,
                         fillColor: Colors.white,
                       ),
