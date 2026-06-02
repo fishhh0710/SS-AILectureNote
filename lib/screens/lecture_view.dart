@@ -369,11 +369,16 @@ class _LectureViewState extends State<LectureView> {
         );
         break;
       case "chatbot":
+        final notesString = _pageNotes.map((page) => page.markdown).join("\n\n");
+        
         panel = ChatbotPanel(
           key: const ValueKey("chatbot"),
           width: width,
           index: index,
           onClose: () => setState(() => _showChatbot = false),
+          notebookId: int.tryParse(widget.fileId) ?? 0,
+          aiNotes: notesString,        // 目前畫面上最新最真實的筆記內容
+          transcript: _liveTranscript, // 目前最新錄製的即時逐字稿
         );
         break;
       default:
