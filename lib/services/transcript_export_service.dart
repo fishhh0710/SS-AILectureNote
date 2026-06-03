@@ -103,8 +103,10 @@ class TranscriptExportService {
     await file.writeAsString(
       const JsonEncoder.withIndent('  ').convert(payload),
     );
-    debugPrint('[TranscriptExportService] Wrote $fileName '
-        '(is_empty=${payload['is_empty']})');
+    debugPrint(
+      '[TranscriptExportService] Wrote $fileName '
+      '(is_empty=${payload['is_empty']})',
+    );
 
     // --- Update DB with latest full transcript ---
     await _updateRecordingTranscript(fullText);
@@ -117,8 +119,9 @@ class TranscriptExportService {
     await exportSegment(); // Flush remaining delta (may be empty — still saved)
     await _updateRecordingTranscript(finalTranscript);
     debugPrint(
-        '[TranscriptExportService] Session ended. '
-        'Total segments: $_segmentIndex. Dir: ${_sessionDir?.path}');
+      '[TranscriptExportService] Session ended. '
+      'Total segments: $_segmentIndex. Dir: ${_sessionDir?.path}',
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -140,19 +143,21 @@ class TranscriptExportService {
       parentId: courseItemParentId,
       type: 'recording',
       name: '$sessionName.json',
-      content: '',             // Updated incrementally via _updateRecordingTranscript
+      content: '', // Updated incrementally via _updateRecordingTranscript
       filePath: _sessionDir!.path,
       createdAt: now,
     );
     _recordingItemId = await DatabaseHelper.instance.insertItem(node);
     debugPrint(
-        '[TranscriptExportService] Created DB recording item id=$_recordingItemId');
+      '[TranscriptExportService] Created DB recording item id=$_recordingItemId',
+    );
   }
 
   Future<void> _updateRecordingTranscript(String fullText) async {
     if (_recordingItemId == null) return;
-    final existing =
-        await DatabaseHelper.instance.getNodeById(_recordingItemId!);
+    final existing = await DatabaseHelper.instance.getNodeById(
+      _recordingItemId!,
+    );
     if (existing == null) return;
 
     final updated = AppNode(

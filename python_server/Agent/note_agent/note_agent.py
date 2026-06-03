@@ -1,8 +1,11 @@
 from openai import OpenAI
 from pathlib import Path
+from fastapi import FastAPI
+from pydantic import BaseModel
 import json
 import os
 
+app = FastAPI()
 
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 

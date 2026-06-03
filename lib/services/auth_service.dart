@@ -1,28 +1,44 @@
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
+import 'firebase_function_client.dart';
+
 class AzureAuthService {
-  // Use 10.0.2.2 for Android emulator to access localhost, or your computer's IP for physical devices.
-  // For now, assuming you are testing locally. Adjust this URL when you move to Firebase.
-  final String backendUrl = 'http://10.0.2.2:5000/api/azure-token';
+  AzureAuthService({FirebaseFunctionClient? functionClient})
+    : _functionClient = functionClient ?? FirebaseFunctionClient();
+
+  static const _functionName = String.fromEnvironment(
+    'FIREBASE_AZURE_TOKEN_FUNCTION_NAME',
+    defaultValue: 'azureSpeechToken',
+  );
+  static const _functionUrl = String.fromEnvironment(
+    'FIREBASE_AZURE_TOKEN_FUNCTION_URL',
+  );
+
+  final FirebaseFunctionClient _functionClient;
 
   Future<String> getTemporaryToken() async {
     try {
-      final response = await http.get(Uri.parse(backendUrl));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['token'] != null) {
-          return data['token'];
-        } else {
-          throw Exception('Backend did not return a token. Response: ${response.body}');
-        }
-      } else {
-        throw Exception('Failed to fetch Azure token. Status Code: ${response.statusCode}');
+      final response = await _functionClient.postJson(
+        functionName: _functionName,
+        overrideUrl: _functionUrl,
+        body: const {},
+      );
+      final payload = FirebaseFunctionClient.unwrapPayload(response);
+      final token = payload['token'];
+      if (token is String && token.isNotEmpty) {
+        return token;
       }
+
+      throw const FirebaseFunctionException(
+        'Azure token Firebase Function response is missing token.',
+      );
     } catch (e) {
       debugPrint('Error fetching Azure token: $e');
       rethrow;
     }
+  }
+
+  void dispose() {
+    _functionClient.dispose();
   }
 }

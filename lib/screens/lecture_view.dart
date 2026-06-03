@@ -5,9 +5,9 @@ import '../widgets/slides_panel.dart';
 import '../widgets/transcript_panel.dart';
 import '../widgets/summary_panel.dart';
 import '../widgets/chatbot_panel.dart';
-import '../services/note_generation_service.dart';
 import '../services/gemini_live_speech_service.dart';
 import '../services/transcript_export_service.dart';
+import '../viewmodels/lecture_notes_view_model.dart';
 
 class LectureView extends StatefulWidget {
   final String courseId;
@@ -26,19 +26,12 @@ class _LectureViewState extends State<LectureView> {
   bool _showChatbot = false;
   bool _isRecording = false;
   final GlobalKey _panelsAreaKey = GlobalKey();
-  final NoteGenerationService _noteGenerationService = NoteGenerationService();
 
   late GeminiLiveSpeechService _speechService;
+  late final LectureNotesViewModel _notesViewModel;
   String _liveTranscript = '';
   String _currentLanguage = 'en_US';
   String? _savedStatusText;
-  String? _savedFilePath;
-  double _soundLevel = 0.0;
-  List<AiPageNote> _pageNotes = const [];
-  bool _isGeneratingNotes = false;
-  String? _notesError;
-  String? _lastPdfPath;
-  int _noteGenerationRequestId = 0;
 
   // 10-second export service
   TranscriptExportService? _exportService;
@@ -47,6 +40,8 @@ class _LectureViewState extends State<LectureView> {
   @override
   void initState() {
     super.initState();
+    _notesViewModel = LectureNotesViewModel()
+      ..addListener(_handleNotesStateChanged);
     _speechService = GeminiLiveSpeechService(
       onUpdate: (text, listening) {
         if (!mounted) return;
@@ -63,12 +58,6 @@ class _LectureViewState extends State<LectureView> {
           _savedStatusText = 'Transcript saved locally';
         });
       },
-      onSoundLevelChange: (level) {
-        if (!mounted) return;
-        setState(() {
-          _soundLevel = level;
-        });
-      },
       onError: (error) {
         if (!mounted) return;
         ScaffoldMessenger.of(
@@ -77,16 +66,22 @@ class _LectureViewState extends State<LectureView> {
       },
     );
     _initializeSpeechService();
-    _loadSavedAiNotes();
+    unawaited(_notesViewModel.loadSaved(widget.fileId));
   }
 
   @override
   void dispose() {
-    _noteGenerationRequestId++;
+    _notesViewModel
+      ..removeListener(_handleNotesStateChanged)
+      ..dispose();
     _exportTimer?.cancel();
-    _noteGenerationService.dispose();
     _speechService.dispose();
     super.dispose();
+  }
+
+  void _handleNotesStateChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _initializeSpeechService() async {
@@ -97,23 +92,6 @@ class _LectureViewState extends State<LectureView> {
       });
     }
     await _speechService.initialize();
-  }
-
-  Future<void> _loadSavedAiNotes() async {
-    try {
-      final notes = await _noteGenerationService.loadSavedNotes(widget.fileId);
-      if (!mounted) return;
-
-      setState(() {
-        _pageNotes = notes;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _notesError = 'Failed to load saved AI notes: $e';
-      });
-    }
   }
 
   double _getMinWidth(String id) {
@@ -282,44 +260,20 @@ class _LectureViewState extends State<LectureView> {
   }
 
   Future<void> _handlePdfUploaded(String pdfPath) async {
-    final requestId = ++_noteGenerationRequestId;
-
     setState(() {
       _showSummary = true;
       _layoutOrder.remove('summary');
       _layoutOrder.add('summary');
-      _lastPdfPath = pdfPath;
-      _pageNotes = const [];
-      _isGeneratingNotes = true;
-      _notesError = null;
     });
 
-    try {
-      await _noteGenerationService.clearSavedNotes(widget.fileId);
-      final notes = await _noteGenerationService.generateNotesFromPdf(pdfPath);
-      await _noteGenerationService.saveNotes(widget.fileId, notes);
-
-      if (!mounted || requestId != _noteGenerationRequestId) return;
-
-      setState(() {
-        _pageNotes = notes;
-        _isGeneratingNotes = false;
-      });
-    } catch (e) {
-      if (!mounted || requestId != _noteGenerationRequestId) return;
-
-      setState(() {
-        _isGeneratingNotes = false;
-        _notesError = e.toString();
-      });
-    }
+    await _notesViewModel.generateFromPdf(
+      storageId: widget.fileId,
+      pdfPath: pdfPath,
+    );
   }
 
   void _retryGeneratingNotes() {
-    final pdfPath = _lastPdfPath;
-    if (pdfPath == null || _isGeneratingNotes) return;
-
-    _handlePdfUploaded(pdfPath);
+    unawaited(_notesViewModel.retry(widget.fileId));
   }
 
   Widget _buildPanel(
@@ -362,18 +316,25 @@ class _LectureViewState extends State<LectureView> {
           width: width,
           index: index,
           onClose: () => setState(() => _showSummary = false),
-          notes: _pageNotes,
-          isGenerating: _isGeneratingNotes,
-          errorMessage: _notesError,
-          onRetry: _lastPdfPath == null ? null : _retryGeneratingNotes,
+          notes: _notesViewModel.notes,
+          isGenerating: _notesViewModel.isGenerating,
+          errorMessage: _notesViewModel.errorMessage,
+          onRetry: _notesViewModel.canRetry ? _retryGeneratingNotes : null,
         );
         break;
       case "chatbot":
+        final notesString = _notesViewModel.notes
+            .map((page) => page.markdown)
+            .join("\n\n");
+
         panel = ChatbotPanel(
           key: const ValueKey("chatbot"),
           width: width,
           index: index,
           onClose: () => setState(() => _showChatbot = false),
+          notebookId: int.tryParse(widget.fileId) ?? 0,
+          aiNotes: notesString, // 目前畫面上最新最真實的筆記內容
+          transcript: _liveTranscript, // 目前最新錄製的即時逐字稿
         );
         break;
       default:
@@ -696,70 +657,6 @@ class _LectureViewState extends State<LectureView> {
                           ),
                           const SizedBox(height: 12),
                           ElevatedButton(
-                            onPressed: () async {
-                              if (_isRecording) {
-                                // --- STOP RECORDING ---
-                                _speechService.toggleListening();
-
-                                // Cancel the 10-second export timer and flush
-                                _exportTimer?.cancel();
-                                _exportTimer = null;
-                                await _exportService?.stop(_liveTranscript);
-                                final savedDir = _exportService?.sessionDirPath ?? '';
-                                _exportService = null;
-
-                                setState(() {
-                                  _savedFilePath = savedDir;
-                                });
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Transcript saved to: $savedDir'),
-                                    ),
-                                  );
-                                }
-
-                                Future.delayed(const Duration(seconds: 3), () {
-                                  if (mounted) {
-                                    setState(() {
-                                      _savedFilePath = null;
-                                    });
-                                  }
-                                });
-                              } else {
-                                // --- START RECORDING ---
-                                setState(() {
-                                  _savedFilePath = null;
-                                  _liveTranscript = '';
-                                  _soundLevel = 0.0;
-                                });
-                                _speechService.reset();
-
-                                // Build a session name from current timestamp
-                                final now = DateTime.now();
-                                final sessionName =
-                                    'lecture_${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
-                                    '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
-
-                                // fileId is the DB id of the current course item
-                                // used as parentId so the recording is linked to it.
-                                final parentId = int.tryParse(widget.fileId) ?? 0;
-
-                                final exportSvc = TranscriptExportService(
-                                  courseItemParentId: parentId,
-                                  sessionName: sessionName,
-                                );
-                                _exportService = exportSvc;
-                                await exportSvc.start();
-
-                                // Fire every 10 seconds to write a new segment
-                                _exportTimer = Timer.periodic(
-                                  const Duration(seconds: 10),
-                                  (_) => _exportService?.exportSegment(),
-                                );
-
-                                _speechService.toggleListening();
-                              }
                             onPressed: () {
                               unawaited(_handleRecordingToggle());
                             },

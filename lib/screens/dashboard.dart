@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../database/database_helper.dart';
+
 import '../database/models.dart';
-import '../services/firebase_upload_service.dart';
+import '../viewmodels/dashboard_view_model.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -13,22 +13,19 @@ class Dashboard extends StatefulWidget {
 
 class _DashboardState extends State<Dashboard>
     with SingleTickerProviderStateMixin {
+  late final DashboardViewModel _viewModel;
   late AnimationController _controller;
   late Animation<double> _expandAnimation;
   late Animation<double> _rotateAnimation;
+
   bool _isMenuOpen = false;
-
-  List<AppNode> _nodes = [];
-  AppNode? _databaseRoot;
-
-  bool _isBackingUp = false;
-  String _backupStatus = '';
-  double _backupProgress = 0.0;
   StateSetter? _dialogSetState;
 
   @override
   void initState() {
     super.initState();
+    _viewModel = DashboardViewModel()..addListener(_handleViewModelChanged);
+
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 250),
@@ -42,70 +39,22 @@ class _DashboardState extends State<Dashboard>
       end: 0.125,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    final dbRoot = await DatabaseHelper.instance.getDatabaseRootFolder();
-    if (dbRoot != null) {
-      final items = await DatabaseHelper.instance.getItemsByParent(dbRoot.id);
-      setState(() {
-        _databaseRoot = dbRoot;
-        _nodes = items;
-      });
-    }
-  }
-
-  void _showCreateDialog(String type) {
-    final textController = TextEditingController();
-    String title = type == 'course' ? '課程' : (type == 'folder' ? '資料夾' : '筆記本');
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('新增 $title'),
-        content: TextField(
-          controller: textController,
-          decoration: const InputDecoration(hintText: '請輸入名稱'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (textController.text.isNotEmpty && _databaseRoot != null) {
-                final newNode = AppNode(
-                  parentId: _databaseRoot!.id,
-                  type: type,
-                  name: textController.text,
-                  createdAt: DateTime.now().toIso8601String(),
-                );
-
-                if (type == 'course') {
-                  await DatabaseHelper.instance.insertCourse(newNode);
-                } else {
-                  await DatabaseHelper.instance.insertItem(newNode);
-                }
-
-                if (mounted) {
-                  Navigator.pop(context);
-                  _loadData();
-                }
-              }
-            },
-            child: const Text('建立'),
-          ),
-        ],
-      ),
-    );
+    _viewModel.loadData();
   }
 
   @override
   void dispose() {
+    _viewModel
+      ..removeListener(_handleViewModelChanged)
+      ..dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  void _handleViewModelChanged() {
+    if (!mounted) return;
+    setState(() {});
+    _dialogSetState?.call(() {});
   }
 
   void _toggleMenu() {
@@ -119,59 +68,75 @@ class _DashboardState extends State<Dashboard>
     });
   }
 
-  Future<void> _uploadToFirebase() async {
+  void _showCreateDialog(String type) {
+    final textController = TextEditingController();
+    final title = switch (type) {
+      'course' => '課程',
+      'folder' => '資料夾',
+      _ => '筆記本',
+    };
 
-    setState(() {
-      _isBackingUp = true;
-      _backupStatus = '正在準備...';
-      _backupProgress = 0.0;
-    });
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('新增$title'),
+        content: TextField(
+          controller: textController,
+          autofocus: true,
+          decoration: InputDecoration(hintText: '請輸入$title名稱'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                await _viewModel.createNode(
+                  type: type,
+                  name: textController.text,
+                );
+                if (!context.mounted) return;
+                Navigator.pop(context);
+              } catch (e) {
+                if (!context.mounted) return;
+                _showErrorSnackBar(e.toString());
+              }
+            },
+            child: const Text('建立'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _uploadToFirebase() async {
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     _showBackupProgressDialog();
 
     try {
-      await FirebaseUploadService.uploadAllFiles(
-        userId: 'jenny',
-        onProgress: (status, progress) {
-          if (mounted) {
-            setState(() {
-              _backupStatus = status;
-              _backupProgress = progress;
-            });
-            _dialogSetState?.call(() {});
-          }
-        },
-      );
+      await _viewModel.uploadToFirebase();
       await Future.delayed(const Duration(milliseconds: 800));
     } catch (e) {
-      if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress dialog
-        _showErrorSnackBar(e.toString());
-        print(e.toString());
-      }
-      setState(() {
-        _isBackingUp = false;
-      });
+      if (!mounted) return;
+      rootNavigator.pop();
+      _showErrorSnackBar(e.toString());
+      debugPrint(e.toString());
       return;
     }
 
-    if (mounted) {
-      Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress dialog
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_backupStatus),
-          backgroundColor: const Color(0xFF8E9775),
-        ),
-      );
-    }
-
-    setState(() {
-      _isBackingUp = false;
-    });
-    _loadData();
+    if (!mounted) return;
+    rootNavigator.pop();
+    scaffoldMessenger.showSnackBar(
+      SnackBar(
+        content: Text(_viewModel.backupStatus),
+        backgroundColor: const Color(0xFF8E9775),
+      ),
+    );
   }
-
-
 
   void _showBackupProgressDialog() {
     showDialog(
@@ -181,20 +146,23 @@ class _DashboardState extends State<Dashboard>
         return StatefulBuilder(
           builder: (context, setDialogState) {
             _dialogSetState = setDialogState;
+            final progress = _viewModel.backupProgress;
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Text('備份至 Firebase'),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text('備份到 Firebase'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const SizedBox(height: 12),
                   CircularProgressIndicator(
-                    value: _backupProgress <= 0.0 || _backupProgress >= 1.0 ? null : _backupProgress,
+                    value: progress <= 0.0 || progress >= 1.0 ? null : progress,
                     color: const Color(0xFF8E9775),
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    _backupStatus,
+                    _viewModel.backupStatus,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 14,
@@ -204,7 +172,7 @@ class _DashboardState extends State<Dashboard>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${(_backupProgress * 100).toInt()}%',
+                    '${(progress * 100).toInt()}%',
                     style: const TextStyle(
                       fontSize: 12,
                       color: Color(0xFFA8A08E),
@@ -224,16 +192,15 @@ class _DashboardState extends State<Dashboard>
   }
 
   void _showErrorSnackBar(String errorMsg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('備份失敗: $errorMsg'),
-        backgroundColor: Colors.red,
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('操作失敗：$errorMsg')));
   }
 
   @override
   Widget build(BuildContext context) {
+    final nodes = _viewModel.nodes;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: _buildSpeedDial(),
@@ -250,7 +217,7 @@ class _DashboardState extends State<Dashboard>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      '目前課程',
+                      '課程',
                       style: TextStyle(
                         fontSize: 24,
                         fontFamily: 'Serif',
@@ -258,8 +225,10 @@ class _DashboardState extends State<Dashboard>
                       ),
                     ),
                     ElevatedButton.icon(
-                      onPressed: _isBackingUp ? null : _uploadToFirebase,
-                      icon: _isBackingUp 
+                      onPressed: _viewModel.isBackingUp
+                          ? null
+                          : _uploadToFirebase,
+                      icon: _viewModel.isBackingUp
                           ? const SizedBox(
                               width: 16,
                               height: 16,
@@ -270,14 +239,17 @@ class _DashboardState extends State<Dashboard>
                             )
                           : const Icon(Icons.cloud_upload, size: 18),
                       label: const Text(
-                        '備份至 Firebase',
+                        '備份到 Firebase',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF8E9775),
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -286,26 +258,37 @@ class _DashboardState extends State<Dashboard>
                   ],
                 ),
                 const SizedBox(height: 24),
-                _nodes.isEmpty
-                    ? const Text(
-                        '目前沒有任何項目，請點擊右下角新增',
-                        style: TextStyle(color: Color(0xFFA8A08E)),
-                      )
-                    : GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              childAspectRatio: 3,
-                              mainAxisSpacing: 16,
-                              crossAxisSpacing: 16,
-                            ),
-                        itemCount: _nodes.length,
-                        itemBuilder: (context, index) {
-                          return _buildFileItem(context, _nodes[index]);
-                        },
-                      ),
+                if (_viewModel.isLoading)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 24),
+                    child: CircularProgressIndicator(color: Color(0xFF8E9775)),
+                  )
+                else if (_viewModel.errorMessage != null)
+                  Text(
+                    _viewModel.errorMessage!,
+                    style: const TextStyle(color: Colors.redAccent),
+                  )
+                else if (nodes.isEmpty)
+                  const Text(
+                    '目前沒有任何項目，請點擊右下角新增。',
+                    style: TextStyle(color: Color(0xFFA8A08E)),
+                  )
+                else
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 3,
+                          mainAxisSpacing: 16,
+                          crossAxisSpacing: 16,
+                        ),
+                    itemCount: nodes.length,
+                    itemBuilder: (context, index) {
+                      return _buildFileItem(context, nodes[index]);
+                    },
+                  ),
               ],
             ),
           ),
@@ -405,7 +388,7 @@ class _DashboardState extends State<Dashboard>
             borderRadius: BorderRadius.circular(8),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -423,7 +406,7 @@ class _DashboardState extends State<Dashboard>
         ),
         const SizedBox(width: 12),
         SizedBox(
-          width: 56, // Perfectly matches the 56dp width of the main FAB
+          width: 56,
           child: Center(
             child: FloatingActionButton.small(
               heroTag: null,
@@ -447,6 +430,7 @@ class _DashboardState extends State<Dashboard>
         title: const Text('重新命名'),
         content: TextField(
           controller: textController,
+          autofocus: true,
           decoration: const InputDecoration(hintText: '請輸入新名稱'),
         ),
         actions: [
@@ -456,21 +440,13 @@ class _DashboardState extends State<Dashboard>
           ),
           ElevatedButton(
             onPressed: () async {
-              if (textController.text.isNotEmpty) {
-                final updatedNode = AppNode(
-                  id: node.id,
-                  parentId: node.parentId,
-                  type: node.type,
-                  name: textController.text,
-                  content: node.content,
-                  filePath: node.filePath,
-                  createdAt: node.createdAt,
-                );
-                await DatabaseHelper.instance.updateItem(updatedNode);
-                if (mounted) {
-                  Navigator.pop(context);
-                  _loadData();
-                }
+              try {
+                await _viewModel.renameNode(node, textController.text);
+                if (!context.mounted) return;
+                Navigator.pop(context);
+              } catch (e) {
+                if (!context.mounted) return;
+                _showErrorSnackBar(e.toString());
               }
             },
             child: const Text('儲存'),
@@ -485,7 +461,7 @@ class _DashboardState extends State<Dashboard>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('刪除確認'),
-        content: Text('確定要刪除「${node.name}」嗎？這將會連同內部所有檔案一併刪除！'),
+        content: Text('確定要刪除「${node.name}」嗎？這將會連同內部所有項目一併刪除。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -494,10 +470,13 @@ class _DashboardState extends State<Dashboard>
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              await DatabaseHelper.instance.deleteItem(node.id!);
-              if (mounted) {
+              try {
+                await _viewModel.deleteNode(node);
+                if (!context.mounted) return;
                 Navigator.pop(context);
-                _loadData();
+              } catch (e) {
+                if (!context.mounted) return;
+                _showErrorSnackBar(e.toString());
               }
             },
             child: const Text('刪除', style: TextStyle(color: Colors.white)),
@@ -508,30 +487,25 @@ class _DashboardState extends State<Dashboard>
   }
 
   Widget _buildFileItem(BuildContext context, AppNode node) {
-    bool isFolder =
+    final isFolder =
         node.type == 'system_folder' ||
         node.type == 'folder' ||
         node.type == 'course';
 
-    IconData icon;
-    if (isFolder) {
-      icon = Icons.folder;
-    } else if (node.type == 'notebook') {
-      icon = Icons.book;
-    } else if (node.type == 'recording') {
-      icon = Icons.mic;
-    } else if (node.type == 'ai_note') {
-      icon = Icons.auto_awesome;
-    } else {
-      icon = Icons.description;
-    }
+    final icon = switch (node.type) {
+      'system_folder' || 'folder' || 'course' => Icons.folder,
+      'notebook' => Icons.book,
+      'recording' => Icons.mic,
+      'ai_note' => Icons.auto_awesome,
+      _ => Icons.description,
+    };
 
     return InkWell(
       onTap: () {
         if (isFolder) {
           context.push('/course/${node.id}');
         } else {
-          context.push('/lecture/${_databaseRoot?.id}/${node.id}');
+          context.push('/lecture/${_viewModel.databaseRoot?.id}/${node.id}');
         }
       },
       child: Container(
@@ -596,12 +570,9 @@ class _DashboardState extends State<Dashboard>
                     _showDeleteDialog(node);
                   }
                 },
-                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                  const PopupMenuItem<String>(
-                    value: 'rename',
-                    child: Text('重新命名'),
-                  ),
-                  const PopupMenuItem<String>(
+                itemBuilder: (context) => const [
+                  PopupMenuItem<String>(value: 'rename', child: Text('重新命名')),
+                  PopupMenuItem<String>(
                     value: 'delete',
                     child: Text('刪除', style: TextStyle(color: Colors.red)),
                   ),

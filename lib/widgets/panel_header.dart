@@ -30,30 +30,51 @@ class PanelHeader extends StatelessWidget {
           Expanded(
             child: Center(
               child: MouseRegion(
-                cursor: isDraggable ? SystemMouseCursors.grab : SystemMouseCursors.basic,
+                cursor: isDraggable
+                    ? SystemMouseCursors.grab
+                    : SystemMouseCursors.basic,
                 child: Builder(
                   builder: (context) {
                     final content = Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (isDraggable)
-                          const Icon(Icons.drag_indicator, size: 14, color: Color(0xFFA8A08E)),
+                          const Icon(
+                            Icons.drag_indicator,
+                            size: 14,
+                            color: Color(0xFFA8A08E),
+                          ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.5),
+                            color: Colors.white.withValues(alpha: 0.5),
                             borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: const Color(0xFFEAE7DC).withOpacity(0.5)),
+                            border: Border.all(
+                              color: const Color(
+                                0xFFEAE7DC,
+                              ).withValues(alpha: 0.5),
+                            ),
                             boxShadow: const [
-                              BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1)),
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 2,
+                                offset: Offset(0, 1),
+                              ),
                             ],
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (icon != null) ...[
-                                Icon(icon, size: 14, color: const Color(0xFFA8A08E)),
+                                Icon(
+                                  icon,
+                                  size: 14,
+                                  color: const Color(0xFFA8A08E),
+                                ),
                                 const SizedBox(width: 6),
                               ],
                               Text(
@@ -76,7 +97,11 @@ class PanelHeader extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(12),
                                   child: const Padding(
                                     padding: EdgeInsets.all(4.0),
-                                    child: Icon(Icons.close, size: 14, color: Color(0xFFA8A08E)),
+                                    child: Icon(
+                                      Icons.close,
+                                      size: 14,
+                                      color: Color(0xFFA8A08E),
+                                    ),
                                   ),
                                 ),
                               ],

@@ -49,3 +49,4 @@ app.*.map.json
 #python server
 venv/
 .venv/
+codex.md

@@ -19,6 +19,9 @@ from transcript_saver import (
     save_transcript_chunk,
 )
 
+import os
+from openai import OpenAI
+from starlette.concurrency import run_in_threadpool
 
 app = FastAPI(
     title="SS AI Lecture Note API",
@@ -143,5 +146,75 @@ async def transcript_session(session_id: str) -> dict[str, Any]:
 async def attention_analyze(request: WorkflowInput) -> dict[str, Any]:
     try:
         return await detraction_detect(request)
+    except Exception as error:
+        raise _to_http_error(error) from error
+
+# ===============================================================
+#      AI Chatbot 功能區塊 (從 note_agent.py 合併並修正)
+# ===============================================================
+
+# OpenAI SDK 會自動讀取環境變數中的 OPENAI_API_KEY
+client = OpenAI()
+
+class ChatRequest(BaseModel):
+    notes: str
+    transcript: str
+    history: str
+    question: str
+
+def ask_learning_assistant(notes: str, transcript: str, history: str, question: str) -> str:
+    prompt = f"""
+你是一位學習助理。
+
+目標:
+教會學生理解課程內容。
+
+回答規則:
+1. 使用課程內容回答
+2. 優先引用 AI筆記
+3. 參考逐字稿
+4. 用繁體中文
+5. 條列式說明
+
+================
+
+【AI筆記】
+{notes}
+
+================
+
+【逐字稿】
+{transcript}
+
+================
+
+【歷史對話】
+{history}
+
+================
+
+【問題】
+{question}
+"""
+    # 修正為標準的 chat.completions API 並使用 gpt-4o-mini
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7
+    )
+    return response.choices[0].message.content
+
+@app.post("/chat")
+def chat(req: ChatRequest):
+    try:
+        answer = ask_learning_assistant(
+            notes=req.notes,
+            transcript=req.transcript,
+            history=req.history,
+            question=req.question,
+        )
+        return {"answer": answer}
     except Exception as error:
         raise _to_http_error(error) from error

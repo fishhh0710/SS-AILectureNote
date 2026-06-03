@@ -1,38 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:http/http.dart' as http;
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-class AiPageNote {
-  final int pageNumber;
-  final String markdown;
-
-  const AiPageNote({required this.pageNumber, required this.markdown});
-
-  factory AiPageNote.fromJson(Map<String, dynamic> json) {
-    final pageValue = json['page_number'] ?? json['pageNumber'];
-    final pageNumber = pageValue is int
-        ? pageValue
-        : int.tryParse(pageValue.toString());
-
-    if (pageNumber == null) {
-      throw const FormatException('Missing page_number in AI note response.');
-    }
-
-    final markdown = json['markdown'];
-    if (markdown is! String) {
-      throw const FormatException('Missing markdown in AI note response.');
-    }
-
-    return AiPageNote(pageNumber: pageNumber, markdown: markdown.trim());
-  }
-
-  Map<String, dynamic> toJson() {
-    return {'page_number': pageNumber, 'markdown': markdown};
-  }
-}
+import '../models/ai_page_note.dart';
+import 'firebase_function_client.dart';
 
 class NoteGenerationException implements Exception {
   final String message;
@@ -44,49 +18,63 @@ class NoteGenerationException implements Exception {
 }
 
 class NoteGenerationService {
-  NoteGenerationService({http.Client? client, String? baseUrl})
-    : _client = client ?? http.Client(),
-      baseUrl = baseUrl ?? _defaultBaseUrl();
+  NoteGenerationService({
+    FirebaseStorage? storage,
+    FirebaseFunctionClient? functionClient,
+  }) : _storage = storage ?? FirebaseStorage.instance,
+       _functionClient = functionClient ?? FirebaseFunctionClient();
 
-  final http.Client _client;
-  final String baseUrl;
+  static const _functionName = String.fromEnvironment(
+    'FIREBASE_NOTES_FUNCTION_NAME',
+    defaultValue: 'generateNotesFromPdf',
+  );
+  static const _functionUrl = String.fromEnvironment(
+    'FIREBASE_NOTES_FUNCTION_URL',
+  );
 
-  static String _defaultBaseUrl() {
-    const configured = String.fromEnvironment('PYTHON_API_BASE_URL');
-    if (configured.isNotEmpty) return configured;
+  final FirebaseStorage _storage;
+  final FirebaseFunctionClient _functionClient;
 
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8000';
-    }
-
-    return 'http://127.0.0.1:8000';
-  }
-
-  Future<List<AiPageNote>> generateNotesFromPdf(String pdfPath) async {
+  Future<List<AiPageNote>> generateNotesFromPdf({
+    required String storageId,
+    required String pdfPath,
+  }) async {
     final file = File(pdfPath);
     if (!await file.exists()) {
       throw NoteGenerationException('PDF not found: $pdfPath');
     }
 
-    final request = http.MultipartRequest('POST', _uri('/notes/from-pdf'))
-      ..files.add(
-        await http.MultipartFile.fromPath(
-          'file',
-          pdfPath,
-          filename: p.basename(pdfPath),
-        ),
-      );
+    final safeStorageId = _safeStorageId(storageId);
+    final pdfStoragePath = _buildPdfStoragePath(safeStorageId, pdfPath);
+    final jobPath = 'ai_note_jobs/$safeStorageId';
 
-    final streamedResponse = await _client
-        .send(request)
-        .timeout(const Duration(minutes: 10));
-    final response = await http.Response.fromStream(streamedResponse);
+    await _storage
+        .ref()
+        .child(pdfStoragePath)
+        .putFile(
+          file,
+          SettableMetadata(
+            contentType: 'application/pdf',
+            customMetadata: {
+              'storageId': storageId,
+              'sourceFileName': p.basename(pdfPath),
+            },
+          ),
+        );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw NoteGenerationException(_extractErrorMessage(response));
-    }
+    final response = await _functionClient.postJson(
+      functionName: _functionName,
+      overrideUrl: _functionUrl,
+      timeout: const Duration(minutes: 10),
+      body: {
+        'storageId': storageId,
+        'pdfStoragePath': pdfStoragePath,
+        'jobPath': jobPath,
+        'requestedAt': DateTime.now().toUtc().toIso8601String(),
+      },
+    );
 
-    return _parseNotesResponse(response.body);
+    return _parseFunctionResponse(response);
   }
 
   Future<List<AiPageNote>> loadSavedNotes(String storageId) async {
@@ -138,14 +126,45 @@ class NoteGenerationService {
   }
 
   void dispose() {
-    _client.close();
+    _functionClient.dispose();
   }
 
-  Uri _uri(String path) {
-    final normalizedBaseUrl = baseUrl.endsWith('/')
-        ? baseUrl.substring(0, baseUrl.length - 1)
-        : baseUrl;
-    return Uri.parse('$normalizedBaseUrl$path');
+  Future<List<AiPageNote>> _parseFunctionResponse(
+    Map<String, dynamic> response,
+  ) async {
+    final payload = FirebaseFunctionClient.unwrapPayload(response);
+
+    if (payload['pages'] is List) {
+      return _parseNotesMap(payload);
+    }
+
+    final notesStoragePath = payload['notesStoragePath'];
+    if (notesStoragePath is String && notesStoragePath.isNotEmpty) {
+      final bytes = await _storage
+          .ref()
+          .child(notesStoragePath)
+          .getData(50 * 1024 * 1024);
+      if (bytes == null) {
+        throw NoteGenerationException(
+          'Generated notes file is empty: $notesStoragePath',
+        );
+      }
+      return _parseNotesResponse(utf8.decode(bytes));
+    }
+
+    final status = payload['status'];
+    final jobPath = payload['jobPath'];
+    if (status is String && status.isNotEmpty) {
+      throw NoteGenerationException(
+        'Note generation job is "$status". The Firebase Function must return '
+        'pages or notesStoragePath before the app can render notes.'
+        '${jobPath is String ? ' Job path: $jobPath.' : ''}',
+      );
+    }
+
+    throw const NoteGenerationException(
+      'Firebase note function response is missing pages.',
+    );
   }
 
   List<AiPageNote> _parseNotesResponse(String body) {
@@ -154,6 +173,10 @@ class NoteGenerationService {
       throw const FormatException('AI note response must be a JSON object.');
     }
 
+    return _parseNotesMap(decoded);
+  }
+
+  List<AiPageNote> _parseNotesMap(Map<String, dynamic> decoded) {
     final pages = decoded['pages'];
     if (pages is! List) {
       throw const FormatException('AI note response is missing pages.');
@@ -161,10 +184,8 @@ class NoteGenerationService {
 
     final notes =
         pages
-            .map(
-              (page) =>
-                  AiPageNote.fromJson(Map<String, dynamic>.from(page as Map)),
-            )
+            .whereType<Map>()
+            .map((page) => AiPageNote.fromJson(Map<String, dynamic>.from(page)))
             .where((note) => note.markdown.isNotEmpty)
             .toList()
           ..sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
@@ -205,34 +226,17 @@ class NoteGenerationService {
     );
   }
 
+  String _buildPdfStoragePath(String safeStorageId, String pdfPath) {
+    final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final fileName = _safeFileName(p.basename(pdfPath));
+    return 'ai_note_jobs/$safeStorageId/source/${timestamp}_$fileName';
+  }
+
   String _safeStorageId(String storageId) {
     return storageId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
   }
 
-  String _extractErrorMessage(http.Response response) {
-    try {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map<String, dynamic>) {
-        final detail = decoded['detail'];
-        if (detail is Map<String, dynamic>) {
-          final message = detail['message'];
-          if (message is String && message.isNotEmpty) {
-            return 'AI note generation failed (${response.statusCode}): $message';
-          }
-        }
-        if (detail is String && detail.isNotEmpty) {
-          return 'AI note generation failed (${response.statusCode}): $detail';
-        }
-      }
-    } catch (_) {
-      // Fall back to the raw HTTP response below.
-    }
-
-    final body = response.body.trim();
-    if (body.isNotEmpty) {
-      return 'AI note generation failed (${response.statusCode}): $body';
-    }
-
-    return 'AI note generation failed (${response.statusCode}).';
+  String _safeFileName(String fileName) {
+    return fileName.replaceAll(RegExp(r'[^A-Za-z0-9_.-]'), '_');
   }
 }

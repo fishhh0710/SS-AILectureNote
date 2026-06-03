@@ -4,11 +4,7 @@ class SlidePage extends StatelessWidget {
   final int pageNumber;
   final Widget child;
 
-  const SlidePage({
-    super.key,
-    required this.pageNumber,
-    required this.child,
-  });
+  const SlidePage({super.key, required this.pageNumber, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -25,9 +21,7 @@ class SlidePage extends StatelessWidget {
               borderRadius: BorderRadius.circular(24),
               child: Stack(
                 children: [
-                  ClipRect(
-                    child: child,
-                  ),
+                  ClipRect(child: child),
                   // Top decoration
                   Positioned(
                     top: 0,
@@ -36,7 +30,7 @@ class SlidePage extends StatelessWidget {
                     height: 6,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFF8E9775).withOpacity(0.2),
+                        color: const Color(0xFF8E9775).withValues(alpha: 0.2),
                         borderRadius: const BorderRadius.only(
                           topLeft: Radius.circular(22),
                           topRight: Radius.circular(22),
@@ -60,7 +54,7 @@ class SlidePage extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
-                  color: const Color(0xFF8E9775).withOpacity(0.3),
+                  color: const Color(0xFF8E9775).withValues(alpha: 0.3),
                   letterSpacing: 4.0,
                 ),
               ),

@@ -46,7 +46,6 @@ class SpeechService {
 
   List<TranscriptChunk> chunks = [];
   DateTime? _currentChunkStartTime;
-  int? _activeChunkIndex;
   String? _storageId;
   String currentWords = '';
   double confidence = 1.0;
@@ -77,7 +76,6 @@ class SpeechService {
     if (val == 'done' || val == 'notListening') {
       isListening = false;
       onSoundLevelChange?.call(0.0);
-      _activeChunkIndex = null;
       _currentChunkStartTime = null;
       currentWords = '';
       onUpdate(_getCombinedText(), isListening);
@@ -148,23 +146,26 @@ class SpeechService {
     if (available && _shouldListen) {
       isListening = true;
       _currentChunkStartTime = DateTime.now();
-      _activeChunkIndex = null;
       currentWords = '';
       onUpdate(_getCombinedText(), isListening);
       _speech.listen(
         onResult: (val) {
           currentWords = val.recognizedWords;
-          if (val.hasConfidenceRating && val.confidence > 0) confidence = val.confidence;
+          if (val.hasConfidenceRating && val.confidence > 0) {
+            confidence = val.confidence;
+          }
 
           // When the recognizer finalizes a sentence within a session,
           // immediately save it as a chunk so the next partial result
           // appends rather than overwrites it.
           if (val.finalResult && currentWords.trim().isNotEmpty) {
-            chunks.add(TranscriptChunk(
-              startTime: _currentChunkStartTime ?? DateTime.now(),
-              endTime: DateTime.now(),
-              text: currentWords.trim(),
-            ));
+            chunks.add(
+              TranscriptChunk(
+                startTime: _currentChunkStartTime ?? DateTime.now(),
+                endTime: DateTime.now(),
+                text: currentWords.trim(),
+              ),
+            );
             currentWords = '';
             _currentChunkStartTime = DateTime.now();
           }
@@ -186,31 +187,6 @@ class SpeechService {
     }
   }
 
-  void _upsertCurrentChunk(String recognizedWords) {
-    final text = recognizedWords.trim();
-    if (text.isEmpty) return;
-
-    currentWords = text;
-    final now = DateTime.now();
-    final startTime = _currentChunkStartTime ?? now;
-    final index = _activeChunkIndex;
-
-    if (index == null || index >= chunks.length) {
-      chunks.add(
-        TranscriptChunk(startTime: startTime, endTime: now, text: text),
-      );
-      _activeChunkIndex = chunks.length - 1;
-      return;
-    }
-
-    final existing = chunks[index];
-    chunks[index] = TranscriptChunk(
-      startTime: existing.startTime,
-      endTime: now,
-      text: text,
-    );
-  }
-
   String _getCombinedText() {
     return chunks.map((c) => c.text).join('\n\n').trim();
   }
@@ -227,7 +203,6 @@ class SpeechService {
       if (!await file.exists()) {
         chunks.clear();
         currentWords = '';
-        _activeChunkIndex = null;
         onUpdate('', isListening);
         return null;
       }
@@ -246,7 +221,6 @@ class SpeechService {
           .where((chunk) => chunk.text.trim().isNotEmpty)
           .toList();
       currentWords = '';
-      _activeChunkIndex = null;
       onUpdate(_getCombinedText(), isListening);
       return file.path;
     } catch (e) {
@@ -286,7 +260,6 @@ class SpeechService {
   void reset() {
     chunks.clear();
     currentWords = '';
-    _activeChunkIndex = null;
     onSoundLevelChange?.call(0.0);
     onUpdate('', isListening);
   }

@@ -27,16 +27,10 @@ final _router = GoRouter(
   routes: [
     ShellRoute(
       builder: (context, state, child) {
-        return LayoutWrapper(
-          currentPath: state.uri.path,
-          child: child,
-        );
+        return LayoutWrapper(currentPath: state.uri.path, child: child);
       },
       routes: [
-        GoRoute(
-          path: '/',
-          builder: (context, state) => const Dashboard(),
-        ),
+        GoRoute(path: '/', builder: (context, state) => const Dashboard()),
         GoRoute(
           path: '/course/:courseId',
           builder: (context, state) {

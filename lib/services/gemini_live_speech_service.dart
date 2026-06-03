@@ -50,8 +50,8 @@ class GeminiLiveSpeechService {
 
   bool isListening = false;
   bool _shouldListen = false;
-  bool _isAudioStreaming = false;  // Tracks if audio recorder is active
-  bool _isReconnecting = false;   // Prevents reconnect storms
+  bool _isAudioStreaming = false; // Tracks if audio recorder is active
+  bool _isReconnecting = false; // Prevents reconnect storms
 
   List<TranscriptChunk> chunks = [];
   DateTime? _currentChunkStartTime;
@@ -102,7 +102,10 @@ class GeminiLiveSpeechService {
       final model = FirebaseAI.googleAI().liveGenerativeModel(
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         liveGenerationConfig: LiveGenerationConfig(
-          responseModalities: [ResponseModalities.audio, ResponseModalities.text],
+          responseModalities: [
+            ResponseModalities.audio,
+            ResponseModalities.text,
+          ],
         ),
         systemInstruction: Content.system(_getSystemInstruction()),
       );
@@ -126,7 +129,9 @@ class GeminiLiveSpeechService {
         onDone: () {
           // Session ended — could be server timeout, model rejection, or graceful close
           final closeCode = _session?.toString() ?? 'unknown';
-          debugPrint('[GeminiLive] Receive stream ended (session closed). $closeCode');
+          debugPrint(
+            '[GeminiLive] Receive stream ended (session closed). $closeCode',
+          );
           if (_shouldListen) {
             _scheduleReconnect();
           } else {
@@ -178,11 +183,13 @@ class GeminiLiveSpeechService {
   void _finalizeActiveChunk() {
     final cleanWords = _currentTurnWords.trim();
     if (cleanWords.isNotEmpty) {
-      chunks.add(TranscriptChunk(
-        startTime: _currentChunkStartTime ?? DateTime.now(),
-        endTime: DateTime.now(),
-        text: cleanWords,
-      ));
+      chunks.add(
+        TranscriptChunk(
+          startTime: _currentChunkStartTime ?? DateTime.now(),
+          endTime: DateTime.now(),
+          text: cleanWords,
+        ),
+      );
       _currentTurnWords = '';
       _currentChunkStartTime = DateTime.now();
 
@@ -234,7 +241,9 @@ class GeminiLiveSpeechService {
   Future<void> _closeSessionOnly() async {
     await _receiveSubscription?.cancel();
     _receiveSubscription = null;
-    try { await _session?.close(); } catch (_) {}
+    try {
+      await _session?.close();
+    } catch (_) {}
     _session = null;
   }
 
@@ -273,11 +282,13 @@ class GeminiLiveSpeechService {
     if (_isAudioStreaming) return; // Already recording, don't double-start
     try {
       if (await _record.hasPermission()) {
-        final audioStream = await _record.startStream(const RecordConfig(
-          encoder: AudioEncoder.pcm16bits,
-          sampleRate: 16000,
-          numChannels: 1,
-        ));
+        final audioStream = await _record.startStream(
+          const RecordConfig(
+            encoder: AudioEncoder.pcm16bits,
+            sampleRate: 16000,
+            numChannels: 1,
+          ),
+        );
 
         _isAudioStreaming = true;
         isListening = true;
@@ -292,11 +303,13 @@ class GeminiLiveSpeechService {
           // Only send if session is alive; if not, drop the chunk (session will reconnect)
           final session = _session;
           if (session != null) {
-            session.sendAudioRealtime(
-              InlineDataPart('audio/pcm;rate=16000', data),
-            ).catchError((e) {
-              debugPrint('[GeminiLive] Audio send error (session may be reconnecting): $e');
-            });
+            session
+                .sendAudioRealtime(InlineDataPart('audio/pcm;rate=16000', data))
+                .catchError((e) {
+                  debugPrint(
+                    '[GeminiLive] Audio send error (session may be reconnecting): $e',
+                  );
+                });
           }
         });
       } else {
@@ -320,11 +333,13 @@ class GeminiLiveSpeechService {
   String getExportJson() {
     final allChunks = List<TranscriptChunk>.from(chunks);
     if (_currentTurnWords.trim().isNotEmpty) {
-      allChunks.add(TranscriptChunk(
-        startTime: _currentChunkStartTime ?? DateTime.now(),
-        endTime: DateTime.now(),
-        text: _currentTurnWords.trim(),
-      ));
+      allChunks.add(
+        TranscriptChunk(
+          startTime: _currentChunkStartTime ?? DateTime.now(),
+          endTime: DateTime.now(),
+          text: _currentTurnWords.trim(),
+        ),
+      );
     }
     return jsonEncode(allChunks.map((c) => c.toJson()).toList());
   }
