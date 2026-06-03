@@ -7,8 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
 
-import '../database/database_helper.dart';
-import '../database/models.dart';
+import '../viewmodels/slides_view_model.dart';
 import 'panel_header.dart';
 import 'slide_page.dart';
 
@@ -34,14 +33,14 @@ class SlidesPanel extends StatefulWidget {
 
 class _SlidesPanelState extends State<SlidesPanel> {
   PdfDocument? _document;
+  late SlidesViewModel _viewModel;
   bool _isLoading = false;
   String? _errorMessage;
-
-  int? get _nodeId => int.tryParse(widget.fileId);
 
   @override
   void initState() {
     super.initState();
+    _viewModel = SlidesViewModel(fileId: widget.fileId);
     unawaited(_loadSavedPdf());
   }
 
@@ -49,6 +48,9 @@ class _SlidesPanelState extends State<SlidesPanel> {
   void didUpdateWidget(covariant SlidesPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.fileId != widget.fileId) {
+      _viewModel.dispose();
+      _viewModel = SlidesViewModel(fileId: widget.fileId);
+
       final oldDocument = _document;
       _document = null;
       if (oldDocument != null) {
@@ -59,17 +61,13 @@ class _SlidesPanelState extends State<SlidesPanel> {
   }
 
   Future<void> _loadSavedPdf() async {
-    final nodeId = _nodeId;
-    if (nodeId == null) return;
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final node = await DatabaseHelper.instance.getNodeById(nodeId);
-      final savedPath = node?.filePath;
+      final savedPath = await _viewModel.loadSavedPdfPath();
 
       if (savedPath == null || savedPath.isEmpty) {
         if (!mounted) return;
@@ -145,30 +143,7 @@ class _SlidesPanelState extends State<SlidesPanel> {
   }
 
   Future<void> _savePdfPath(String filePath) async {
-    final nodeId = _nodeId;
-    if (nodeId == null) {
-      throw Exception('Cannot save PDF because fileId is invalid.');
-    }
-
-    final node = await DatabaseHelper.instance.getNodeById(nodeId);
-    if (node == null) {
-      throw Exception(
-        'Cannot save PDF because the lecture item does not exist.',
-      );
-    }
-
-    await DatabaseHelper.instance.updateItem(
-      AppNode(
-        id: node.id,
-        parentId: node.parentId,
-        type: node.type,
-        name: node.name,
-        content: node.content,
-        filePath: filePath,
-        cloudPath: node.cloudPath,
-        createdAt: node.createdAt,
-      ),
-    );
+    await _viewModel.savePdfPath(filePath);
   }
 
   Future<void> _openPdf(String filePath) async {
@@ -198,6 +173,7 @@ class _SlidesPanelState extends State<SlidesPanel> {
     if (document != null) {
       unawaited(document.dispose());
     }
+    _viewModel.dispose();
     super.dispose();
   }
 

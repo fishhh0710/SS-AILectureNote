@@ -23,6 +23,28 @@ class AppNode {
     required this.createdAt,
   });
 
+  AppNode copyWith({
+    int? id,
+    int? parentId,
+    String? type,
+    String? name,
+    String? content,
+    String? filePath,
+    String? cloudPath,
+    String? createdAt,
+  }) {
+    return AppNode(
+      id: id ?? this.id,
+      parentId: parentId ?? this.parentId,
+      type: type ?? this.type,
+      name: name ?? this.name,
+      content: content ?? this.content,
+      filePath: filePath ?? this.filePath,
+      cloudPath: cloudPath ?? this.cloudPath,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
   Map<String, dynamic> toMap() => {
     'id': id,
     'parentId': parentId,

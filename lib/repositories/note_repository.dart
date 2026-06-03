@@ -16,7 +16,10 @@ class NoteRepository {
     required String pdfPath,
   }) async {
     await _service.clearSavedNotes(storageId);
-    final notes = await _service.generateNotesFromPdf(pdfPath);
+    final notes = await _service.generateNotesFromPdf(
+      storageId: storageId,
+      pdfPath: pdfPath,
+    );
     await _service.saveNotes(storageId, notes);
     return notes;
   }

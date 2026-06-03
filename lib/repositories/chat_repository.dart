@@ -1,6 +1,6 @@
 import '../database/database_helper.dart';
 import '../database/models.dart';
-import '../services/chat_api_service.dart';
+import '../services/chat_function_service.dart';
 
 class ChatSession {
   final int conversationId;
@@ -10,15 +10,15 @@ class ChatSession {
 }
 
 class ChatRepository {
-  ChatRepository({DatabaseHelper? dbHelper, ChatApiService? apiService})
+  ChatRepository({DatabaseHelper? dbHelper, ChatFunctionService? chatService})
     : _dbHelper = dbHelper ?? DatabaseHelper.instance,
-      _apiService = apiService ?? ChatApiService();
+      _chatService = chatService ?? ChatFunctionService();
 
   static const welcomeText =
       'Hi! I am your AI study assistant. Ask me anything about this lecture!';
 
   final DatabaseHelper _dbHelper;
-  final ChatApiService _apiService;
+  final ChatFunctionService _chatService;
 
   Future<ChatSession> loadLatestSession(int notebookId) async {
     var conversationId = await _dbHelper.getLatestConversationId(notebookId);
@@ -59,7 +59,7 @@ class ChatRepository {
         .map((message) => '${message.role}: ${message.content}')
         .join('\n');
 
-    final answer = await _apiService.ask(
+    final answer = await _chatService.ask(
       notes: aiNotes,
       transcript: transcript,
       history: history,
@@ -80,7 +80,7 @@ class ChatRepository {
   }
 
   void dispose() {
-    _apiService.dispose();
+    _chatService.dispose();
   }
 
   ChatMessage _welcomeMessage(int conversationId) {

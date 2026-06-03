@@ -17,6 +17,7 @@ class _AzureLectureViewState extends State<AzureLectureView> {
   @override
   void dispose() {
     _speechService.dispose();
+    _authService.dispose();
     super.dispose();
   }
 
@@ -28,7 +29,7 @@ class _AzureLectureViewState extends State<AzureLectureView> {
         _isLoadingToken = true;
       });
       try {
-        // 1. Fetch token securely from your backend
+        // 1. Fetch token securely from Firebase Functions.
         final token = await _authService.getTemporaryToken();
 
         // 2. Start listening with the token
