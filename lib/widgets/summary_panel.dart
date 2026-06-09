@@ -12,6 +12,7 @@ class SummaryPanel extends StatelessWidget {
   final bool isGenerating;
   final String? errorMessage;
   final VoidCallback? onRetry;
+  final Stream<Map<String, dynamic>>? segmentStream;
 
   const SummaryPanel({
     super.key,
@@ -22,6 +23,7 @@ class SummaryPanel extends StatelessWidget {
     this.isGenerating = false,
     this.errorMessage,
     this.onRetry,
+    this.segmentStream,
   });
 
   @override

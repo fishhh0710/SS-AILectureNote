@@ -14,55 +14,6 @@ class TranscriptPage {
 
 final List<TranscriptPage> chapter4_1TranscriptData = [
   const TranscriptPage(
-    pageNumber: 1,
-    sections: [
-      TranscriptSection(
-        title: "Chapter 4: The Processor",
-        content: "這頁在講整章的主題。\n\n👉 重點：\nCPU 怎麼執行指令（datapath + control）",
-      ),
-    ],
-  ),
-  const TranscriptPage(
-    pageNumber: 2,
-    sections: [
-      TranscriptSection(
-        title: "Outline",
-        content:
-            "這頁在講接下來會做什麼。\n\n👉 重點流程：\n先看 CPU 做什麼（instruction execution）\n再看 datapath\n最後加 control",
-      ),
-    ],
-  ),
-  const TranscriptPage(
-    pageNumber: 3,
-    sections: [
-      TranscriptSection(
-        title: "Introduction",
-        content:
-            "這頁在講 CPU 效能怎麼來。\n\n👉 跟硬體的關係：\ndatapath 會影響 CPI\nclock 速度取決於硬體延遲\n👉 暗示：後面設計會影響效能",
-      ),
-    ],
-  ),
-  const TranscriptPage(
-    pageNumber: 4,
-    sections: [
-      TranscriptSection(
-        title: "Instruction Execution",
-        content:
-            "這頁在講「一條指令實際會做哪些動作」。\n\n👉 datapath 角度：\nPC → instruction memory（取指令）\nregister file（讀資料）\nALU（運算）\nmemory（必要時）\n寫回 register\n👉 重點：\n之後所有 datapath 都是在實現這幾步",
-      ),
-    ],
-  ),
-  const TranscriptPage(
-    pageNumber: 5,
-    sections: [
-      TranscriptSection(
-        title: "High-level View of a RISC-V Implementation",
-        content:
-            "這頁在講 RISC-V 處理器的 datapath 雛形。\n\n👉 datapath 目前包含：PC、Instruction Memory、Registers、ALU、Data Memory。",
-      ),
-    ],
-  ),
-  const TranscriptPage(
     pageNumber: 18,
     sections: [
       TranscriptSection(

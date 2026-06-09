@@ -10,6 +10,8 @@ class TranscriptPanel extends StatefulWidget {
   final String? savedStatusText;
   final VoidCallback onStartRecording;
   final String liveTranscript;
+  final bool isDemoMode;
+  final ValueChanged<bool>? onDemoModeChanged;
 
   const TranscriptPanel({
     super.key,
@@ -20,6 +22,8 @@ class TranscriptPanel extends StatefulWidget {
     this.savedStatusText,
     required this.onStartRecording,
     this.liveTranscript = '',
+    this.isDemoMode = false,
+    this.onDemoModeChanged,
   });
 
   @override
@@ -74,7 +78,7 @@ class _TranscriptPanelState extends State<TranscriptPanel> {
         child: Column(
           children: [
             PanelHeader(
-              title: 'Transcript',
+              title: widget.isDemoMode ? '即時逐字稿 (Demo)' : '即時逐字稿',
               icon: Icons.subtitles,
               onClose: widget.onClose,
               index: widget.index,
@@ -84,7 +88,11 @@ class _TranscriptPanelState extends State<TranscriptPanel> {
               _StatusBanner(text: widget.savedStatusText!),
             Expanded(
               child: displayText.isEmpty && !widget.isRecording
-                  ? _EmptyTranscript(onStartRecording: widget.onStartRecording)
+                  ? _EmptyTranscript(
+                      onStartRecording: widget.onStartRecording,
+                      isDemoMode: widget.isDemoMode,
+                      onDemoModeChanged: widget.onDemoModeChanged,
+                    )
                   : _TranscriptBody(
                       controller: _scrollController,
                       text: displayText,
@@ -126,8 +134,14 @@ class _StatusBanner extends StatelessWidget {
 
 class _EmptyTranscript extends StatelessWidget {
   final VoidCallback onStartRecording;
+  final bool isDemoMode;
+  final ValueChanged<bool>? onDemoModeChanged;
 
-  const _EmptyTranscript({required this.onStartRecording});
+  const _EmptyTranscript({
+    required this.onStartRecording,
+    required this.isDemoMode,
+    this.onDemoModeChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -145,24 +159,51 @@ class _EmptyTranscript extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: const Color(0xFFEAE7DC), width: 2),
               ),
-              child: const Icon(Icons.mic, size: 48, color: Color(0xFF8E9775)),
+              child: Icon(
+                isDemoMode ? Icons.play_arrow : Icons.mic,
+                size: 48,
+                color: const Color(0xFF8E9775),
+              ),
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
-            'Start recording',
-            style: TextStyle(
+          Text(
+            isDemoMode ? '開始展示模擬' : '開始錄音吧',
+            style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
               color: Color(0xFF3D3D3D),
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Tap the microphone to start live transcription.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: Color(0xFFA8A08E)),
+          Text(
+            isDemoMode
+                ? '點擊上方播放按鈕，模擬即時課程逐字稿。'
+                : '點擊上方圖示或右下角按鈕開始紀錄課程',
+            style: const TextStyle(fontSize: 12, color: Color(0xFFA8A08E)),
           ),
+          const SizedBox(height: 32),
+          if (onDemoModeChanged != null)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '展示模擬模式',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF6F735E),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Switch(
+                  value: isDemoMode,
+                  onChanged: onDemoModeChanged,
+                  activeColor: const Color(0xFF8E9775),
+                  activeTrackColor: const Color(0xFFDCD7C9),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -182,24 +223,113 @@ class _TranscriptBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    final List<String> chunks = text.split('\n\n').where((s) => s.trim().isNotEmpty).toList();
+
+    return ListView.builder(
       controller: controller,
       padding: const EdgeInsets.all(20),
+      itemCount: chunks.length + (chunks.isEmpty && isRecording ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (chunks.isEmpty) {
+          return const _TranscriptChunkCard(
+            text: '',
+            isFinished: false,
+            index: 0,
+          );
+        }
+
+        final chunkText = chunks[index];
+        final isLast = index == chunks.length - 1;
+        final isFinished = !isRecording || !isLast;
+
+        return _TranscriptChunkCard(
+          text: chunkText,
+          isFinished: isFinished,
+          index: index,
+        );
+      },
+    );
+  }
+}
+
+class _TranscriptChunkCard extends StatelessWidget {
+  final String text;
+  final bool isFinished;
+  final int index;
+
+  const _TranscriptChunkCard({
+    required this.text,
+    required this.isFinished,
+    required this.index,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isFinished ? const Color(0xFFEAE7DC) : const Color(0xFF8E9775),
+          width: isFinished ? 1.0 : 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            text.isEmpty && isRecording ? 'Listening...' : text,
-            style: const TextStyle(
-              fontSize: 16,
-              height: 1.7,
-              color: Color(0xFF3D3D3D),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                isFinished ? '段落 ${index + 1}' : '即時語音辨識中...',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: isFinished ? const Color(0xFF8E9775) : const Color(0xFFC88A58),
+                ),
+              ),
+              if (!isFinished)
+                const _PulsingDot(),
+            ],
           ),
-          if (isRecording)
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
-              child: _BlinkingCursor(),
+          const SizedBox(height: 10),
+          if (text.isEmpty && !isFinished)
+            const Text(
+              'Listening...',
+              style: TextStyle(
+                fontSize: 15,
+                fontStyle: FontStyle.italic,
+                color: Color(0xFFA8A08E),
+              ),
+            )
+          else
+            RichText(
+              text: TextSpan(
+                style: const TextStyle(
+                  fontSize: 15,
+                  height: 1.6,
+                  color: Color(0xFF3D3D3D),
+                ),
+                children: [
+                  TextSpan(text: text),
+                  if (!isFinished)
+                    const WidgetSpan(
+                      child: Padding(
+                        padding: EdgeInsets.only(left: 2),
+                        child: _BlinkingCursorInline(),
+                      ),
+                    ),
+                ],
+              ),
             ),
         ],
       ),
@@ -207,15 +337,14 @@ class _TranscriptBody extends StatelessWidget {
   }
 }
 
-class _BlinkingCursor extends StatefulWidget {
-  const _BlinkingCursor();
+class _PulsingDot extends StatefulWidget {
+  const _PulsingDot();
 
   @override
-  State<_BlinkingCursor> createState() => _BlinkingCursorState();
+  State<_PulsingDot> createState() => _PulsingDotState();
 }
 
-class _BlinkingCursorState extends State<_BlinkingCursor>
-    with SingleTickerProviderStateMixin {
+class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
@@ -223,7 +352,7 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
   }
 
@@ -237,7 +366,52 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _controller,
-      child: Container(width: 2, height: 18, color: const Color(0xFF8E9775)),
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: const BoxDecoration(
+          color: Color(0xFFC88A58),
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}
+
+class _BlinkingCursorInline extends StatefulWidget {
+  const _BlinkingCursorInline();
+
+  @override
+  State<_BlinkingCursorInline> createState() => _BlinkingCursorInlineState();
+}
+
+class _BlinkingCursorInlineState extends State<_BlinkingCursorInline> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _controller,
+      child: Container(
+        width: 2,
+        height: 16,
+        color: const Color(0xFF8E9775),
+      ),
     );
   }
 }

@@ -12,6 +12,7 @@ class ChatbotPanel extends StatefulWidget {
   final int notebookId;
   final String aiNotes;
   final String transcript;
+  final Stream<Map<String, dynamic>>? segmentStream;
 
   const ChatbotPanel({
     super.key,
@@ -21,6 +22,7 @@ class ChatbotPanel extends StatefulWidget {
     required this.notebookId,
     required this.aiNotes,
     required this.transcript,
+    this.segmentStream,
   });
 
   @override

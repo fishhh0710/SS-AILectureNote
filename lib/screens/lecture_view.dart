@@ -8,6 +8,7 @@ import '../widgets/chatbot_panel.dart';
 import '../services/gemini_live_speech_service.dart';
 import '../services/transcript_export_service.dart';
 import '../viewmodels/lecture_notes_view_model.dart';
+import '../data/transcript_data.dart';
 
 class LectureView extends StatefulWidget {
   final String courseId;
@@ -36,6 +37,16 @@ class _LectureViewState extends State<LectureView> {
   // 10-second export service
   TranscriptExportService? _exportService;
   Timer? _exportTimer;
+
+  bool _isDemoMode = false;
+  Timer? _demoTimer;
+  int _demoSectionIndex = 0;
+  int _demoIncrementIndex = 0;
+  List<String> _demoIncrements = [];
+  String _demoAccumulatedText = "";
+  String _demoCurrentActiveText = "";
+  final StreamController<Map<String, dynamic>> _segmentStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   @override
   void initState() {
@@ -71,6 +82,8 @@ class _LectureViewState extends State<LectureView> {
 
   @override
   void dispose() {
+    _demoTimer?.cancel();
+    _segmentStreamController.close();
     _notesViewModel
       ..removeListener(_handleNotesStateChanged)
       ..dispose();
@@ -189,7 +202,14 @@ class _LectureViewState extends State<LectureView> {
 
   Future<void> _handleRecordingToggle() async {
     if (_isRecording) {
-      _speechService.toggleListening();
+      if (_isDemoMode) {
+        _stopDemoTyping();
+        setState(() {
+          _isRecording = false;
+        });
+      } else {
+        _speechService.toggleListening();
+      }
 
       _exportTimer?.cancel();
       _exportTimer = null;
@@ -223,8 +243,12 @@ class _LectureViewState extends State<LectureView> {
     setState(() {
       _savedStatusText = null;
       _liveTranscript = '';
+      _isRecording = true;
     });
-    _speechService.reset();
+
+    if (!_isDemoMode) {
+      _speechService.reset();
+    }
 
     final now = DateTime.now();
     final sessionName =
@@ -235,6 +259,9 @@ class _LectureViewState extends State<LectureView> {
     final exportService = TranscriptExportService(
       courseItemParentId: parentId,
       sessionName: sessionName,
+      onSegmentExported: (segment) {
+        _segmentStreamController.add(segment);
+      },
     );
     _exportService = exportService;
 
@@ -243,6 +270,9 @@ class _LectureViewState extends State<LectureView> {
     } catch (e) {
       _exportService = null;
       if (!mounted) return;
+      setState(() {
+        _isRecording = false;
+      });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to start recording: $e')));
@@ -256,7 +286,94 @@ class _LectureViewState extends State<LectureView> {
       (_) => _exportService?.exportSegment(),
     );
 
-    _speechService.toggleListening();
+    if (_isDemoMode) {
+      _demoAccumulatedText = "";
+      _demoCurrentActiveText = "";
+      _demoSectionIndex = 0;
+      _startDemoTyping();
+    } else {
+      _speechService.toggleListening();
+    }
+  }
+
+  List<String> _getTypingIncrements(String text) {
+    final List<String> increments = [];
+    int i = 0;
+    while (i < text.length) {
+      final char = text[i];
+      if (RegExp(r'[a-zA-Z0-9]').hasMatch(char)) {
+        final buffer = StringBuffer();
+        while (i < text.length && RegExp(r'[a-zA-Z0-9\-\.\u0027]').hasMatch(text[i])) {
+          buffer.write(text[i]);
+          i++;
+        }
+        if (i < text.length && text[i] == ' ') {
+          buffer.write(' ');
+          i++;
+        }
+        increments.add(buffer.toString());
+      } else {
+        if (i + 1 < text.length && !RegExp(r'[a-zA-Z0-9]').hasMatch(text[i+1])) {
+          increments.add(text.substring(i, i + 2));
+          i += 2;
+        } else {
+          increments.add(text.substring(i, i + 1));
+          i++;
+        }
+      }
+    }
+    return increments;
+  }
+
+  void _startDemoTyping() {
+    final allSections = chapter4_1TranscriptData.expand((page) => page.sections).toList();
+    if (_demoSectionIndex >= allSections.length) {
+      unawaited(_handleRecordingToggle());
+      return;
+    }
+
+    final content = allSections[_demoSectionIndex].content;
+    _demoIncrements = _getTypingIncrements(content);
+    _demoIncrementIndex = 0;
+    _demoCurrentActiveText = "";
+
+    _demoTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (!mounted || !_isRecording) {
+        timer.cancel();
+        return;
+      }
+
+      if (_demoIncrementIndex < _demoIncrements.length) {
+        _demoCurrentActiveText += _demoIncrements[_demoIncrementIndex];
+        _demoIncrementIndex++;
+        setState(() {
+          if (_demoAccumulatedText.isEmpty) {
+            _liveTranscript = _demoCurrentActiveText;
+          } else {
+            _liveTranscript = '$_demoAccumulatedText\n\n$_demoCurrentActiveText';
+          }
+        });
+        _exportService?.tick(_liveTranscript);
+      } else {
+        timer.cancel();
+        _demoAccumulatedText = _demoAccumulatedText.isEmpty
+            ? _demoCurrentActiveText
+            : '$_demoAccumulatedText\n\n$_demoCurrentActiveText';
+        _demoCurrentActiveText = "";
+        _demoSectionIndex++;
+
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted && _isRecording) {
+            _startDemoTyping();
+          }
+        });
+      }
+    });
+  }
+
+  void _stopDemoTyping() {
+    _demoTimer?.cancel();
+    _demoTimer = null;
   }
 
   Future<void> _handlePdfUploaded(String pdfPath) async {
@@ -294,6 +411,7 @@ class _LectureViewState extends State<LectureView> {
           fileId: widget.fileId,
           onClose: () => setState(() => _showSlides = false),
           onPdfUploaded: _handlePdfUploaded,
+          segmentStream: _segmentStreamController.stream,
         );
         break;
       case "transcript":
@@ -308,6 +426,12 @@ class _LectureViewState extends State<LectureView> {
             unawaited(_handleRecordingToggle());
           },
           liveTranscript: _liveTranscript,
+          isDemoMode: _isDemoMode,
+          onDemoModeChanged: (val) {
+            setState(() {
+              _isDemoMode = val;
+            });
+          },
         );
         break;
       case "summary":
@@ -320,6 +444,7 @@ class _LectureViewState extends State<LectureView> {
           isGenerating: _notesViewModel.isGenerating,
           errorMessage: _notesViewModel.errorMessage,
           onRetry: _notesViewModel.canRetry ? _retryGeneratingNotes : null,
+          segmentStream: _segmentStreamController.stream,
         );
         break;
       case "chatbot":
@@ -335,6 +460,7 @@ class _LectureViewState extends State<LectureView> {
           notebookId: int.tryParse(widget.fileId) ?? 0,
           aiNotes: notesString, // 目前畫面上最新最真實的筆記內容
           transcript: _liveTranscript, // 目前最新錄製的即時逐字稿
+          segmentStream: _segmentStreamController.stream,
         );
         break;
       default:

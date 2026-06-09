@@ -19,6 +19,7 @@ class SlidesPanel extends StatefulWidget {
   final String fileId;
   final VoidCallback onClose;
   final Future<void> Function(String filePath)? onPdfUploaded;
+  final Stream<Map<String, dynamic>>? segmentStream;
 
   const SlidesPanel({
     super.key,
@@ -27,6 +28,7 @@ class SlidesPanel extends StatefulWidget {
     required this.onClose,
     required this.fileId,
     this.onPdfUploaded,
+    this.segmentStream,
   });
 
   @override

@@ -19,9 +19,12 @@ class TranscriptExportService {
   /// e.g. "lecture_20260527_143000"
   final String sessionName;
 
+  final void Function(Map<String, dynamic> segment)? onSegmentExported;
+
   TranscriptExportService({
     required this.courseItemParentId,
     required this.sessionName,
+    this.onSegmentExported,
   });
 
   // ---------------------------------------------------------------------------
@@ -110,6 +113,9 @@ class TranscriptExportService {
 
     // --- Update DB with latest full transcript ---
     await _updateRecordingTranscript(fullText);
+
+    // Notify listeners about the exported segment
+    onSegmentExported?.call(payload);
   }
 
   /// Call when the user presses Stop Recording.
