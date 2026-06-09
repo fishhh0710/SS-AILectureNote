@@ -1,7 +1,9 @@
 // database_helper.dart
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'models.dart';
+import '../data/annotation_model.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -361,5 +363,83 @@ class DatabaseHelper {
         .map((row) => row['content'] as String? ?? "")
         .where((text) => text.isNotEmpty)
         .join("\n\n");
+  }
+}
+
+extension DatabaseHelperAnnotationExtension on DatabaseHelper {
+  // 1. 取得指定 PDF 某頁的標記
+  Future<List<Annotation>> getPageAnnotations(int pdfId, int pageIndex) async {
+    final db = await database;
+    final result = await db.query(
+      'items',
+      where: 'parentId = ? AND type = ? AND name = ?',
+      whereArgs: [pdfId, 'slide_annotation', 'page_$pageIndex'],
+    );
+
+    if (result.isEmpty) return [];
+
+    final contentJson = result.first['content'] as String?;
+    if (contentJson == null || contentJson.isEmpty) return [];
+
+    try {
+      final decoded = jsonDecode(contentJson) as List<dynamic>;
+      return decoded.map((e) => Annotation.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (e) {
+      print('解析頁面 $pageIndex 標記失敗: $e');
+      return [];
+    }
+  }
+
+  // 2. 儲存/更新特定頁面的標記
+  Future<void> savePageAnnotations(int pdfId, int pageIndex, List<Annotation> annotations) async {
+    final db = await database;
+    final jsonString = jsonEncode(annotations.map((e) => e.toJson()).toList());
+    
+    final existing = await db.query(
+      'items',
+      where: 'parentId = ? AND type = ? AND name = ?',
+      whereArgs: [pdfId, 'slide_annotation', 'page_$pageIndex'],
+    );
+
+    if (existing.isNotEmpty) {
+      final nodeId = existing.first['id'] as int;
+      await db.update(
+        'items',
+        {'content': jsonString},
+        where: 'id = ?',
+        whereArgs: [nodeId],
+      );
+    } else {
+      await db.insert(
+        'items',
+        {
+          'parentId': pdfId,
+          'type': 'slide_annotation',
+          'name': 'page_$pageIndex',
+          'content': jsonString,
+          'createdAt': DateTime.now().toIso8601String(),
+        },
+      );
+    }
+  }
+
+  // 3. 刪除整頁的標記子節點
+  Future<void> deletePageAnnotationsNode(int pdfId, int pageIndex) async {
+    final db = await database;
+    await db.delete(
+      'items',
+      where: 'parentId = ? AND type = ? AND name = ?',
+      whereArgs: [pdfId, 'slide_annotation', 'page_$pageIndex'],
+    );
+  }
+
+  // 4. 一鍵清除該 PDF 的所有標記子節點
+  Future<void> clearAllPdfAnnotations(int pdfId) async {
+    final db = await database;
+    await db.delete(
+      'items',
+      where: 'parentId = ? AND type = ?',
+      whereArgs: [pdfId, 'slide_annotation'],
+    );
   }
 }

@@ -7,7 +7,9 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
 
+import '../services/annotation_manager.dart';
 import '../viewmodels/slides_view_model.dart';
+import 'annotation_test_controls.dart';
 import 'panel_header.dart';
 import 'slide_page.dart';
 
@@ -36,6 +38,9 @@ class _SlidesPanelState extends State<SlidesPanel> {
   late SlidesViewModel _viewModel;
   bool _isLoading = false;
   String? _errorMessage;
+  PageAnnotationManager? _annotationManager;
+
+  int? get _nodeId => int.tryParse(widget.fileId);
 
   @override
   void initState() {
@@ -56,11 +61,20 @@ class _SlidesPanelState extends State<SlidesPanel> {
       if (oldDocument != null) {
         unawaited(oldDocument.dispose());
       }
+      _annotationManager?.dispose();
+      _annotationManager = null;
       unawaited(_loadSavedPdf());
     }
   }
 
   Future<void> _loadSavedPdf() async {
+    final nodeId = _nodeId;
+    if (nodeId == null) {
+      print('DEBUG: _loadSavedPdf returned early because _nodeId is null');
+      return;
+    }
+
+    print('DEBUG: _loadSavedPdf started, nodeId: $nodeId');
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -70,8 +84,10 @@ class _SlidesPanelState extends State<SlidesPanel> {
       final savedPath = await _viewModel.loadSavedPdfPath();
 
       if (savedPath == null || savedPath.isEmpty) {
-        if (!mounted) return;
-        setState(() => _isLoading = false);
+        print('DEBUG: savedPath is null or empty, setting _isLoading = false');
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
         return;
       }
 
@@ -84,6 +100,7 @@ class _SlidesPanelState extends State<SlidesPanel> {
         return;
       }
 
+      print('DEBUG: calling _openPdf');
       await _openPdf(savedPath);
     } catch (e) {
       if (!mounted) return;
@@ -160,6 +177,13 @@ class _SlidesPanelState extends State<SlidesPanel> {
       _document = loaded;
       _isLoading = false;
       _errorMessage = null;
+      final nodeId = _nodeId;
+      print('DEBUG: _openPdf setState running, nodeId: $nodeId');
+      if (nodeId != null) {
+        _annotationManager?.dispose();
+        _annotationManager = PageAnnotationManager(nodeId);
+        print('DEBUG: _annotationManager initialized');
+      }
     });
 
     if (oldDocument != null) {
@@ -169,6 +193,7 @@ class _SlidesPanelState extends State<SlidesPanel> {
 
   @override
   void dispose() {
+    _annotationManager?.dispose();
     final document = _document;
     if (document != null) {
       unawaited(document.dispose());
@@ -181,30 +206,60 @@ class _SlidesPanelState extends State<SlidesPanel> {
   Widget build(BuildContext context) {
     return SizedBox(
       width: widget.width,
-      child: Column(
-        children: [
-          PanelHeader(
-            title: 'Slides',
-            icon: Icons.picture_in_picture,
-            onClose: widget.onClose,
-            actions: [
-              InkWell(
-                onTap: _isLoading ? null : _pickAndLoadPdf,
-                borderRadius: BorderRadius.circular(12),
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(
-                    Icons.upload_file,
-                    size: 14,
-                    color: Color(0xFFA8A08E),
+      child: Container(
+        margin: const EdgeInsets.only(top: 16, bottom: 16, right: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFAF9F6),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFEAE7DC)),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 4,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            PanelHeader(
+              title: '課堂教材',
+              icon: Icons.picture_in_picture,
+              onClose: widget.onClose,
+              actions: [
+                InkWell(
+                  onTap: _isLoading ? null : _pickAndLoadPdf,
+                  borderRadius: BorderRadius.circular(12),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4.0),
+                    child: Icon(
+                      Icons.upload_file,
+                      size: 14,
+                      color: Color(0xFFA8A08E),
+                    ),
                   ),
                 ),
+              ],
+              index: widget.index,
+            ),
+            const Divider(height: 1, color: Color(0xFFEAE7DC)),
+            Expanded(
+              child: Stack(
+                children: [
+                  _buildContent(),
+                  if (_annotationManager != null)
+                    Positioned(
+                      bottom: 16,
+                      right: 16,
+                      child: SlideAnnotationTestControls(
+                        manager: _annotationManager!,
+                      ),
+                    ),
+                ],
               ),
-            ],
-            index: widget.index,
-          ),
-          Expanded(child: _buildContent()),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -247,7 +302,7 @@ class _SlidesPanelState extends State<SlidesPanel> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Upload PDF slides',
+                '匯入簡報',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -256,7 +311,7 @@ class _SlidesPanelState extends State<SlidesPanel> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Choose a PDF to preview slides and generate AI notes.',
+                '或是搭配手寫筆與平板進行即時速記',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: Color(0xFFA8A08E)),
               ),
@@ -281,10 +336,12 @@ class _SlidesPanelState extends State<SlidesPanel> {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
       itemCount: document.pages.length,
-      itemBuilder: (context, index) {
+      itemBuilder: (context, idx) {
+        final pageNum = idx + 1;
         return SlidePage(
-          pageNumber: index + 1,
-          child: PdfPageView(document: document, pageNumber: index + 1),
+          pageNumber: pageNum,
+          annotationListenable: _annotationManager?.getPageNotifier(pageNum),
+          child: PdfPageView(document: document, pageNumber: pageNum),
         );
       },
     );

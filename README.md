@@ -137,4 +137,40 @@ git push -u origin feature/chatbot-integration
 
 ```
 
+---
+
+<!-- NEW FEATURE START: PDF ANNOTATION OVERLAY -->
+## 🎨 PDF 標記與筆跡儲存功能 (PDF Annotation Overlay)
+
+本專案支援高效能、防溢出的 PDF 投影片標記與儲存系統。使用者可以在投影片面板疊加方框與文字標記，資料會完整持久化於本機 SQLite 資料庫中。
+
+### 🚀 核心設計特點
+1. **SQLite 樹狀子節點儲存**：
+   * 每一頁的筆跡資料會打包成 JSON 字串，作為類型為 `'slide_annotation'` 的子節點儲存於 `items` 資料表中，其 `parentId` 指向對應的 PDF 節點。
+   * **級聯刪除（ON DELETE CASCADE）**：當 PDF 檔案節點被刪除時，SQLite 資料庫會自動在底層一併清除該 PDF 所有的筆跡子節點，不留下髒資料。
+2. **零延遲與局部重繪優化**：
+   * **分頁 ValueNotifier 快取**：為每頁投影片配置獨立的狀態監聽器。修改筆跡時，記憶體資料會立即變更，從而實現一幀之內（16ms 內）的局部 Canvas 重繪。
+   * **重繪邊界（RepaintBoundary）**：將繪圖 Canvas 封裝在獨立圖層。PDF 縮放與滾動時，Flutter 引擎會直接複用 GPU 快取的點陣圖，不重複繪製向量線條，確保操作極致流暢。
+   * **非同步防抖儲存（Debounced I/O）**：使用者停止編輯 600ms 後，背景線程才非同步將快取資料寫入資料庫，完全釋放主線程（UI Thread）負擔。
+3. **比例縮放與防溢出保護（Overflow Safety）**：
+   * **相對座標與字型比例**：標記位置、尺寸以及字體大小（基於 850.0 寬度）皆採用相對比例計算。當 PDF 縮放時，標記與文字尺寸會同比例縮放，保證文字不移位或錯開。
+   * **安全裁剪（ClipRect）**：繪圖疊加層外使用 `ClipRect` 包覆，超出 PDF 邊界的線條將自動在邊界裁剪。
+   * **文字自動換行**：當文字標記長度超出投影片右側邊界時會自動向下折行（支援設定 `autoWrap` 參數），絕不產生黃黑相間的 `RenderFlex overflowed` 佈局錯誤，也不會導致程式崩潰。
+
+### 🧩 檔案與核心程式碼
+* **[`lib/data/annotation_model.dart`](file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/data/annotation_model.dart)**：定義標記（Annotation）、方框（RectAnnotation）、與文字（TextAnnotation）的多型資料模型及渲染（draw）邏輯。
+* **[`lib/services/annotation_manager.dart`](file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/services/annotation_manager.dart)**：處理分頁筆跡快取更新、即時更新分發以及 SQLite 防抖非同步寫入。
+* **[`lib/widgets/annotation_test_controls.dart`](file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/widgets/annotation_test_controls.dart)**：**可隨時移除的測試控制組件**。提供一個懸浮按鈕與對話框（Dialog）供開發者手動新增方框/文字、查看標記清單、個別刪除標記或一鍵清除所有標記。
+* **SQLite 擴充 API**：在 `DatabaseHelper` 中整合了 `getPageAnnotations`、`savePageAnnotations`、`deletePageAnnotationsNode` 以及 `clearAllPdfAnnotations` 以供專案中**任何其他的 `.dart` 檔案**直接存取。
+
+### 🗑️ 如何移除測試控制 UI？
+為了日後維護與上線的便利，本功能採用完全解耦的設計。當您想將測試控制 UI 拆除時，**只需進行以下兩步操作**即可不著痕跡地完美移除：
+1. 開啟 **`lib/widgets/slides_panel.dart`**：
+   * 移除頂部 import `annotation_test_controls.dart`
+   * 移除 build 方法 Stack 中掛載的 `SlideAnnotationTestControls` 這一行程式碼。
+2. 刪除 **`lib/widgets/annotation_test_controls.dart`** 實體檔案。
+
+<!-- NEW FEATURE END -->
+
+
 
