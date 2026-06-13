@@ -41,21 +41,20 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyB6MORt4y2WzDHNS6anjU8XboRF5CxFqE0',
-    appId: '1:219229493478:web:6d8a682a8035efbba18327',
-    messagingSenderId: '219229493478',
-    projectId: 'ai-notes-555a6',
-    authDomain: 'ai-notes-555a6.firebaseapp.com',
-    storageBucket: 'ai-notes-555a6.firebasestorage.app',
-    measurementId: 'G-E9PNL7JS6Z',
+    apiKey: 'AIzaSyCESxiQAOC5gSZ5JQTGdbMvk0PVZ-xp1Dk',
+    appId: '1:565463920399:web:ab3f87d07ad3f126ae987a',
+    messagingSenderId: '565463920399',
+    projectId: 'speech-recognition-7d363',
+    authDomain: 'speech-recognition-7d363.firebaseapp.com',
+    storageBucket: 'speech-recognition-7d363.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAchHRoJVVo7rQCFnFBJ_KBRzT-Ni0a9hE',
-    appId: '1:219229493478:android:9f0d579f4facce71a18327',
-    messagingSenderId: '219229493478',
-    projectId: 'ai-notes-555a6',
-    storageBucket: 'ai-notes-555a6.firebasestorage.app',
+    apiKey: 'AIzaSyChZ0OO05Aix89IT-OdEjfxHHXZBOniH6o',
+    appId: '1:565463920399:android:04d1912f7f95faf4ae987a',
+    messagingSenderId: '565463920399',
+    projectId: 'speech-recognition-7d363',
+    storageBucket: 'speech-recognition-7d363.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -84,4 +83,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'speech-recognition-7d363.firebasestorage.app',
     iosBundleId: 'com.example.lectureNoteApp',
   );
+
 }

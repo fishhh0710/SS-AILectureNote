@@ -371,3 +371,39 @@ function sendError(res, error) {
     message: error.message || String(error),
   });
 }
+
+exports.azureSpeechToken = functions
+  .region(region)
+  .runWith({ timeoutSeconds: 60, memory: "256MB" })
+  .https.onRequest(async (req, res) => {
+    if (handleCors(req, res)) return;
+
+    try {
+      const azureSpeechKey = process.env.AZURE_SPEECH_KEY || functions.config()?.azure?.key;
+      const azureRegion = process.env.AZURE_REGION || functions.config()?.azure?.region || "eastasia";
+
+      if (!azureSpeechKey || azureSpeechKey === "AZURE_KEY_NOT_SET") {
+        throw new Error("Azure Speech key is not configured for Firebase Functions.");
+      }
+
+      const tokenUrl = `https://${azureRegion}.api.cognitive.microsoft.com/sts/v1.0/issueToken`;
+
+      const response = await fetch(tokenUrl, {
+        method: "POST",
+        headers: {
+          "Ocp-Apim-Subscription-Key": azureSpeechKey,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch token from Azure: Status ${response.status} - ${errorText}`);
+      }
+
+      const token = await response.text();
+      res.json({ token: token.trim() });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+

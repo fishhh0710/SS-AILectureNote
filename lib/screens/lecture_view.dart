@@ -5,7 +5,8 @@ import '../widgets/slides_panel.dart';
 import '../widgets/transcript_panel.dart';
 import '../widgets/summary_panel.dart';
 import '../widgets/chatbot_panel.dart';
-import '../services/gemini_live_speech_service.dart';
+import '../services/azure_speech_service.dart';
+import '../services/auth_service.dart';
 import '../services/transcript_export_service.dart';
 import '../viewmodels/lecture_notes_view_model.dart';
 import '../data/transcript_data.dart';
@@ -28,7 +29,10 @@ class _LectureViewState extends State<LectureView> {
   bool _isRecording = false;
   final GlobalKey _panelsAreaKey = GlobalKey();
 
-  late GeminiLiveSpeechService _speechService;
+  late AzureSpeechService _speechService;
+  late AzureAuthService _authService;
+  StreamSubscription? _transcriptSubscription;
+  StreamSubscription? _statusSubscription;
   late final LectureNotesViewModel _notesViewModel;
   String _liveTranscript = '';
   String _currentLanguage = 'en_US';
@@ -53,29 +57,26 @@ class _LectureViewState extends State<LectureView> {
     super.initState();
     _notesViewModel = LectureNotesViewModel()
       ..addListener(_handleNotesStateChanged);
-    _speechService = GeminiLiveSpeechService(
-      onUpdate: (text, listening) {
-        if (!mounted) return;
-        setState(() {
-          _liveTranscript = text;
-          _isRecording = listening;
-        });
-        // Feed the latest transcript to the export service on every update
-        _exportService?.tick(text);
-      },
-      onSaved: (filePath) {
-        if (!mounted) return;
-        setState(() {
-          _savedStatusText = 'Transcript saved locally';
-        });
-      },
-      onError: (error) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error)));
-      },
-    );
+    
+    _speechService = AzureSpeechService();
+    _authService = AzureAuthService();
+
+    _transcriptSubscription = _speechService.transcriptStream.listen((text) {
+      if (!mounted) return;
+      setState(() {
+        _liveTranscript = text;
+      });
+      // Feed the latest transcript to the export service on every update
+      _exportService?.tick(text);
+    });
+
+    _statusSubscription = _speechService.statusStream.listen((listening) {
+      if (!mounted) return;
+      setState(() {
+        _isRecording = listening;
+      });
+    });
+
     _initializeSpeechService();
     unawaited(_notesViewModel.loadSaved(widget.fileId));
   }
@@ -88,7 +89,10 @@ class _LectureViewState extends State<LectureView> {
       ..removeListener(_handleNotesStateChanged)
       ..dispose();
     _exportTimer?.cancel();
+    _transcriptSubscription?.cancel();
+    _statusSubscription?.cancel();
     _speechService.dispose();
+    _authService.dispose();
     super.dispose();
   }
 
@@ -104,7 +108,6 @@ class _LectureViewState extends State<LectureView> {
         _savedStatusText = 'Saved transcript loaded';
       });
     }
-    await _speechService.initialize();
   }
 
   double _getMinWidth(String id) {
@@ -208,7 +211,7 @@ class _LectureViewState extends State<LectureView> {
           _isRecording = false;
         });
       } else {
-        _speechService.toggleListening();
+        await _speechService.stopListening();
       }
 
       _exportTimer?.cancel();
@@ -292,7 +295,21 @@ class _LectureViewState extends State<LectureView> {
       _demoSectionIndex = 0;
       _startDemoTyping();
     } else {
-      _speechService.toggleListening();
+      try {
+        final token = await _authService.getTemporaryToken();
+        await _speechService.startListening(token);
+      } catch (e) {
+        _exportTimer?.cancel();
+        _exportTimer = null;
+        _exportService = null;
+        if (!mounted) return;
+        setState(() {
+          _isRecording = false;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to get Azure token: $e')));
+      }
     }
   }
 
