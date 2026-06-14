@@ -230,9 +230,7 @@ class _LectureViewState extends State<LectureView> {
             : 'Transcript saved to: $savedDir';
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_savedStatusText!)));
+
 
       Future.delayed(const Duration(seconds: 3), () {
         if (!mounted) return;
@@ -245,13 +243,9 @@ class _LectureViewState extends State<LectureView> {
 
     setState(() {
       _savedStatusText = null;
-      _liveTranscript = '';
+      // Keep the existing transcript so it is not cleared on restart
       _isRecording = true;
     });
-
-    if (!_isDemoMode) {
-      _speechService.reset();
-    }
 
     final now = DateTime.now();
     final sessionName =
@@ -290,9 +284,12 @@ class _LectureViewState extends State<LectureView> {
     );
 
     if (_isDemoMode) {
-      _demoAccumulatedText = "";
+      _demoAccumulatedText = _liveTranscript;
       _demoCurrentActiveText = "";
-      _demoSectionIndex = 0;
+      final allSections = chapter4_1TranscriptData.expand((page) => page.sections).toList();
+      if (_demoSectionIndex >= allSections.length) {
+        _demoSectionIndex = 0;
+      }
       _startDemoTyping();
     } else {
       try {
