@@ -12,6 +12,8 @@ from firebase_admin import auth, firestore, messaging
 from firebase_functions import https_fn
 from pydantic import BaseModel, Field
 
+from memory_service import MemoryService, MemoryWrite
+
 
 class AttentionAgentOutput(BaseModel):
     status: Literal["following", "confused", "behind", "distracted", "unclear"]
@@ -55,6 +57,46 @@ attention_agent = Agent(
     instructions=ATTENTION_AGENT_INSTRUCTIONS,
     output_type=AttentionAgentOutput,
 )
+
+
+def attention_memory_writes(
+    output: AttentionAgentOutput,
+    *,
+    course_id: str,
+    lecture_id: str,
+) -> list[MemoryWrite]:
+    writes: list[MemoryWrite] = []
+    missed = [item.strip() for item in output.missed_content if item.strip()]
+    if missed:
+        writes.append(
+            MemoryWrite(
+                domain="learning",
+                kind="missed_content",
+                content="\n".join(f"- {item}" for item in missed),
+                scope="lecture",
+                course_id=course_id,
+                lecture_id=lecture_id,
+                confidence=output.confidence,
+                importance=0.75,
+                metadata={"attentionStatus": output.status},
+            )
+        )
+    confused = (output.confused_summary or "").strip()
+    if confused:
+        writes.append(
+            MemoryWrite(
+                domain="learning",
+                kind="confusion",
+                content=confused,
+                scope="lecture",
+                course_id=course_id,
+                lecture_id=lecture_id,
+                confidence=output.confidence,
+                importance=0.85,
+                metadata={"attentionStatus": output.status},
+            )
+        )
+    return writes
 
 
 def authenticated_user_id(req: https_fn.Request) -> str:
@@ -174,6 +216,8 @@ def evaluate_attention(
     page_summaries: dict[int, str],
     transcript_segments: list[str],
     notification_token: str,
+    course_id: str,
+    lecture_id: str,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current_time = now or datetime.now(timezone.utc)
@@ -265,6 +309,31 @@ def evaluate_attention(
         "notification_sent": notification_sent,
         "notification_message_id": notification_message_id,
     }
+    memory_writes: list[dict[str, Any]] = []
+    memory_service = MemoryService(database=database)
+    for memory in attention_memory_writes(
+        output,
+        course_id=course_id,
+        lecture_id=lecture_id,
+    ):
+        try:
+            stored = memory_service.remember(
+                uid=uid,
+                memory=memory,
+                source="attention_agent",
+                source_ref=session_id,
+            )
+            memory_writes.append(
+                {
+                    "memory_id": stored["memory_id"],
+                    "kind": memory.kind,
+                    "status": stored["status"],
+                }
+            )
+        except Exception as error:
+            logging.exception("Failed to persist attention memory")
+            memory_writes.append({"kind": memory.kind, "error": str(error)})
+    result["memory_writes"] = memory_writes
     session_update.update(
         {
             "lastAttentionCheckedAt": current_time,

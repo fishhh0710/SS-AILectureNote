@@ -267,6 +267,18 @@ def realtime_agent_handler(req: https_fn.Request) -> https_fn.Response:
                         if isinstance(payload.get("notificationToken"), str)
                         else ""
                     ),
+                    course_id=(
+                        payload.get("courseId", "").strip()
+                        if isinstance(payload.get("courseId"), str)
+                        else ""
+                    )
+                    or "unknown-course",
+                    lecture_id=(
+                        payload.get("lectureId", "").strip()
+                        if isinstance(payload.get("lectureId"), str)
+                        else ""
+                    )
+                    or session_id,
                 )
             except Exception as error:
                 logging.exception("Attention evaluation failed")

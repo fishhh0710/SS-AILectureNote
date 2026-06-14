@@ -21,6 +21,7 @@ class _QueuedTranscriptChunk {
 class RealtimeAgentCoordinator {
   RealtimeAgentCoordinator({
     required this.storageId,
+    required this.courseId,
     required this.slidesViewModel,
     required this.notesViewModel,
     required this.segmentStream,
@@ -35,6 +36,7 @@ class RealtimeAgentCoordinator {
   }
 
   final String storageId;
+  final String courseId;
   final SlidesViewModel slidesViewModel;
   final LectureNotesViewModel notesViewModel;
   final Stream<Map<String, dynamic>> segmentStream;
@@ -108,6 +110,8 @@ class RealtimeAgentCoordinator {
             'recentSegments': chunk.recentSegments,
             'latestSegment': chunk.latestSegment,
             'sessionId': sessionId,
+            'courseId': courseId,
+            'lectureId': storageId,
             'studentState': getStudentState(),
             'notificationToken': notificationToken,
           },

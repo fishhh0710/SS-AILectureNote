@@ -298,6 +298,7 @@ class _LectureViewState extends State<LectureView> {
       if (state != null) {
         _realtimeAgentCoordinator = RealtimeAgentCoordinator(
           storageId: widget.fileId,
+          courseId: widget.courseId,
           slidesViewModel: state.viewModel,
           notesViewModel: _notesViewModel,
           segmentStream: _segmentStreamController.stream,

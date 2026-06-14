@@ -154,6 +154,23 @@ class FunctionContractTests(unittest.TestCase):
                 scope="course",
             )
 
+    def test_attention_output_creates_learning_memory_evidence(self):
+        output = attention_agent.AttentionAgentOutput(
+            status="confused",
+            page_relevance="same_topic",
+            confidence=0.9,
+            reasoning_summary="Student stayed on a relevant concept.",
+            missed_content=["The base case stops recursion."],
+            confused_summary="The student may not understand the recursion base case.",
+        )
+        writes = attention_agent.attention_memory_writes(
+            output,
+            course_id="course-1",
+            lecture_id="lecture-1",
+        )
+        self.assertEqual([item.kind for item in writes], ["missed_content", "confusion"])
+        self.assertTrue(all(item.scope == "lecture" for item in writes))
+
     @patch.dict(speech.os.environ, {}, clear=True)
     def test_azure_handler_reports_missing_key(self):
         request = Mock(method="POST")
