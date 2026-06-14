@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+pydantic
+opencv-python-headless
+numpy
+google-generativeai
+google-genai
+openai
+pillow
+python-dotenv
+python-multipart
+# CPU-only PyTorch (needed for SAM) to keep container image size minimal on Cloud Run
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+ultralytics

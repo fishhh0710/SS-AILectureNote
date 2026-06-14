@@ -1,5 +1,8 @@
 # Python Server
 
+> This directory is an early local FastAPI prototype and is not used by the current Flutter runtime.
+> Production endpoints now live in `functions_python/main.py` and are deployed as Python 3.13 Firebase Functions.
+
 This folder contains the temporary Python backend for the Flutter app.
 
 The project currently uses this local `python_server` because Firebase is not connected yet. After Firebase is added, these Python APIs can be moved to Firebase / Cloud Functions / Cloud Run, and the Flutter app should call Firebase instead of this local Python server.

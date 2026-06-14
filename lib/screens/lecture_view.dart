@@ -9,6 +9,7 @@ import '../services/azure_speech_service.dart';
 import '../services/auth_service.dart';
 import '../services/transcript_export_service.dart';
 import '../viewmodels/lecture_notes_view_model.dart';
+import '../services/realtime_agent_coordinator.dart';
 import '../data/transcript_data.dart';
 
 class LectureView extends StatefulWidget {
@@ -28,6 +29,10 @@ class _LectureViewState extends State<LectureView> {
   bool _showChatbot = false;
   bool _isRecording = false;
   final GlobalKey _panelsAreaKey = GlobalKey();
+  final ValueNotifier<int> _currentPageNotifier = ValueNotifier<int>(1);
+  final GlobalKey<SlidesPanelState> _slidesPanelKey =
+      GlobalKey<SlidesPanelState>();
+  RealtimeAgentCoordinator? _realtimeAgentCoordinator;
 
   late AzureSpeechService _speechService;
   late AzureAuthService _authService;
@@ -57,7 +62,7 @@ class _LectureViewState extends State<LectureView> {
     super.initState();
     _notesViewModel = LectureNotesViewModel()
       ..addListener(_handleNotesStateChanged);
-    
+
     _speechService = AzureSpeechService();
     _authService = AzureAuthService();
 
@@ -85,6 +90,8 @@ class _LectureViewState extends State<LectureView> {
   void dispose() {
     _demoTimer?.cancel();
     _segmentStreamController.close();
+    _realtimeAgentCoordinator?.dispose();
+    _currentPageNotifier.dispose();
     _notesViewModel
       ..removeListener(_handleNotesStateChanged)
       ..dispose();
@@ -214,6 +221,9 @@ class _LectureViewState extends State<LectureView> {
         await _speechService.stopListening();
       }
 
+      _realtimeAgentCoordinator?.dispose();
+      _realtimeAgentCoordinator = null;
+
       _exportTimer?.cancel();
       _exportTimer = null;
 
@@ -264,6 +274,20 @@ class _LectureViewState extends State<LectureView> {
 
     try {
       await exportService.start();
+
+      final state = _slidesPanelKey.currentState;
+      if (state != null) {
+        _realtimeAgentCoordinator = RealtimeAgentCoordinator(
+          storageId: widget.fileId,
+          slidesViewModel: state.viewModel,
+          notesViewModel: _notesViewModel,
+          currentPageNotifier: _currentPageNotifier,
+          segmentStream: _segmentStreamController.stream,
+          getAnnotationManager: () =>
+              _slidesPanelKey.currentState?.annotationManager,
+          getPdfDocument: () => _slidesPanelKey.currentState?.document,
+        );
+      }
     } catch (e) {
       _exportService = null;
       if (!mounted) return;
@@ -303,9 +327,9 @@ class _LectureViewState extends State<LectureView> {
         setState(() {
           _isRecording = false;
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to get Azure token: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to get Azure token: $e')),
+        );
       }
     }
   }
@@ -317,7 +341,8 @@ class _LectureViewState extends State<LectureView> {
       final char = text[i];
       if (RegExp(r'[a-zA-Z0-9]').hasMatch(char)) {
         final buffer = StringBuffer();
-        while (i < text.length && RegExp(r'[a-zA-Z0-9\-\.\u0027]').hasMatch(text[i])) {
+        while (i < text.length &&
+            RegExp(r'[a-zA-Z0-9\-\.\u0027]').hasMatch(text[i])) {
           buffer.write(text[i]);
           i++;
         }
@@ -327,7 +352,8 @@ class _LectureViewState extends State<LectureView> {
         }
         increments.add(buffer.toString());
       } else {
-        if (i + 1 < text.length && !RegExp(r'[a-zA-Z0-9]').hasMatch(text[i+1])) {
+        if (i + 1 < text.length &&
+            !RegExp(r'[a-zA-Z0-9]').hasMatch(text[i + 1])) {
           increments.add(text.substring(i, i + 2));
           i += 2;
         } else {
@@ -340,7 +366,9 @@ class _LectureViewState extends State<LectureView> {
   }
 
   void _startDemoTyping() {
-    final allSections = chapter4_1TranscriptData.expand((page) => page.sections).toList();
+    final allSections = chapter4_1TranscriptData
+        .expand((page) => page.sections)
+        .toList();
     if (_demoSectionIndex >= allSections.length) {
       unawaited(_handleRecordingToggle());
       return;
@@ -364,7 +392,8 @@ class _LectureViewState extends State<LectureView> {
           if (_demoAccumulatedText.isEmpty) {
             _liveTranscript = _demoCurrentActiveText;
           } else {
-            _liveTranscript = '$_demoAccumulatedText\n\n$_demoCurrentActiveText';
+            _liveTranscript =
+                '$_demoAccumulatedText\n\n$_demoCurrentActiveText';
           }
         });
         _exportService?.tick(_liveTranscript);
@@ -419,13 +448,14 @@ class _LectureViewState extends State<LectureView> {
     switch (id) {
       case "slides":
         panel = SlidesPanel(
-          key: const ValueKey("slides"),
+          key: _slidesPanelKey,
           width: width,
           index: index,
           fileId: widget.fileId,
           onClose: () => setState(() => _showSlides = false),
           onPdfUploaded: _handlePdfUploaded,
           segmentStream: _segmentStreamController.stream,
+          currentPageNotifier: _currentPageNotifier,
         );
         break;
       case "transcript":

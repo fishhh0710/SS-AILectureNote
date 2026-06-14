@@ -1,0 +1,8 @@
+__pycache__/
+0_not_used/
+*.jpg
+*.png
+*.jpeg
+.git/
+.gitignore
+.dockerignore

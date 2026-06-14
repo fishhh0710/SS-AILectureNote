@@ -7,6 +7,7 @@ import 'screens/dashboard.dart';
 import 'screens/course_details.dart';
 import 'screens/lecture_view.dart';
 import 'widgets/layout_wrapper.dart';
+import 'widgets/lifecycle_notification_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -56,31 +57,33 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'Claw-Note',
-      theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFFFDFCF8),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF8E9775),
-          primary: const Color(0xFF8E9775),
-          surface: const Color(0xFFFDFCF8),
-          onSurface: const Color(0xFF3D3D3D),
-        ),
-        fontFamily: 'Inter', // Default sans-serif
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          iconTheme: IconThemeData(color: Color(0xFFA8A08E)),
-          titleTextStyle: TextStyle(
-            color: Color(0xFF3D3D3D),
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
+    return LifecycleNotificationManager(
+      child: MaterialApp.router(
+        title: 'Claw-Note',
+        theme: ThemeData(
+          scaffoldBackgroundColor: const Color(0xFFFDFCF8),
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF8E9775),
+            primary: const Color(0xFF8E9775),
+            surface: const Color(0xFFFDFCF8),
+            onSurface: const Color(0xFF3D3D3D),
+          ),
+          fontFamily: 'Inter', // Default sans-serif
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            iconTheme: IconThemeData(color: Color(0xFFA8A08E)),
+            titleTextStyle: TextStyle(
+              color: Color(0xFF3D3D3D),
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
+        routerConfig: _router,
+        debugShowCheckedModeBanner: false,
       ),
-      routerConfig: _router,
-      debugShowCheckedModeBanner: false,
     );
   }
 }

@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "565463920399",
-    "project_id": "speech-recognition-7d363",
-    "storage_bucket": "speech-recognition-7d363.firebasestorage.app"
+    "project_number": "219229493478",
+    "project_id": "ai-notes-555a6",
+    "storage_bucket": "ai-notes-555a6.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:565463920399:android:04d1912f7f95faf4ae987a",
+        "mobilesdk_app_id": "1:219229493478:android:9f0d579f4facce71a18327",
         "android_client_info": {
           "package_name": "com.example.lecture_note_app"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyChZ0OO05Aix89IT-OdEjfxHHXZBOniH6o"
+          "current_key": "AIzaSyAchHRoJVVo7rQCFnFBJ_KBRzT-Ni0a9hE"
         }
       ],
       "services": {
