@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 import attention_agent
 import function_common
+import memory_service
 import realtime_agent
 import speech
 
@@ -107,6 +108,51 @@ class FunctionContractTests(unittest.TestCase):
         )
         self.assertTrue(gate["should_run"])
         self.assertTrue(gate["signals"]["teacher_moved"])
+
+    def test_memory_preference_id_is_stable_across_content_changes(self):
+        first = memory_service.MemoryWrite(
+            domain="preference",
+            kind="summary_format",
+            content="Use bullet points",
+            preference_key="summary.format",
+            explicit=True,
+        )
+        second = memory_service.MemoryWrite(
+            domain="preference",
+            kind="summary_format",
+            content="Use concise numbered points",
+            preference_key="summary.format",
+            explicit=True,
+        )
+        self.assertEqual(
+            memory_service.memory_document_id("user-1", first),
+            memory_service.memory_document_id("user-1", second),
+        )
+
+    def test_memory_learning_id_normalizes_text(self):
+        first = memory_service.MemoryWrite(
+            domain="learning",
+            kind="confusion",
+            content="  Binary   Search ",
+        )
+        second = memory_service.MemoryWrite(
+            domain="learning",
+            kind="confusion",
+            content="binary search",
+        )
+        self.assertEqual(
+            memory_service.memory_document_id("user-1", first),
+            memory_service.memory_document_id("user-1", second),
+        )
+
+    def test_memory_scope_requires_identifiers(self):
+        with self.assertRaisesRegex(ValueError, "course_id"):
+            memory_service.MemoryWrite(
+                domain="learning",
+                kind="confusion",
+                content="Recursion",
+                scope="course",
+            )
 
     @patch.dict(speech.os.environ, {}, clear=True)
     def test_azure_handler_reports_missing_key(self):
