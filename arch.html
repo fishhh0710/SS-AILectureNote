@@ -13,88 +13,53 @@
       --line: #d9d4c7;
       --soft: #f0ede4;
       --green: #6f7d55;
-      --green-2: #8e9775;
       --blue: #536f91;
       --orange: #b27342;
       --red: #a35656;
       --code: #f4f2ec;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
 
     body {
       margin: 0;
-      background: var(--bg);
       color: var(--ink);
+      background: var(--bg);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
       line-height: 1.62;
     }
 
     header {
-      padding: 44px 24px 28px;
+      padding: 42px 24px 28px;
       background: #eeebe1;
       border-bottom: 1px solid var(--line);
     }
 
-    main {
+    header > div, main {
       max-width: 1120px;
       margin: 0 auto;
-      padding: 28px 20px 64px;
     }
 
-    h1,
-    h2,
-    h3 {
-      line-height: 1.25;
-      margin: 0;
-    }
+    main { padding: 28px 20px 64px; }
 
-    h1 {
-      max-width: 1120px;
-      margin: 0 auto 10px;
-      font-size: clamp(30px, 5vw, 48px);
-      letter-spacing: 0;
-    }
+    h1, h2, h3 { line-height: 1.3; }
+    h1 { margin: 0 0 8px; font-size: clamp(30px, 5vw, 47px); }
+    h2 { margin: 0 0 14px; font-size: 24px; }
+    h3 { margin: 22px 0 9px; font-size: 18px; }
+    p { margin: 9px 0; }
+    ul, ol { margin: 8px 0; padding-left: 23px; }
+    li { margin: 6px 0; }
 
-    .subtitle {
-      max-width: 1120px;
-      margin: 0 auto;
-      color: var(--muted);
-      font-size: 15px;
-    }
+    .subtitle { margin: 0; color: var(--muted); font-size: 15px; }
 
     section {
-      margin-top: 28px;
-      padding: 26px;
+      margin-top: 24px;
+      padding: 25px;
       background: var(--paper);
       border: 1px solid var(--line);
-      border-radius: 8px;
-    }
-
-    h2 {
-      margin-bottom: 14px;
-      font-size: 24px;
-    }
-
-    h3 {
-      margin: 24px 0 10px;
-      font-size: 18px;
-    }
-
-    p {
-      margin: 10px 0;
-    }
-
-    ul,
-    ol {
-      margin: 10px 0 0;
-      padding-left: 22px;
-    }
-
-    li {
-      margin: 6px 0;
+      border-radius: 9px;
     }
 
     code {
@@ -102,634 +67,502 @@
       border-radius: 5px;
       background: var(--code);
       font-family: "Cascadia Mono", Consolas, monospace;
-      font-size: 0.92em;
+      font-size: .91em;
     }
 
     pre {
-      overflow: auto;
-      padding: 14px 16px;
+      overflow-x: auto;
+      margin: 12px 0;
+      padding: 15px 17px;
+      color: #f5f1e5;
+      background: #292a26;
       border-radius: 8px;
-      background: #242520;
-      color: #f6f1df;
-      font-size: 13px;
-      line-height: 1.5;
+      font: 13px/1.55 "Cascadia Mono", Consolas, monospace;
     }
 
-    pre code {
-      padding: 0;
-      background: transparent;
-      color: inherit;
-    }
+    pre code { padding: 0; color: inherit; background: transparent; }
 
     table {
       width: 100%;
+      margin-top: 11px;
       border-collapse: collapse;
-      margin-top: 12px;
       font-size: 14px;
     }
 
-    th,
-    td {
-      vertical-align: top;
-      padding: 10px 12px;
+    th, td {
+      padding: 10px 11px;
       border-bottom: 1px solid var(--line);
       text-align: left;
+      vertical-align: top;
     }
 
-    th {
-      color: #333;
-      background: var(--soft);
-      font-weight: 700;
-    }
+    th { background: var(--soft); }
 
     .toc {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 10px;
-      margin-top: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 9px;
+      margin-top: 15px;
     }
 
     .toc a {
-      display: block;
       padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
       color: var(--ink);
       background: #fbfaf6;
+      border: 1px solid var(--line);
+      border-radius: 7px;
       text-decoration: none;
       font-weight: 650;
     }
 
-    .note {
-      padding: 12px 14px;
-      margin-top: 14px;
-      border-left: 4px solid var(--green);
-      background: #f4f2ea;
-      border-radius: 6px;
-      color: #34382b;
+    .grid-2, .grid-3, .flow {
+      display: grid;
+      gap: 13px;
+      margin-top: 13px;
     }
 
-    .warning {
-      border-left-color: var(--red);
-      background: #f8eeee;
-      color: #513030;
-    }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .flow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
-    .diagram {
-      margin: 18px 0 8px;
-      overflow-x: auto;
+    .card, .flow-step {
+      padding: 14px;
+      background: #fbfaf7;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #fbfaf7;
     }
 
-    .diagram svg {
-      display: block;
-      min-width: 760px;
-      width: 100%;
-      height: auto;
+    .card h3 { margin-top: 0; }
+
+    .flow-step { border-top: 4px solid var(--green); }
+    .flow-step:nth-child(2) { border-top-color: var(--blue); }
+    .flow-step:nth-child(3), .flow-step:nth-child(4) { border-top-color: var(--orange); }
+    .flow-step strong { display: block; margin-bottom: 5px; }
+
+    .note {
+      margin-top: 13px;
+      padding: 12px 14px;
+      color: #34382b;
+      background: #f4f2ea;
+      border-left: 4px solid var(--green);
+      border-radius: 6px;
     }
 
-    .caption {
-      margin-top: 8px;
-      color: var(--muted);
-      font-size: 13px;
-    }
+    .info { color: #30445b; background: #eef3f7; border-left-color: var(--blue); }
+    .warning { color: #5a3825; background: #f8eee7; border-left-color: var(--orange); }
+    .danger { color: #513030; background: #f8eeee; border-left-color: var(--red); }
 
-    .pill {
+    .tag {
       display: inline-block;
+      margin-right: 5px;
       padding: 2px 8px;
-      border-radius: 999px;
-      background: #e8eadf;
       color: #425034;
+      background: #e8eadf;
+      border-radius: 999px;
       font-size: 12px;
       font-weight: 700;
     }
 
-    .legacy {
-      background: #efe7df;
-      color: #6a4428;
-    }
-
-    .grid-2 {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 16px;
-    }
-
-    .mini-card {
-      padding: 14px;
+    .diagram {
+      overflow-x: auto;
+      margin: 15px 0;
+      padding: 16px;
+      background: #fbfaf7;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #fbfaf7;
     }
 
-    @media (max-width: 760px) {
-      section {
-        padding: 20px;
-      }
+    .diagram pre { min-width: 720px; margin: 0; color: var(--ink); background: transparent; }
+    .caption { color: var(--muted); font-size: 13px; }
 
-      table {
-        font-size: 13px;
-      }
-
-      th,
-      td {
-        padding: 8px;
-      }
+    @media (max-width: 820px) {
+      .grid-2, .grid-3, .flow { grid-template-columns: 1fr; }
+      section { padding: 19px; }
+      table { display: block; overflow-x: auto; }
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>AI Lecture Note 架構導覽</h1>
-    <p class="subtitle">
-      更新：2026-06-03。此文件主要依據目前的 <code>lib/</code> 與 <code>functions/</code> 程式碼整理，<code>arch.md</code> 作為補充。目標閱讀時間：15 分鐘內。
-    </p>
+    <div>
+      <h1>AI Lecture Note 架構導覽</h1>
+      <p class="subtitle">依 2026-06-14 的 <code>lib/</code>、<code>functions_python/</code> 與 Firebase 設定整理。預估閱讀時間約 10 分鐘。</p>
+    </div>
   </header>
 
   <main>
-    <section>
-      <h2>閱讀方式</h2>
+    <section id="guide">
+      <h2>閱讀指南</h2>
       <p>
-        這個專案是 Flutter app 加 Firebase backend。前端採輕量 MVVM：畫面用 <code>screens/</code> 與 <code>widgets/</code> 組起來，狀態放在 <code>viewmodels/</code>，跨 SQLite、local files、Firebase 的流程集中在 <code>repositories/</code> 與 <code>services/</code>。
+        Claw-Note 是 Flutter 講義管理 App。使用者可以建立課程與筆記、匯入 PDF、標記投影片、錄製或模擬即時逐字稿、產生逐頁 AI 筆記，並以講義內容和逐字稿向 chatbot 提問。
+        整體採用接近 MVVM 的分層：Widget 負責顯示，ViewModel 管理畫面狀態，Repository 組合使用案例，Service 處理 SQLite、檔案、Firebase、OpenAI 與 Azure Speech。
       </p>
       <div class="toc">
-        <a href="#overview">1. 整體架構</a>
-        <a href="#details">2. 細部架構</a>
-        <a href="#files">3. lib 檔案導覽</a>
-        <a href="#functions">4. 新增 Cloud Functions</a>
-        <a href="#trace">5. 常用 trace 入口</a>
-        <a href="#notes">6. 開發注意事項</a>
+        <a href="#overview">1. 系統總覽</a>
+        <a href="#client">2. Flutter 與 MVVM</a>
+        <a href="#local-data">3. 本機資料</a>
+        <a href="#transcript">4. 逐字稿流程</a>
+        <a href="#firebase">5. Firebase 架構</a>
+        <a href="#flows">6. 端到端資料流</a>
+        <a href="#files">7. 主要檔案索引</a>
+        <a href="#boundaries">8. 現況與邊界</a>
       </div>
     </section>
 
     <section id="overview">
-      <h2>1. 整體架構</h2>
-      <p>
-        App 入口是 <code>lib/main.dart</code>，先初始化 Firebase，再用 <code>GoRouter</code> 建三條主要路由。大部分 UI 狀態由 <code>ChangeNotifier</code> viewmodel 手動監聽，沒有引入 Provider 或 Riverpod。Cloud backend 目前在 <code>functions/index.js</code>，提供 chat 與 PDF 產生逐頁筆記兩個 HTTP Functions。
-      </p>
-
-      <div class="diagram" aria-label="overall architecture diagram">
-        <svg viewBox="0 0 1060 520" role="img">
-          <defs>
-            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L9,3 z" fill="#6f7d55"></path>
-            </marker>
-            <style>
-              .box{fill:#fff;stroke:#d9d4c7;stroke-width:2}
-              .box2{fill:#f0ede4;stroke:#d9d4c7;stroke-width:2}
-              .cloud{fill:#edf2f7;stroke:#b9c5d3;stroke-width:2}
-              .fn{fill:#f6eee6;stroke:#d8b894;stroke-width:2}
-              .txt{font:600 15px sans-serif;fill:#252525}
-              .small{font:12px sans-serif;fill:#646464}
-              .line{stroke:#6f7d55;stroke-width:2.3;fill:none;marker-end:url(#arrow)}
-            </style>
-          </defs>
-
-          <text x="36" y="34" class="txt">Flutter client</text>
-          <text x="348" y="34" class="txt">State / workflow</text>
-          <text x="632" y="34" class="txt">Local + Firebase integrations</text>
-          <text x="842" y="34" class="txt">Backend</text>
-
-          <rect x="32" y="58" width="210" height="66" rx="8" class="box2"></rect>
-          <text x="52" y="84" class="txt">main.dart</text>
-          <text x="52" y="106" class="small">Firebase init + GoRouter</text>
-
-          <rect x="32" y="158" width="210" height="76" rx="8" class="box"></rect>
-          <text x="52" y="186" class="txt">Screens</text>
-          <text x="52" y="208" class="small">Dashboard / CourseDetails</text>
-          <text x="52" y="225" class="small">LectureView</text>
-
-          <rect x="32" y="270" width="210" height="92" rx="8" class="box"></rect>
-          <text x="52" y="298" class="txt">Lecture panels</text>
-          <text x="52" y="320" class="small">Slides / Transcript</text>
-          <text x="52" y="337" class="small">Summary / Chatbot</text>
-
-          <rect x="330" y="76" width="220" height="98" rx="8" class="box2"></rect>
-          <text x="350" y="104" class="txt">ViewModels</text>
-          <text x="350" y="126" class="small">Dashboard, Course, Slides</text>
-          <text x="350" y="143" class="small">LectureNotes, Chat</text>
-          <text x="350" y="160" class="small">ChangeNotifier state</text>
-
-          <rect x="330" y="230" width="220" height="92" rx="8" class="box2"></rect>
-          <text x="350" y="258" class="txt">Repositories</text>
-          <text x="350" y="280" class="small">File tree workflows</text>
-          <text x="350" y="297" class="small">Chat and note workflows</text>
-
-          <rect x="620" y="58" width="220" height="80" rx="8" class="box"></rect>
-          <text x="640" y="86" class="txt">SQLite</text>
-          <text x="640" y="108" class="small">lecture_system_v2.db</text>
-          <text x="640" y="125" class="small">items / conversations / messages</text>
-
-          <rect x="620" y="166" width="220" height="84" rx="8" class="box"></rect>
-          <text x="640" y="194" class="txt">App documents</text>
-          <text x="640" y="216" class="small">lecture_slides / transcripts</text>
-          <text x="640" y="233" class="small">ai_notes / upload metadata</text>
-
-          <rect x="620" y="282" width="220" height="96" rx="8" class="cloud"></rect>
-          <text x="640" y="310" class="txt">Firebase SDK</text>
-          <text x="640" y="332" class="small">Storage upload/download</text>
-          <text x="640" y="349" class="small">Firebase AI Gemini Live</text>
-          <text x="640" y="366" class="small">project from firebase_options.dart</text>
-
-          <rect x="866" y="106" width="202" height="92" rx="8" class="fn"></rect>
-          <text x="886" y="134" class="txt">Firebase Functions</text>
-          <text x="886" y="156" class="small">chat</text>
-          <text x="886" y="173" class="small">generateNotesFromPdf</text>
-
-          <rect x="866" y="246" width="202" height="98" rx="8" class="cloud"></rect>
-          <text x="886" y="274" class="txt">Cloud resources</text>
-          <text x="886" y="296" class="small">Storage: PDFs + notes JSON</text>
-          <text x="886" y="313" class="small">Firestore: job state</text>
-          <text x="886" y="330" class="small">OpenAI API</text>
-
-          <path d="M137 124 V158" class="line"></path>
-          <path d="M242 196 C285 196 285 125 330 125" class="line"></path>
-          <path d="M242 316 C285 316 285 125 330 125" class="line"></path>
-          <path d="M440 174 V230" class="line"></path>
-          <path d="M550 276 C586 276 586 100 620 100" class="line"></path>
-          <path d="M550 276 C588 276 588 208 620 208" class="line"></path>
-          <path d="M550 276 C588 276 588 330 620 330" class="line"></path>
-          <path d="M840 330 C858 330 858 152 866 152" class="line"></path>
-          <path d="M967 198 V246" class="line"></path>
-          <path d="M840 330 C858 330 858 292 866 292" class="line"></path>
-        </svg>
+      <h2>1. 系統總覽</h2>
+      <div class="flow">
+        <div class="flow-step">
+          <strong>Flutter UI</strong>
+          <code>screens/</code>、<code>widgets/</code><br>
+          Dashboard、CourseDetails、LectureView 與四個 lecture panels。
+        </div>
+        <div class="flow-step">
+          <strong>App 邏輯</strong>
+          <code>viewmodels/</code>、<code>repositories/</code><br>
+          管理 loading、error、資料 CRUD 與跨服務工作流程。
+        </div>
+        <div class="flow-step">
+          <strong>本機儲存</strong>
+          SQLite + App documents<br>
+          課程樹、聊天、PDF、標記、逐字稿與 AI notes。
+        </div>
+        <div class="flow-step">
+          <strong>雲端整合</strong>
+          Firebase Storage、Firestore、Functions<br>
+          再由 Functions 呼叫 OpenAI 或 Azure。
+        </div>
       </div>
-      <p class="caption">
-        重點邊界：UI 不直接碰 Firebase Functions；Functions call 由 <code>FirebaseFunctionClient</code> 統一處理，資料庫 CRUD 則集中在 <code>DatabaseHelper</code>。
+
+      <div class="diagram" aria-label="系統元件資料流">
+<pre><code>使用者
+  │
+  ▼
+Flutter Screens / Widgets
+  │  呼叫方法、監聽 ChangeNotifier / Stream
+  ▼
+ViewModels ──► Repositories / App-level Managers ──► Services
+                                                    ├─ SQLite / App documents
+                                                    ├─ Firebase Storage
+                                                    ├─ Firebase HTTP Functions ──► OpenAI
+                                                    │                         └──► Azure token API
+                                                    └─ Azure Speech WebSocket（音訊由 App 直接串流）</code></pre>
+      </div>
+
+      <p>
+        App 入口是 <code>lib/main.dart</code>。它先使用 <code>firebase_options.dart</code> 初始化 Firebase，再建立 <code>GoRouter</code>。
+        Cloud Functions 入口是 <code>functions_python/main.py</code>，使用 Python 3.13，輸出 <code>chat</code>、<code>generateNotesFromPdf</code> 與 <code>azureSpeechToken</code> 三個 HTTP Functions。
       </p>
     </section>
 
-    <section id="details">
-      <h2>2. 細部架構</h2>
+    <section id="client">
+      <h2>2. Flutter 與 MVVM</h2>
 
-      <h3>Navigation 架構</h3>
-      <p>
-        <code>ShellRoute</code> 會包住主要頁面並套上 <code>LayoutWrapper</code>。Lecture workspace 本身不顯示 app bar / bottom bar，所以 <code>LayoutWrapper</code> 會用 path 判斷是否在 <code>/lecture/</code>。
-      </p>
-      <div class="diagram" aria-label="navigation architecture diagram">
-        <svg viewBox="0 0 980 260" role="img">
-          <defs>
-            <marker id="arrowNav" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L9,3 z" fill="#536f91"></path>
-            </marker>
-            <style>
-              .nbox{fill:#fff;stroke:#d9d4c7;stroke-width:2}
-              .route{fill:#eef3f7;stroke:#b9c5d3;stroke-width:2}
-              .ntxt{font:600 15px sans-serif;fill:#252525}
-              .nsmall{font:12px sans-serif;fill:#646464}
-              .nline{stroke:#536f91;stroke-width:2.2;fill:none;marker-end:url(#arrowNav)}
-            </style>
-          </defs>
-          <rect x="34" y="52" width="160" height="64" rx="8" class="nbox"></rect>
-          <text x="54" y="80" class="ntxt">main.dart</text>
-          <text x="54" y="101" class="nsmall">Firebase.initializeApp</text>
-
-          <rect x="258" y="52" width="174" height="64" rx="8" class="nbox"></rect>
-          <text x="278" y="80" class="ntxt">GoRouter</text>
-          <text x="278" y="101" class="nsmall">initialLocation: /</text>
-
-          <rect x="496" y="52" width="178" height="64" rx="8" class="nbox"></rect>
-          <text x="516" y="80" class="ntxt">ShellRoute</text>
-          <text x="516" y="101" class="nsmall">LayoutWrapper(child)</text>
-
-          <rect x="754" y="24" width="190" height="56" rx="8" class="route"></rect>
-          <text x="774" y="49" class="ntxt">/</text>
-          <text x="774" y="68" class="nsmall">Dashboard</text>
-
-          <rect x="754" y="104" width="190" height="58" rx="8" class="route"></rect>
-          <text x="774" y="129" class="ntxt">/course/:courseId</text>
-          <text x="774" y="149" class="nsmall">CourseDetails</text>
-
-          <rect x="754" y="186" width="190" height="58" rx="8" class="route"></rect>
-          <text x="774" y="211" class="ntxt">/lecture/:courseId/:fileId</text>
-          <text x="774" y="231" class="nsmall">LectureView</text>
-
-          <path d="M194 84 H258" class="nline"></path>
-          <path d="M432 84 H496" class="nline"></path>
-          <path d="M674 84 C710 84 710 52 754 52" class="nline"></path>
-          <path d="M674 84 C710 84 710 133 754 133" class="nline"></path>
-          <path d="M674 84 C710 84 710 215 754 215" class="nline"></path>
-
-          <text x="62" y="182" class="nsmall">Tap folder/course</text>
-          <path d="M158 176 C336 154 510 154 754 133" class="nline"></path>
-          <text x="62" y="220" class="nsmall">Tap notebook/recording/file</text>
-          <path d="M198 214 C390 224 560 228 754 215" class="nline"></path>
-        </svg>
-      </div>
-      <ul>
-        <li><code>courseId</code> 與 <code>fileId</code> 在 route 中是字串，但通常是 SQLite <code>items.id</code>。</li>
-        <li><code>Dashboard</code> 點 folder/course 進 <code>/course/:courseId</code>；點非 folder 進 <code>/lecture/:courseId/:fileId</code>。</li>
-        <li><code>CourseDetails</code> 可遞迴進 folder/course，也可進 lecture workspace。</li>
-      </ul>
-
-      <h3>Local SQLite 架構</h3>
-      <p>
-        SQLite singleton 是 <code>DatabaseHelper.instance</code>，資料庫檔名 <code>lecture_system_v2.db</code>，schema version 3。它同時管理檔案樹與聊天紀錄。
-      </p>
-      <div class="diagram" aria-label="sqlite schema diagram">
-        <svg viewBox="0 0 980 360" role="img">
-          <defs>
-            <marker id="arrowDb" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L9,3 z" fill="#6f7d55"></path>
-            </marker>
-            <style>
-              .dbbox{fill:#fff;stroke:#d9d4c7;stroke-width:2}
-              .dbhead{fill:#f0ede4;stroke:#d9d4c7;stroke-width:2}
-              .dbtxt{font:600 15px sans-serif;fill:#252525}
-              .dbsmall{font:12px sans-serif;fill:#646464}
-              .dbline{stroke:#6f7d55;stroke-width:2.2;fill:none;marker-end:url(#arrowDb)}
-            </style>
-          </defs>
-
-          <rect x="44" y="44" width="278" height="246" rx="8" class="dbbox"></rect>
-          <rect x="44" y="44" width="278" height="40" rx="8" class="dbhead"></rect>
-          <text x="64" y="70" class="dbtxt">items</text>
-          <text x="64" y="108" class="dbsmall">id PK</text>
-          <text x="64" y="128" class="dbsmall">parentId FK - self reference</text>
-          <text x="64" y="148" class="dbsmall">type: system_folder / folder / course</text>
-          <text x="64" y="168" class="dbsmall">type: notebook / recording / ai_note</text>
-          <text x="64" y="188" class="dbsmall">name, content</text>
-          <text x="64" y="208" class="dbsmall">filePath: local file/dir path</text>
-          <text x="64" y="228" class="dbsmall">cloudPath: Firebase Storage path</text>
-          <text x="64" y="248" class="dbsmall">createdAt</text>
-
-          <rect x="426" y="54" width="250" height="132" rx="8" class="dbbox"></rect>
-          <rect x="426" y="54" width="250" height="40" rx="8" class="dbhead"></rect>
-          <text x="446" y="80" class="dbtxt">conversations</text>
-          <text x="446" y="118" class="dbsmall">id PK</text>
-          <text x="446" y="138" class="dbsmall">courseId FK to items.id</text>
-          <text x="446" y="158" class="dbsmall">createdAt</text>
-
-          <rect x="426" y="226" width="250" height="142" rx="8" class="dbbox"></rect>
-          <rect x="426" y="226" width="250" height="40" rx="8" class="dbhead"></rect>
-          <text x="446" y="252" class="dbtxt">messages</text>
-          <text x="446" y="290" class="dbsmall">id PK</text>
-          <text x="446" y="310" class="dbsmall">conversationId FK</text>
-          <text x="446" y="330" class="dbsmall">role, content, sequenceNumber, createdAt</text>
-
-          <rect x="748" y="76" width="196" height="170" rx="8" class="dbbox"></rect>
-          <rect x="748" y="76" width="196" height="40" rx="8" class="dbhead"></rect>
-          <text x="768" y="102" class="dbtxt">auto folders</text>
-          <text x="768" y="140" class="dbsmall">root: Database</text>
-          <text x="768" y="160" class="dbsmall">root: Temp</text>
-          <text x="768" y="190" class="dbsmall">new course creates:</text>
-          <text x="768" y="210" class="dbsmall">Recordings</text>
-          <text x="768" y="230" class="dbsmall">AI notes</text>
-
-          <path d="M322 128 C366 128 372 120 426 120" class="dbline"></path>
-          <path d="M551 186 V226" class="dbline"></path>
-          <path d="M322 72 C590 18 650 42 748 96" class="dbline"></path>
-          <path d="M166 290 C126 324 126 330 166 338 C204 346 228 326 202 298" class="dbline"></path>
-          <text x="86" y="330" class="dbsmall">parentId cascade tree</text>
-        </svg>
-      </div>
-      <p>
-        <code>content</code> 目前會放 recording 的完整 transcript，也可能放 AI note / notebook 內容。真正的 PDF、transcript segment、notes JSON/Markdown 多半存在 app documents，SQLite 只記路徑和索引資料。
-      </p>
-
-      <h3>Firebase / Storage / Firestore / Functions 架構</h3>
-      <p>
-        Flutter 端不直接呼叫 OpenAI。PDF 會先上傳到 Firebase Storage，再由 <code>generateNotesFromPdf</code> Function 下載、交給 OpenAI Responses API、把 notes JSON 寫回 Storage，並回傳 <code>pages</code> 或 <code>notesStoragePath</code>。
-      </p>
-      <div class="diagram" aria-label="firebase architecture diagram">
-        <svg viewBox="0 0 1040 430" role="img">
-          <defs>
-            <marker id="arrowFb" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L9,3 z" fill="#b27342"></path>
-            </marker>
-            <style>
-              .fbbox{fill:#fff;stroke:#d9d4c7;stroke-width:2}
-              .storage{fill:#eef3f7;stroke:#b9c5d3;stroke-width:2}
-              .func{fill:#f6eee6;stroke:#d8b894;stroke-width:2}
-              .fbtxt{font:600 15px sans-serif;fill:#252525}
-              .fbsmall{font:12px sans-serif;fill:#646464}
-              .fbline{stroke:#b27342;stroke-width:2.2;fill:none;marker-end:url(#arrowFb)}
-            </style>
-          </defs>
-
-          <rect x="38" y="72" width="220" height="92" rx="8" class="fbbox"></rect>
-          <text x="58" y="100" class="fbtxt">Flutter services</text>
-          <text x="58" y="122" class="fbsmall">NoteGenerationService</text>
-          <text x="58" y="139" class="fbsmall">ChatFunctionService</text>
-          <text x="58" y="156" class="fbsmall">FirebaseUploadService</text>
-
-          <rect x="350" y="38" width="282" height="110" rx="8" class="storage"></rect>
-          <text x="370" y="66" class="fbtxt">Firebase Storage</text>
-          <text x="370" y="88" class="fbsmall">ai_note_jobs/{fileId}/source/*.pdf</text>
-          <text x="370" y="105" class="fbsmall">ai_note_jobs/{fileId}/notes/notes.json</text>
-          <text x="370" y="122" class="fbsmall">users/{userId}/referenced_files/*</text>
-
-          <rect x="350" y="206" width="282" height="118" rx="8" class="func"></rect>
-          <text x="370" y="234" class="fbtxt">HTTPS Functions</text>
-          <text x="370" y="256" class="fbsmall">chat: notes + transcript + history</text>
-          <text x="370" y="273" class="fbsmall">generateNotesFromPdf: PDF to page notes</text>
-          <text x="370" y="290" class="fbsmall">shared CORS / requestPayload / sendError</text>
-          <text x="370" y="307" class="fbsmall">region: FUNCTION_REGION or us-central1</text>
-
-          <rect x="734" y="44" width="222" height="86" rx="8" class="storage"></rect>
-          <text x="754" y="72" class="fbtxt">Firestore</text>
-          <text x="754" y="94" class="fbsmall">ai_note_jobs/{safeId}</text>
-          <text x="754" y="111" class="fbsmall">status / error / pageCount</text>
-
-          <rect x="734" y="190" width="222" height="116" rx="8" class="fbbox"></rect>
-          <text x="754" y="218" class="fbtxt">OpenAI</text>
-          <text x="754" y="240" class="fbsmall">Files API for uploaded PDF</text>
-          <text x="754" y="257" class="fbsmall">Responses API JSON schema</text>
-          <text x="754" y="274" class="fbsmall">Chat completions for chatbot</text>
-          <text x="754" y="291" class="fbsmall">cleanup via files.del/delete</text>
-
-          <rect x="38" y="264" width="220" height="74" rx="8" class="fbbox"></rect>
-          <text x="58" y="292" class="fbtxt">Local cache</text>
-          <text x="58" y="314" class="fbsmall">ai_notes/{fileId}/notes.json</text>
-          <text x="58" y="331" class="fbsmall">notes/page_001.md ...</text>
-
-          <path d="M258 104 C294 104 304 92 350 92" class="fbline"></path>
-          <path d="M258 132 C302 174 306 250 350 250" class="fbline"></path>
-          <path d="M632 252 C684 242 690 238 734 238" class="fbline"></path>
-          <path d="M632 238 C676 158 684 90 734 90" class="fbline"></path>
-          <path d="M734 278 C680 330 606 356 258 314" class="fbline"></path>
-          <path d="M632 286 C676 276 676 96 350 96" class="fbline"></path>
-          <path d="M350 290 C306 290 302 304 258 304" class="fbline"></path>
-        </svg>
-      </div>
-      <ul>
-        <li><code>FirebaseFunctionClient</code> 預設組出 <code>https://&lt;region&gt;-&lt;projectId&gt;.cloudfunctions.net/&lt;functionName&gt;</code>。</li>
-        <li>可以用 <code>FIREBASE_FUNCTIONS_BASE_URL</code> 指到 emulator，也可以用 <code>FIREBASE_CHAT_FUNCTION_URL</code> / <code>FIREBASE_NOTES_FUNCTION_URL</code> 指定完整 URL。</li>
-        <li><code>generateNotesFromPdf</code> 會寫 Firestore job state；目前環境已建立好即可。換 project 或重建 Firebase 環境時，要確認 Cloud Firestore database 已啟用，否則 Function 會因 Firestore <code>NOT_FOUND</code> 失敗。</li>
-      </ul>
-    </section>
-
-    <section id="files">
-      <h2>3. <code>lib/</code> 每個 file 在做什麼</h2>
+      <h3>Navigation 與主要畫面</h3>
       <table>
-        <thead>
-          <tr>
-            <th>File</th>
-            <th>狀態</th>
-            <th>用途</th>
-          </tr>
-        </thead>
+        <thead><tr><th>Route</th><th>畫面</th><th>責任</th></tr></thead>
         <tbody>
-          <tr><td><code>lib/main.dart</code></td><td><span class="pill">active</span></td><td>App entry；初始化 Firebase，宣告 <code>GoRouter</code>、<code>ShellRoute</code>、三條主路由與 theme。</td></tr>
-          <tr><td><code>lib/firebase_options.dart</code></td><td><span class="pill">active</span></td><td>FlutterFire 產生的 Firebase platform config。注意 web/android 與 desktop/iOS 目前指到不同 project。</td></tr>
-          <tr><td><code>lib/database/models.dart</code></td><td><span class="pill">active</span></td><td><code>AppNode</code> 對應 <code>items</code>；<code>ChatMessage</code> 對應 <code>messages</code>。</td></tr>
-          <tr><td><code>lib/database/database_helper.dart</code></td><td><span class="pill">active</span></td><td>SQLite singleton；建立 schema、CRUD、course 預設資料夾、聊天紀錄、AI notes/transcript 聚合查詢。</td></tr>
-          <tr><td><code>lib/models/ai_page_note.dart</code></td><td><span class="pill">active</span></td><td>逐頁 AI 筆記 model；支援 <code>page_number</code> 與 <code>pageNumber</code> JSON 欄位。</td></tr>
-          <tr><td><code>lib/repositories/file_tree_repository.dart</code></td><td><span class="pill">active</span></td><td>檔案樹 workflow boundary；包裝 SQLite load/create/rename/delete/update filePath 與 Firebase backup。</td></tr>
-          <tr><td><code>lib/repositories/note_repository.dart</code></td><td><span class="pill">active</span></td><td>AI notes workflow；清掉舊 notes、呼叫 note service、把結果存到 local cache。</td></tr>
-          <tr><td><code>lib/repositories/chat_repository.dart</code></td><td><span class="pill">active</span></td><td>聊天 session workflow；讀/建 conversation，寫入 user/assistant messages，組 recent history 呼叫 chat Function。</td></tr>
-          <tr><td><code>lib/viewmodels/dashboard_view_model.dart</code></td><td><span class="pill">active</span></td><td>Dashboard 狀態：root nodes、loading/error、create/rename/delete、backup progress。</td></tr>
-          <tr><td><code>lib/viewmodels/course_details_view_model.dart</code></td><td><span class="pill">active</span></td><td>Course/folder detail 狀態：parent node、children、nested folder 建立權限與 CRUD。</td></tr>
-          <tr><td><code>lib/viewmodels/slides_view_model.dart</code></td><td><span class="pill">active</span></td><td>Lecture PDF path persistence；讀寫 <code>items.filePath</code>。</td></tr>
-          <tr><td><code>lib/viewmodels/lecture_notes_view_model.dart</code></td><td><span class="pill">active</span></td><td>AI notes panel 狀態；載入 local notes、生成 notes、retry、避免舊 request 覆蓋新狀態。</td></tr>
-          <tr><td><code>lib/viewmodels/chat_view_model.dart</code></td><td><span class="pill">active</span></td><td>Chat panel 狀態；初始化 session、更新 lecture context、送出訊息並顯示 assistant 回覆。</td></tr>
-          <tr><td><code>lib/screens/dashboard.dart</code></td><td><span class="pill">active</span></td><td>Root dashboard UI；顯示 Database root children、建立節點、手動 Firebase backup、導向 course/lecture。</td></tr>
-          <tr><td><code>lib/screens/course_details.dart</code></td><td><span class="pill">active</span></td><td>Folder/course browser UI；顯示 children，建立 notebook/folder/course，導向 nested course 或 lecture。</td></tr>
-          <tr><td><code>lib/screens/lecture_view.dart</code></td><td><span class="pill">active</span></td><td>Lecture workspace coordinator；管理四個 panel 顯示/排序/寬度、錄音 lifecycle、PDF 上傳後觸發 AI notes。</td></tr>
-          <tr><td><code>lib/widgets/layout_wrapper.dart</code></td><td><span class="pill">active</span></td><td>Route shell layout；非 lecture 顯示 app bar 與 bottom bar，lecture path 則隱藏。</td></tr>
-          <tr><td><code>lib/widgets/slides_panel.dart</code></td><td><span class="pill">active</span></td><td>PDF picker、copy 到 app documents、用 <code>pdfrx</code> render PDF，並通知 <code>LectureView</code> 產生 AI notes。</td></tr>
-          <tr><td><code>lib/widgets/slide_page.dart</code></td><td><span class="pill">active</span></td><td>單頁 slide wrapper；加上頁碼與視覺樣式。</td></tr>
-          <tr><td><code>lib/widgets/transcript_panel.dart</code></td><td><span class="pill">active</span></td><td>Transcript panel UI；顯示 live transcript、recording state、start recording CTA。</td></tr>
-          <tr><td><code>lib/widgets/summary_panel.dart</code></td><td><span class="pill">active</span></td><td>AI notes panel UI；顯示 loading/error/retry 與逐頁 Markdown notes。</td></tr>
-          <tr><td><code>lib/widgets/chatbot_panel.dart</code></td><td><span class="pill">active</span></td><td>Chat UI；建立/更新 <code>ChatViewModel</code>，送出問題並自動 scroll 到底。</td></tr>
-          <tr><td><code>lib/widgets/panel_header.dart</code></td><td><span class="pill">active</span></td><td>共用 panel header；支援 drag handle、action buttons、close button。</td></tr>
-          <tr><td><code>lib/widgets/transcript_accordion.dart</code></td><td><span class="pill legacy">legacy</span></td><td>舊的 transcript accordion UI helper；目前主流程未從 router 使用。</td></tr>
-          <tr><td><code>lib/services/firebase_function_client.dart</code></td><td><span class="pill">active</span></td><td>共用 HTTP Function client；處理 URL resolve、JSON POST、timeout、錯誤訊息、callable-style payload unwrap。</td></tr>
-          <tr><td><code>lib/services/chat_function_service.dart</code></td><td><span class="pill">active</span></td><td>Chat Function adapter；送 notes/transcript/history/question，要求回傳 <code>answer</code>。</td></tr>
-          <tr><td><code>lib/services/note_generation_service.dart</code></td><td><span class="pill">active</span></td><td>PDF note service；上傳 PDF 到 Storage、呼叫 notes Function、解析 pages/notesStoragePath、存 local notes cache。</td></tr>
-          <tr><td><code>lib/services/firebase_upload_service.dart</code></td><td><span class="pill">active</span></td><td>手動 Storage backup；掃 SQLite nodes 的 <code>filePath</code>，用 MD5 metadata 跳過未變更檔案並更新 <code>cloudPath</code>。</td></tr>
-          <tr><td><code>lib/services/gemini_live_speech_service.dart</code></td><td><span class="pill">active</span></td><td>目前主要 STT service；用 Firebase AI Gemini Live 串流 16k PCM audio，支援 reconnect、locale、local transcript JSON。</td></tr>
-          <tr><td><code>lib/services/transcript_export_service.dart</code></td><td><span class="pill">active</span></td><td>錄音 session export；每 10 秒寫 <code>seg_NNN.json</code>，並更新 SQLite recording item 的完整 transcript。</td></tr>
-          <tr><td><code>lib/services/auth_service.dart</code></td><td><span class="pill legacy">legacy</span></td><td>Azure token Function adapter；預期 Function 名稱 <code>azureSpeechToken</code>，但目前 <code>functions/index.js</code> 沒有 export。</td></tr>
-          <tr><td><code>lib/services/azure_speech_service.dart</code></td><td><span class="pill legacy">legacy</span></td><td>Azure WebSocket STT prototype；現在 router 未導到這條流程。</td></tr>
-          <tr><td><code>lib/services/speech_service.dart</code></td><td><span class="pill legacy">legacy</span></td><td><code>speech_to_text</code> 版 STT service；主流程已改用 Gemini Live service。</td></tr>
-          <tr><td><code>lib/views/azure_lecture_view.dart</code></td><td><span class="pill legacy">legacy</span></td><td>Azure STT demo page；未在 <code>main.dart</code> routes 中掛載。</td></tr>
-          <tr><td><code>lib/data/transcript_data.dart</code></td><td><span class="pill legacy">legacy</span></td><td>靜態 transcript sample data；目前不是 runtime data source。</td></tr>
+          <tr><td><code>/</code></td><td><code>Dashboard</code></td><td>顯示 Database 根目錄下的課程／資料夾；建立、改名、刪除節點及啟動 Firebase 備份。</td></tr>
+          <tr><td><code>/course/:courseId</code></td><td><code>CourseDetails</code></td><td>瀏覽課程內的 Recordings、AI notes、notebook 等子節點。</td></tr>
+          <tr><td><code>/lecture/:courseId/:fileId</code></td><td><code>LectureView</code></td><td>整合 Slides、Transcript、Summary、Chatbot，可顯示／隱藏、拖曳與調整面板寬度。</td></tr>
+        </tbody>
+      </table>
+      <p><code>ShellRoute</code> 以 <code>LayoutWrapper</code> 包住各 route；lecture route 會使用專屬 workspace 版面。</p>
+
+      <h3>分層責任</h3>
+      <div class="grid-3">
+        <div class="card">
+          <h3>Widgets / Screens</h3>
+          <p>渲染 UI、接收輸入、顯示 loading/error。複雜流程交給 ViewModel 或 Service，不直接組裝 OpenAI request。</p>
+        </div>
+        <div class="card">
+          <h3>ViewModels</h3>
+          <p>以 <code>ChangeNotifier</code> 保存畫面狀態。包括 Dashboard、CourseDetails、Slides、LectureNotes、Chat。</p>
+        </div>
+        <div class="card">
+          <h3>Repositories / Services</h3>
+          <p>Repository 組合業務流程；Service 負責資料庫、檔案、HTTP Function、Storage 與語音服務。</p>
+        </div>
+      </div>
+
+      <h3>Lecture 四面板</h3>
+      <table>
+        <thead><tr><th>面板</th><th>目前功能</th><th>主要依賴</th></tr></thead>
+        <tbody>
+          <tr><td>Slides</td><td>匯入／開啟 PDF、投影片顯示、矩形與文字標記。</td><td><code>SlidesViewModel</code>、<code>PageAnnotationManager</code>、<code>pdfrx</code></td></tr>
+          <tr><td>Transcript</td><td>Azure 即時辨識、語言選擇、Demo Mode、錄音狀態與逐字稿顯示。</td><td><code>AzureSpeechService</code>、<code>TranscriptExportService</code></td></tr>
+          <tr><td>Summary</td><td>顯示 PDF 逐頁 Markdown 筆記、產生中／錯誤／重試狀態。</td><td><code>LectureNotesViewModel</code>、<code>NoteGenerationManager</code></td></tr>
+          <tr><td>Chatbot</td><td>載入本機聊天紀錄，將 AI notes、逐字稿、history 與問題送到 Function。</td><td><code>ChatViewModel</code>、<code>ChatRepository</code></td></tr>
         </tbody>
       </table>
     </section>
 
-    <section id="functions">
-      <h2>4. 如果要新增 Cloud Functions 應該怎麼接</h2>
+    <section id="local-data">
+      <h2>3. 本機資料</h2>
+
+      <h3>SQLite：<code>lecture_system_v2.db</code>，schema version 3</h3>
+      <table>
+        <thead><tr><th>Table</th><th>重要欄位</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>items</code></td>
+            <td><code>id</code>、<code>parentId</code>、<code>type</code>、<code>name</code>、<code>content</code>、<code>filePath</code>、<code>cloudPath</code>、<code>createdAt</code></td>
+            <td>一張 self-reference 表表示整棵檔案樹。刪除父節點時，子節點透過 foreign key cascade delete。</td>
+          </tr>
+          <tr>
+            <td><code>conversations</code></td>
+            <td><code>id</code>、<code>courseId</code>、<code>createdAt</code></td>
+            <td>聊天 session。程式中的參數有時命名為 <code>notebookId</code>，實際 FK 指向 <code>items.id</code>。</td>
+          </tr>
+          <tr>
+            <td><code>messages</code></td>
+            <td><code>conversationId</code>、<code>role</code>、<code>content</code>、<code>sequenceNumber</code>、<code>createdAt</code></td>
+            <td>依順序儲存 user／assistant 訊息，隨 conversation cascade delete。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>
+        第一次建立資料庫時會建立根節點 <code>Database</code> 與 <code>Temp</code>。建立一個 <code>course</code> 時，會自動在課程下建立
+        <code>Recordings</code> 與 <code>AI notes</code> 系統資料夾。常見 <code>items.type</code> 包含
+        <code>system_folder</code>、<code>folder</code>、<code>course</code>、<code>notebook</code>、<code>recording</code>、<code>ai_note</code>。
+      </p>
+
+      <h3>標記資料</h3>
+      <p>
+        PDF 標記沒有獨立資料表。<code>PageAnnotationManager</code> 將每頁的 rectangle/text annotations 序列化成 JSON，存回 SQLite 的節點內容；
+        <code>ValueNotifier</code> 提供畫面即時更新，dirty pages 再批次寫回資料庫。
+      </p>
+
+      <h3>App documents</h3>
+      <table>
+        <thead><tr><th>路徑</th><th>內容</th></tr></thead>
+        <tbody>
+          <tr><td><code>lecture_slides/</code></td><td>從 file picker 匯入後複製到 App 管理範圍內的 PDF。</td></tr>
+          <tr><td><code>transcripts/{storageId}.json</code></td><td>Azure 辨識的完整 <code>TranscriptChunk</code> 陣列，用於重開 lecture 時載入。</td></tr>
+          <tr><td><code>transcripts/lecture_YYYYMMDD_HHMMSS/seg_NNN.json</code></td><td>錄製 session 每 10 秒輸出的增量逐字稿片段。</td></tr>
+          <tr><td><code>ai_notes/{storageId}/notes.json</code></td><td>完整逐頁 AI notes JSON。</td></tr>
+          <tr><td><code>ai_notes/{storageId}/notes/page_NNN.md</code></td><td>每頁各自一份 Markdown，方便顯示或單獨使用。</td></tr>
+          <tr><td><code>upload_metadata.json</code></td><td>Firebase 備份時的 local file path → MD5 對照。</td></tr>
+        </tbody>
+      </table>
+      <div class="note info">SQLite 保存索引、階層、文字內容與 cloud path；較大的 PDF、逐字稿分段和 Markdown 檔案保存在 App documents。</div>
+    </section>
+
+    <section id="transcript">
+      <h2>4. 即時逐字稿、Demo 與 segment stream</h2>
+
+      <h3>正式語音辨識</h3>
       <ol>
-        <li>
-          在 <code>functions/index.js</code> 新增 <code>exports.yourFunction</code>。沿用 <code>handleCors(req, res)</code>、<code>requestPayload(req)</code>、<code>requiredString</code>、<code>sendError</code>，回傳 plain JSON object。
-        </li>
-        <li>
-          在 <code>lib/services/</code> 新增一個小型 service，使用 <code>FirebaseFunctionClient.postJson</code>。每個 Function 建議提供兩個 dart-define：<code>FIREBASE_XXX_FUNCTION_NAME</code> 與 <code>FIREBASE_XXX_FUNCTION_URL</code>。
-        </li>
-        <li>
-          如果流程需要 SQLite、local cache 或多個 services，放到 <code>repositories/</code> 組合；UI state 再由 <code>viewmodels/</code> 呼叫 repository。
-        </li>
-        <li>
-          如果 Function 會寫 Firestore 或讀寫 Storage，先確認 Firebase project、Storage bucket、Firestore database 都已建立，且 client 端的 <code>firebase_options.dart</code> 指到同一個 project。
-        </li>
-        <li>
-          部署前檢查 backend 語法與前端靜態分析：<code>node --check functions/index.js</code>、<code>flutter analyze</code>。本專案目前不把 <code>flutter test</code> 當作必要驗證步驟。
-        </li>
+        <li><code>LectureView</code> 呼叫 <code>AzureAuthService.getTemporaryToken()</code>。</li>
+        <li><code>AzureAuthService</code> 透過 <code>FirebaseFunctionClient</code> 呼叫 <code>azureSpeechToken</code>。</li>
+        <li>App 取得短期 token 後，<code>AzureSpeechService</code> 開啟 Azure Speech WebSocket。</li>
+        <li><code>record</code> 套件擷取 16 kHz、16-bit、mono PCM；第一個 frame 加入 WAV header，再以 Azure binary framing 傳送。</li>
+        <li>Azure 的 hypothesis 更新 partial text；phrase 成功時建立 finalized <code>TranscriptChunk</code> 並保存完整逐字稿。</li>
       </ol>
+      <p>支援的 UI locale 為中文與英文；Service 會將 <code>zh_TW</code>／<code>en_US</code> 轉成 Azure 使用的 <code>zh-TW</code>／<code>en-US</code>。</p>
 
-      <h3>Backend 範本</h3>
-      <pre><code>exports.summarizeTranscript = functions
-  .region(region)
-  .runWith({ timeoutSeconds: 120, memory: "512MB" })
-  .https.onRequest(async (req, res) =&gt; {
-    if (handleCors(req, res)) return;
+      <h3>Demo Mode</h3>
+      <p>
+        Transcript 面板可切換 Demo Mode。啟動後不要求麥克風，也不連 Azure，而是讀取 <code>lib/data/transcript_data.dart</code> 的範例講稿，
+        約每 100 ms 增加一個中文字元或英文 token，模擬即時辨識。Demo 仍呼叫相同的 <code>TranscriptExportService.tick()</code>，所以分段檔案與 stream 行為和正式錄音一致。
+      </p>
 
-    try {
-      const payload = requestPayload(req);
-      const transcript = requiredString(payload, "transcript");
-
-      // Do work here: OpenAI, Firestore, Storage, etc.
-      res.json({ summary: transcript.slice(0, 200) });
-    } catch (error) {
-      sendError(res, error);
-    }
-  });</code></pre>
-
-      <h3>Flutter service 範本</h3>
-      <pre><code>import 'firebase_function_client.dart';
-
-class TranscriptSummaryService {
-  TranscriptSummaryService({FirebaseFunctionClient? functionClient})
-    : _functionClient = functionClient ?? FirebaseFunctionClient();
-
-  static const _functionName = String.fromEnvironment(
-    'FIREBASE_TRANSCRIPT_SUMMARY_FUNCTION_NAME',
-    defaultValue: 'summarizeTranscript',
-  );
-  static const _functionUrl = String.fromEnvironment(
-    'FIREBASE_TRANSCRIPT_SUMMARY_FUNCTION_URL',
-  );
-
-  final FirebaseFunctionClient _functionClient;
-
-  Future&lt;String&gt; summarize(String transcript) async {
-    final response = await _functionClient.postJson(
-      functionName: _functionName,
-      overrideUrl: _functionUrl,
-      body: {'transcript': transcript},
-    );
-
-    final payload = FirebaseFunctionClient.unwrapPayload(response);
-    final summary = payload['summary'];
-    if (summary is! String || summary.trim().isEmpty) {
-      throw const FirebaseFunctionException('Missing summary.');
-    }
-    return summary.trim();
-  }
-
-  void dispose() =&gt; _functionClient.dispose();
+      <h3>每 10 秒片段</h3>
+      <p>
+        開始錄音或 Demo 時，<code>LectureView</code> 建立 <code>TranscriptExportService</code> 與 10 秒 periodic timer。
+        每次 <code>exportSegment()</code> 只取「上次輸出後新增的文字」，寫成以下 JSON；即使這 10 秒沒有新文字，也會寫一個 <code>is_empty: true</code> 的片段。
+      </p>
+<pre><code>{
+  "timestamp": "2026-06-14T06:20:00.000Z",
+  "duration_seconds": 10,
+  "segment_index": 3,
+  "text": "本段新增的逐字稿",
+  "is_empty": false
 }</code></pre>
-
-      <div class="note">
-        Emulator 常用設定：<code>--dart-define=FIREBASE_FUNCTIONS_BASE_URL=http://127.0.0.1:5001/&lt;projectId&gt;/us-central1</code>。若只想覆蓋單一 Function，使用完整 URL dart-define 會更直接。
+      <p>
+        寫檔後，Service 透過 <code>onSegmentExported</code> callback 將片段加入 broadcast <code>segmentStream</code>。
+        <code>LectureView</code> 已把這個 stream 傳給 Slides、Summary、Chatbot，讓未來 agent 可以在課程進行中逐段反應。
+      </p>
+      <div class="note warning">
+        <strong>目前邊界：</strong>三個面板已宣告並接收 <code>segmentStream</code>，但面板內尚未呼叫 <code>listen()</code> 或使用 <code>StreamBuilder</code>，所以現在不會自動摘要、更新 chatbot context 或切換投影片。真正已運作的是分段寫檔與 stream 廣播。
       </div>
     </section>
 
-    <section id="trace">
-      <h2>5. 常用 trace 入口</h2>
+    <section id="firebase">
+      <h2>5. Firebase 架構</h2>
+      <p>
+        Firebase 在 <code>main.dart</code> 由 <code>DefaultFirebaseOptions.currentPlatform</code> 初始化。Flutter client 目前直接使用
+        <code>firebase_core</code> 與 <code>firebase_storage</code>；Firestore 只由 Cloud Functions 的 Admin SDK 操作，Flutter 端沒有 <code>cloud_firestore</code> dependency。
+      </p>
+      <p>目前所有 Flutter 平台與 Firebase CLI 的預設 project 都是 <code>ai-notes-555a6</code>，Storage bucket 為 <code>ai-notes-555a6.firebasestorage.app</code>。</p>
+
+      <h3>Firebase Storage</h3>
+      <table>
+        <thead><tr><th>路徑格式</th><th>寫入者</th><th>內容與 metadata</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>ai_note_jobs/{safeStorageId}/source/{timestamp}_{fileName}</code></td>
+            <td>Flutter <code>NoteGenerationManager</code></td>
+            <td>等待 AI 處理的 PDF。Content-Type 為 <code>application/pdf</code>，custom metadata 包含原始 <code>storageId</code> 與 <code>sourceFileName</code>。</td>
+          </tr>
+          <tr>
+            <td><code>ai_note_jobs/{safeStorageId}/notes/notes.json</code></td>
+            <td><code>generateNotesFromPdf</code> Function</td>
+            <td>OpenAI 產生的 <code>{ pages: [...] }</code>。Content-Type 為 <code>application/json</code>，metadata 包含 <code>storageId</code>。</td>
+          </tr>
+          <tr>
+            <td><code>users/{userId}/referenced_files/{nodeId}_{fileName}</code></td>
+            <td>Flutter <code>FirebaseUploadService</code></td>
+            <td>Dashboard 備份的本機實體檔案。資料夾節點不會上傳；目前 <code>DashboardViewModel</code> 的預設 userId 是 <code>jenny</code>。</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Dashboard 備份會計算 MD5，和 <code>upload_metadata.json</code> 比對；hash 相同且 SQLite 已有相同 <code>cloudPath</code> 就跳過。
+        上傳成功後，Storage object path 會回寫 <code>items.cloudPath</code>。目前程式只上傳有 <code>filePath</code> 的節點，沒有實作還原流程，也沒有實際上傳 SQLite database file。
+      </p>
+
+      <h3>Cloud Firestore</h3>
+      <p><code>generateNotesFromPdf</code> 會更新 <code>ai_note_jobs/{safeStorageId}</code>，主要提供後端工作紀錄：</p>
+      <table>
+        <thead><tr><th>欄位</th><th>寫入時機</th><th>說明</th></tr></thead>
+        <tbody>
+          <tr><td><code>status</code></td><td>開始／成功／失敗</td><td><code>running</code>、<code>completed</code>、<code>failed</code>。</td></tr>
+          <tr><td><code>pdfStoragePath</code></td><td>開始</td><td>輸入 PDF 的 Storage path。</td></tr>
+          <tr><td><code>notesStoragePath</code></td><td>成功</td><td>輸出 notes JSON 的 Storage path。</td></tr>
+          <tr><td><code>pageCount</code></td><td>成功</td><td>產生的頁數。</td></tr>
+          <tr><td><code>error</code></td><td>失敗</td><td>Function 捕捉到的錯誤訊息。</td></tr>
+          <tr><td><code>updatedAt</code></td><td>每次更新</td><td>Firestore server timestamp。</td></tr>
+        </tbody>
+      </table>
+      <p>Flutter 不讀取或監聽這份 Firestore document；完成訊號來自同一個長 HTTP response。Firestore 在目前流程中主要用於後端狀態與錯誤紀錄。</p>
+
+      <h3>Cloud Functions</h3>
+      <table>
+        <thead><tr><th>Function</th><th>資源設定</th><th>責任</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>chat</code></td>
+            <td>120 秒、512 MB</td>
+            <td>接收 <code>notes</code>、<code>transcript</code>、<code>history</code>、<code>question</code>，建立學習助理 prompt，呼叫 OpenAI Chat Completions，回傳 <code>{ answer }</code>。</td>
+          </tr>
+          <tr><td><code>generateNotesFromPdf</code></td><td>540 秒、1 GB</td><td>同步 HTTP Function。下載 Storage PDF、呼叫 OpenAI、保存 notes JSON 與 Firestore 狀態，完成後在同一個 response 回傳 pages。</td></tr>
+          <tr>
+            <td><code>azureSpeechToken</code></td>
+            <td>60 秒、256 MB</td>
+            <td>使用後端的 <code>AZURE_SPEECH_KEY</code> 向 Azure issueToken endpoint 換取短期 token。Azure key 不需要進入 Flutter bundle。</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="caption">三個 Functions 都已以 Python 3.13 部署到 <code>ai-notes-555a6</code>。<code>azureSpeechToken</code> 已部署，但 project 尚未設定 <code>AZURE_SPEECH_KEY</code>，因此呼叫時會回傳設定錯誤。</p>
+      <p>
+        Functions 使用 Python 3.13 與 Firebase Functions 2nd Gen，region 由 <code>FUNCTION_REGION</code> 控制，預設 <code>us-central1</code>。
+        OpenAI model 可由 <code>OPENAI_CHAT_MODEL</code>、<code>OPENAI_NOTE_MODEL</code> 或 <code>OPENAI_MODEL</code> 覆寫，預設為 <code>gpt-4o-mini</code>；Azure region 預設 <code>eastasia</code>。
+      </p>
+
+      <h3>Flutter 如何呼叫 Functions</h3>
+      <p>
+        <code>FirebaseFunctionClient</code> 使用一般 HTTP POST，而不是 <code>cloud_functions</code> plugin。預設 URL 為
+        <code>https://{region}-{projectId}.cloudfunctions.net/{functionName}</code>，亦可用 Dart define 覆寫 base URL、project、region 或個別 Function URL，方便 emulator 與部署環境切換。
+      </p>
+      <div class="note danger">
+        <strong>安全現況：</strong>HTTP endpoints 都允許 <code>Access-Control-Allow-Origin: *</code>，目前沒有 Firebase Auth、App Check 或 request-level authorization。正式公開前應限制呼叫來源、加入身分驗證與配額／濫用防護。OpenAI 與 Azure secrets 只應存在 Functions 環境設定。
+      </div>
+    </section>
+
+    <section id="flows">
+      <h2>6. 端到端資料流</h2>
       <div class="grid-2">
-        <div class="mini-card">
-          <h3>PDF 到 AI notes</h3>
-          <p><code>SlidesPanel._pickAndLoadPdf</code> → <code>SlidesViewModel.savePdfPath</code> → <code>LectureView._handlePdfUploaded</code> → <code>LectureNotesViewModel.generateFromPdf</code> → <code>NoteRepository</code> → <code>NoteGenerationService</code> → <code>functions.generateNotesFromPdf</code></p>
+        <div class="card">
+          <h3>PDF → AI notes</h3>
+          <ol>
+            <li>SlidesPanel 將 PDF 複製到 <code>lecture_slides/</code> 並保存 <code>filePath</code>。</li>
+            <li>LectureNotesViewModel 呼叫 App-level singleton <code>NoteGenerationManager</code>。</li>
+            <li>Manager 上傳 PDF，並把實際 <code>storageBucket</code> 與 object path 傳給長時間 <code>generateNotesFromPdf</code> request，避免 App 與 Function 使用不同 default bucket。</li>
+            <li>LectureView 關閉時只移除 ViewModel 的 stream subscription；Manager 與 HTTP client 不會 dispose，因此 App process 存活期間 request 會繼續。</li>
+            <li>Function 完成後 Manager 保存本機 <code>notes.json</code> 與逐頁 Markdown，再廣播 completed 狀態。</li>
+            <li>重進 Lecture 時會讀取 Manager 現有狀態；新結果成功前保留舊摘要。</li>
+          </ol>
         </div>
-        <div class="mini-card">
-          <h3>Live transcript</h3>
-          <p><code>LectureView._handleRecordingToggle</code> 同時控制 <code>GeminiLiveSpeechService</code> 與 <code>TranscriptExportService</code>。這段仍是主要尚未拆成 MVVM 的 workflow。</p>
+
+        <div class="card">
+          <h3>問題 → Chatbot 回答</h3>
+          <ol>
+            <li>ChatRepository 載入或建立 conversation，先把 user message 寫入 SQLite。</li>
+            <li>組合 AI notes、目前逐字稿、recent history 與 question。</li>
+            <li><code>chat</code> Function 呼叫 OpenAI 並回傳答案。</li>
+            <li>assistant message 寫入 SQLite，ChatViewModel 通知 UI 更新。</li>
+          </ol>
         </div>
-        <div class="mini-card">
-          <h3>Chatbot</h3>
-          <p><code>ChatbotPanel._sendMessage</code> → <code>ChatViewModel.sendMessage</code> → <code>ChatRepository.requestAssistantReply</code> → <code>ChatFunctionService.ask</code> → <code>functions.chat</code></p>
+
+        <div class="card">
+          <h3>麥克風 → 即時逐字稿</h3>
+          <ol>
+            <li>App 從 Function 取得 Azure 短期 token。</li>
+            <li>App 直接將 PCM audio 送往 Azure WebSocket。</li>
+            <li>partial/final transcript 經 stream 更新 LectureView。</li>
+            <li>完整 chunks 寫本機 JSON；每 10 秒增量寫 session segment。</li>
+            <li>segment 同時送入 broadcast stream，預留給面板／agent 使用。</li>
+          </ol>
         </div>
-        <div class="mini-card">
-          <h3>Firebase backup</h3>
-          <p><code>Dashboard._uploadToFirebase</code> → <code>DashboardViewModel.uploadToFirebase</code> → <code>FileTreeRepository.backupToFirebase</code> → <code>FirebaseUploadService.uploadAllFiles</code></p>
+
+        <div class="card">
+          <h3>Dashboard → Firebase 備份</h3>
+          <ol>
+            <li>讀取 SQLite 全部 <code>items</code>。</li>
+            <li>排除 system_folder、folder、course 與沒有 <code>filePath</code> 的節點。</li>
+            <li>檔案不存在則跳過；MD5 未變更則跳過上傳。</li>
+            <li>檔案上傳 <code>referenced_files</code>，回寫 SQLite <code>cloudPath</code>。</li>
+            <li>ViewModel 以 progress callback 更新備份 dialog。</li>
+          </ol>
         </div>
       </div>
     </section>
 
-    <section id="notes">
-      <h2>6. 開發注意事項</h2>
+    <section id="files">
+      <h2>7. 主要檔案索引</h2>
+      <table>
+        <thead><tr><th>路徑</th><th>角色</th></tr></thead>
+        <tbody>
+          <tr><td><code>lib/main.dart</code></td><td>Firebase 初始化、GoRouter、全域 theme。</td></tr>
+          <tr><td><code>lib/screens/lecture_view.dart</code></td><td>Lecture workspace 協調者：面板 layout、語音／Demo、10 秒 timer、segment stream、PDF AI notes。</td></tr>
+          <tr><td><code>lib/widgets/slides_panel.dart</code></td><td>PDF 匯入、保存、開啟與 annotation manager。</td></tr>
+          <tr><td><code>lib/widgets/transcript_panel.dart</code></td><td>即時逐字稿 UI、錄音控制、Demo switch、狀態顯示。</td></tr>
+          <tr><td><code>lib/widgets/summary_panel.dart</code></td><td>逐頁 Markdown AI notes 與產生狀態。</td></tr>
+          <tr><td><code>lib/widgets/chatbot_panel.dart</code></td><td>聊天 UI；實際 session 與 request 狀態由 ChatViewModel 管理。</td></tr>
+          <tr><td><code>lib/database/database_helper.dart</code></td><td>SQLite schema、課程樹 CRUD、聊天、AI notes／transcript 聚合、annotation persistence。</td></tr>
+          <tr><td><code>lib/repositories/file_tree_repository.dart</code></td><td>Dashboard／CourseDetails 的節點操作與 Firebase 備份入口。</td></tr>
+          <tr><td><code>lib/repositories/chat_repository.dart</code></td><td>SQLite 聊天 session + chat Function 的工作流程。</td></tr>
+          <tr><td><code>lib/services/note_generation_manager.dart</code></td><td>App-level summary 工作管理：PDF upload、長 HTTP request、本機 notes、狀態廣播、去重與重試。</td></tr>
+          <tr><td><code>lib/services/azure_speech_service.dart</code></td><td>Azure WebSocket protocol、PCM framing、partial/final transcript 與本機 chunks。</td></tr>
+          <tr><td><code>lib/services/transcript_export_service.dart</code></td><td>10 秒 delta segment、recording item 與 broadcast callback。</td></tr>
+          <tr><td><code>lib/services/firebase_function_client.dart</code></td><td>共用 HTTP Function URL、POST、timeout 與錯誤解析。</td></tr>
+          <tr><td><code>lib/services/firebase_upload_service.dart</code></td><td>Firebase Storage 備份、MD5 快取、cloudPath 回寫。</td></tr>
+          <tr><td><code>lib/services/auth_service.dart</code></td><td>呼叫 <code>azureSpeechToken</code>；類別名稱為 <code>AzureAuthService</code>，不是使用者登入服務。</td></tr>
+          <tr><td><code>functions_python/main.py</code></td><td>Python 3.13：chat、同步 PDF notes、Azure token 三個 2nd Gen HTTP Functions。</td></tr>
+          <tr><td><code>docs/transcript_streaming_guideline.md</code></td><td>segment stream 的消費、subscription lifecycle 與測試範例。</td></tr>
+        </tbody>
+      </table>
+      <p class="caption">
+        <code>speech_service.dart</code>、<code>gemini_live_speech_service.dart</code> 與 <code>views/azure_lecture_view.dart</code> 仍在 repository 中，但主要 lecture route 現在使用
+        <code>screens/lecture_view.dart</code> + <code>azure_speech_service.dart</code>。
+      </p>
+    </section>
+
+    <section id="boundaries">
+      <h2>8. 現況與設計邊界</h2>
       <ul>
-        <li>
-          <strong>Firebase project 要對齊。</strong>目前 <code>firebase_options.dart</code> 的 web/android 是 <code>ai-notes-555a6</code>，iOS/macOS/windows 是 <code>speech-recognition-7d363</code>。跑桌面版時，很可能打到不同 Storage/Functions project。
-        </li>
-        <li>
-          <strong>Storage 有檔案不代表 notes 已完成。</strong>PDF source upload 成功後，還要等 Function 寫出 <code>ai_note_jobs/{fileId}/notes/notes.json</code> 或直接回傳 <code>pages</code>。
-        </li>
-        <li>
-          <strong>Firestore 是環境前置條件。</strong><code>generateNotesFromPdf</code> 會寫 job state；目前若已經能看到 Firestore 資料庫畫面就不用再處理。只有換 project 或新建環境時，才需要先啟用 Cloud Firestore，否則會出現 gRPC <code>NOT_FOUND</code>。
-        </li>
-        <li>
-          <strong>SQLite 與 local files 是兩層。</strong><code>items.filePath</code> 只記本機路徑；檔案本體在 app documents，例如 <code>lecture_slides/</code>、<code>transcripts/</code>、<code>ai_notes/</code>。
-        </li>
-        <li>
-          <strong>legacy 檔案不要當主流程。</strong>Azure STT、<code>speech_to_text</code>、static transcript data 目前沒有從 <code>main.dart</code> route 掛進 active app。
-        </li>
+        <li><span class="tag">Local-first</span> 課程樹、聊天與主要索引以 SQLite 為準；Firebase 不是完整同步資料庫。</li>
+        <li><span class="tag">No push</span> 專案沒有 <code>firebase_messaging</code> 或 local notification；目前「通知」是 UI <code>SnackBar</code> 與 Dart stream 事件。</li>
+        <li><span class="tag">Stream ready</span> segment stream 的 producer 已完成，但 Slides／Summary／Chatbot 的 consumer 邏輯尚未實作。</li>
+        <li><span class="tag">App process</span> PDF notes request 可跨 Lecture 頁面繼續，但仍依賴 Flutter process；App 被關閉或系統終止時無法繼續或恢復。</li>
+        <li><span class="tag">Backup only</span> Firebase 備份沒有 restore、刪除同步、衝突解決或多使用者登入；預設 userId 仍是固定字串。</li>
+        <li><span class="tag">Security</span> Functions endpoint 尚未驗證呼叫者；若進入正式環境，Auth／App Check／Storage Rules／Firestore Rules 應視為必要工作。</li>
       </ul>
+      <div class="note">
+        維護架構文件時，請直接修改既有模組描述。例如語音流程改變，就更新「逐字稿流程」與相關檔案索引；只有新增全新子系統時才增加新章節，避免文件變成按日期堆疊的 changelog。
+      </div>
     </section>
   </main>
 </body>
