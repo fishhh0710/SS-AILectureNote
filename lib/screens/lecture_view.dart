@@ -8,6 +8,7 @@ import '../widgets/chatbot_panel.dart';
 import '../services/gemini_live_speech_service.dart';
 import '../services/transcript_export_service.dart';
 import '../viewmodels/lecture_notes_view_model.dart';
+import '../services/realtime_agent_coordinator.dart';
 import '../data/transcript_data.dart';
 
 class LectureView extends StatefulWidget {
@@ -27,6 +28,9 @@ class _LectureViewState extends State<LectureView> {
   bool _showChatbot = false;
   bool _isRecording = false;
   final GlobalKey _panelsAreaKey = GlobalKey();
+  final ValueNotifier<int> _currentPageNotifier = ValueNotifier<int>(1);
+  final GlobalKey<SlidesPanelState> _slidesPanelKey = GlobalKey<SlidesPanelState>();
+  RealtimeAgentCoordinator? _realtimeAgentCoordinator;
 
   late GeminiLiveSpeechService _speechService;
   late final LectureNotesViewModel _notesViewModel;
@@ -84,6 +88,8 @@ class _LectureViewState extends State<LectureView> {
   void dispose() {
     _demoTimer?.cancel();
     _segmentStreamController.close();
+    _realtimeAgentCoordinator?.dispose();
+    _currentPageNotifier.dispose();
     _notesViewModel
       ..removeListener(_handleNotesStateChanged)
       ..dispose();
@@ -211,6 +217,9 @@ class _LectureViewState extends State<LectureView> {
         _speechService.toggleListening();
       }
 
+      _realtimeAgentCoordinator?.dispose();
+      _realtimeAgentCoordinator = null;
+
       _exportTimer?.cancel();
       _exportTimer = null;
 
@@ -267,6 +276,19 @@ class _LectureViewState extends State<LectureView> {
 
     try {
       await exportService.start();
+      
+      final state = _slidesPanelKey.currentState;
+      if (state != null) {
+        _realtimeAgentCoordinator = RealtimeAgentCoordinator(
+          storageId: widget.fileId,
+          slidesViewModel: state.viewModel,
+          notesViewModel: _notesViewModel,
+          currentPageNotifier: _currentPageNotifier,
+          segmentStream: _segmentStreamController.stream,
+          getAnnotationManager: () => _slidesPanelKey.currentState?.annotationManager,
+          getPdfDocument: () => _slidesPanelKey.currentState?.document,
+        );
+      }
     } catch (e) {
       _exportService = null;
       if (!mounted) return;
@@ -405,13 +427,14 @@ class _LectureViewState extends State<LectureView> {
     switch (id) {
       case "slides":
         panel = SlidesPanel(
-          key: const ValueKey("slides"),
+          key: _slidesPanelKey,
           width: width,
           index: index,
           fileId: widget.fileId,
           onClose: () => setState(() => _showSlides = false),
           onPdfUploaded: _handlePdfUploaded,
           segmentStream: _segmentStreamController.stream,
+          currentPageNotifier: _currentPageNotifier,
         );
         break;
       case "transcript":

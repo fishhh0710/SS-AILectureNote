@@ -11,17 +11,22 @@ class NoteRepository {
     return _service.loadSavedNotes(storageId);
   }
 
-  Future<List<AiPageNote>> generateAndSaveNotes({
+  Future<void> clearSavedNotes(String storageId) {
+    return _service.clearSavedNotes(storageId);
+  }
+
+  Future<List<AiPageNote>> generateNotes({
     required String storageId,
     required String pdfPath,
-  }) async {
-    await _service.clearSavedNotes(storageId);
-    final notes = await _service.generateNotesFromPdf(
+  }) {
+    return _service.generateNotesFromPdf(
       storageId: storageId,
       pdfPath: pdfPath,
     );
-    await _service.saveNotes(storageId, notes);
-    return notes;
+  }
+
+  Future<void> saveNotes(String storageId, List<AiPageNote> notes) {
+    return _service.saveNotes(storageId, notes);
   }
 
   void dispose() {

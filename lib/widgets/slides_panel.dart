@@ -20,6 +20,7 @@ class SlidesPanel extends StatefulWidget {
   final VoidCallback onClose;
   final Future<void> Function(String filePath)? onPdfUploaded;
   final Stream<Map<String, dynamic>>? segmentStream;
+  final ValueNotifier<int>? currentPageNotifier;
 
   const SlidesPanel({
     super.key,
@@ -29,13 +30,14 @@ class SlidesPanel extends StatefulWidget {
     required this.fileId,
     this.onPdfUploaded,
     this.segmentStream,
+    this.currentPageNotifier,
   });
 
   @override
-  State<SlidesPanel> createState() => _SlidesPanelState();
+  State<SlidesPanel> createState() => SlidesPanelState();
 }
 
-class _SlidesPanelState extends State<SlidesPanel> {
+class SlidesPanelState extends State<SlidesPanel> {
   PdfDocument? _document;
   late SlidesViewModel _viewModel;
   bool _isLoading = false;
@@ -43,6 +45,11 @@ class _SlidesPanelState extends State<SlidesPanel> {
   PageAnnotationManager? _annotationManager;
   bool _showAnnotations = true;
   final Set<int> _processingPages = {};
+  final ScrollController _scrollController = ScrollController();
+
+  PageAnnotationManager? get annotationManager => _annotationManager;
+  PdfDocument? get document => _document;
+  SlidesViewModel get viewModel => _viewModel;
 
   int? get _nodeId => int.tryParse(widget.fileId);
 
@@ -50,7 +57,19 @@ class _SlidesPanelState extends State<SlidesPanel> {
   void initState() {
     super.initState();
     _viewModel = SlidesViewModel(fileId: widget.fileId);
+    _scrollController.addListener(_onScroll);
     unawaited(_loadSavedPdf());
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients || _document == null) return;
+    final double offset = _scrollController.offset;
+    final int estimatedPage = (offset / 600.0).round() + 1;
+    final totalPages = _document?.pages.length ?? 1;
+    final finalPage = estimatedPage.clamp(1, totalPages);
+    if (widget.currentPageNotifier != null && widget.currentPageNotifier!.value != finalPage) {
+      widget.currentPageNotifier!.value = finalPage;
+    }
   }
 
   @override
@@ -202,11 +221,20 @@ class _SlidesPanelState extends State<SlidesPanel> {
     final annotationManager = _annotationManager;
     if (annotationManager == null) return;
 
-    setState(() {
-      _processingPages.clear();
-    });
-
     try {
+      final status = await annotationManager.getGenerationStatus();
+      if (status == 'completed') {
+        print('DEBUG: Bounding boxes already generated, skipping auto-annotation.');
+        return;
+      }
+
+      await annotationManager.clearAll();
+      await annotationManager.setGenerationStatus('generating');
+
+      setState(() {
+        _processingPages.clear();
+      });
+
       await _viewModel.processAllPages(
         document: doc,
         annotationManager: annotationManager,
@@ -221,6 +249,11 @@ class _SlidesPanelState extends State<SlidesPanel> {
           });
         },
       );
+
+      if (!annotationManager.isDisposed) {
+        await annotationManager.setGenerationStatus('completed');
+        print('DEBUG: Auto-annotation completed successfully.');
+      }
     } catch (e) {
       print('DEBUG: Error auto-annotating pages: $e');
     }
@@ -228,6 +261,8 @@ class _SlidesPanelState extends State<SlidesPanel> {
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _annotationManager?.dispose();
     final document = _document;
     if (document != null) {
@@ -388,6 +423,7 @@ class _SlidesPanelState extends State<SlidesPanel> {
     }
 
     return ListView.builder(
+      controller: _scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
       itemCount: document.pages.length,
       itemBuilder: (context, idx) {

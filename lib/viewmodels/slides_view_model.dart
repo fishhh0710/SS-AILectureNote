@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -146,6 +147,131 @@ class SlidesViewModel extends ChangeNotifier {
     } catch (e) {
       debugPrint('Failed to process page $pageIndex: $e');
       rethrow;
+    }
+  }
+
+  /// Runs OpenCV contour/morph and matching against agent targets,
+  /// adding new bounding box annotations to the page dynamically.
+  Future<void> processPageWithTargets({
+    required PdfPage page,
+    required int pageIndex,
+    required List<Map<String, dynamic>> targets,
+    required PageAnnotationManager annotationManager,
+  }) async {
+    try {
+      if (targets.isEmpty) return;
+
+      // 1. Render the page to a high-resolution raw pixel buffer
+      final pdfImage = await page.render(
+        width: (page.width * 1.5).toInt(),
+        height: (page.height * 1.5).toInt(),
+      );
+      if (pdfImage == null) return;
+
+      // 2. Decode raw BGRA pixels to a Flutter ui.Image and encode as PNG bytes
+      final completer = Completer<ui.Image>();
+      ui.decodeImageFromPixels(
+        pdfImage.pixels,
+        pdfImage.width,
+        pdfImage.height,
+        ui.PixelFormat.bgra8888,
+        (ui.Image img) {
+          completer.complete(img);
+        },
+      );
+      final uiImage = await completer.future;
+      final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
+      pdfImage.dispose(); // Release native image resources early
+      
+      if (byteData == null) return;
+      final pngBytes = byteData.buffer.asUint8List();
+
+      // Convert targets list to JSON string
+      final targetsJson = jsonEncode(targets);
+
+      // 3. Request bounding boxes matching the targets from the REST API
+      final response = await _bboxService.fetchAgentPipeline(pngBytes, targetsJson);
+
+      // 4. Map the bounding boxes back to relative coordinates and add them
+      final double imgWidth = pdfImage.width.toDouble();
+      final double imgHeight = pdfImage.height.toDouble();
+
+      for (final item in response) {
+        final label = item['label'] as String;
+        final colorName = item['color'] as String? ?? 'red';
+        final coordsList = item['box'] as List<dynamic>?;
+        
+        if (coordsList != null && coordsList.length == 4) {
+          final double x1 = (coordsList[0] as num).toDouble();
+          final double y1 = (coordsList[1] as num).toDouble();
+          final double x2 = (coordsList[2] as num).toDouble();
+          final double y2 = (coordsList[3] as num).toDouble();
+
+          // Normalize absolute pixel coordinates to relative (0.0 to 1.0)
+          final rx = x1 / imgWidth;
+          final ry = y1 / imgHeight;
+          final rw = (x2 - x1) / imgWidth;
+          final rh = (y2 - y1) / imgHeight;
+
+          // Parse color string to ui.Color
+          ui.Color colorVal;
+          switch (colorName.toLowerCase()) {
+            case 'green':
+              colorVal = const ui.Color(0xFF00FF00);
+              break;
+            case 'blue':
+              colorVal = const ui.Color(0xFF0000FF);
+              break;
+            case 'yellow':
+              colorVal = const ui.Color(0xFFFFFF00);
+              break;
+            case 'cyan':
+              colorVal = const ui.Color(0xFF00FFFF);
+              break;
+            case 'magenta':
+              colorVal = const ui.Color(0xFFFF00FF);
+              break;
+            case 'orange':
+              colorVal = const ui.Color(0xFFFFA500);
+              break;
+            case 'purple':
+              colorVal = const ui.Color(0xFF800080);
+              break;
+            case 'white':
+              colorVal = const ui.Color(0xFFFFFFFF);
+              break;
+            case 'black':
+              colorVal = const ui.Color(0xFF000000);
+              break;
+            default:
+              colorVal = const ui.Color(0xFFFF0000); // Default to Red
+          }
+
+          // Check if an annotation with the exact same label already exists on this page.
+          // If it does, delete it so we can update it dynamically with new coordinates.
+          final existingNotifier = annotationManager.getPageNotifier(pageIndex);
+          final existingList = List<Annotation>.from(existingNotifier.value);
+          for (final ann in existingList) {
+            if (ann is RectAnnotation && ann.label == label) {
+              annotationManager.deleteAnnotation(pageIndex, ann.id);
+            }
+          }
+
+          final annotation = RectAnnotation(
+            id: 'rect_${DateTime.now().microsecondsSinceEpoch}',
+            pageIndex: pageIndex,
+            color: colorVal,
+            x: rx,
+            y: ry,
+            width: rw,
+            height: rh,
+            label: label,
+          );
+          annotationManager.addAnnotation(pageIndex, annotation);
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to process page with targets $pageIndex: $e');
     }
   }
 

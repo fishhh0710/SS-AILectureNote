@@ -51,11 +51,14 @@ class LectureNotesViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final notes = await _repository.generateAndSaveNotes(
+      await _repository.clearSavedNotes(storageId);
+      final notes = await _repository.generateNotes(
         storageId: storageId,
         pdfPath: pdfPath,
       );
       if (requestId != _requestId) return;
+
+      await _repository.saveNotes(storageId, notes);
 
       _notes = notes;
       _isGenerating = false;
@@ -78,6 +81,39 @@ class LectureNotesViewModel extends ChangeNotifier {
 
   void cancelPending() {
     _requestId++;
+  }
+
+  Future<void> appendNoteToPage({
+    required String storageId,
+    required int pageNumber,
+    required String additionalMarkdown,
+  }) async {
+    final updatedNotes = _notes.map((note) {
+      if (note.pageNumber == pageNumber) {
+        final currentText = note.markdown;
+        String newMarkdown;
+        if (currentText.contains('### Live Lecture Updates')) {
+          newMarkdown = "$currentText\n$additionalMarkdown";
+        } else {
+          newMarkdown = "$currentText\n\n### Live Lecture Updates\n$additionalMarkdown";
+        }
+        return AiPageNote(
+          pageNumber: note.pageNumber,
+          markdown: newMarkdown,
+        );
+      }
+      return note;
+    }).toList();
+
+    _notes = updatedNotes;
+    notifyListeners();
+
+    try {
+      await _repository.saveNotes(storageId, _notes);
+    } catch (e) {
+      // ignore: avoid_print
+      print('Failed to save notes after live update: $e');
+    }
   }
 
   @override

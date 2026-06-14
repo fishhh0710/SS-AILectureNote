@@ -4,7 +4,8 @@ const os = require("os");
 const path = require("path");
 
 const admin = require("firebase-admin");
-const functions = require("firebase-functions/v1");
+const { onRequest } = require("firebase-functions/v2/https");
+const logger = require("firebase-functions/logger");
 const OpenAIImport = require("openai");
 
 const OpenAI = OpenAIImport.default || OpenAIImport;
@@ -42,10 +43,14 @@ const pageNotesSchema = {
   additionalProperties: false,
 };
 
-exports.chat = functions
-  .region(region)
-  .runWith({ timeoutSeconds: 120, memory: "512MB" })
-  .https.onRequest(async (req, res) => {
+exports.chat = onRequest(
+  {
+    region: region,
+    timeoutSeconds: 120,
+    memory: "512MiB",
+    secrets: ["OPENAI_API_KEY"],
+  },
+  async (req, res) => {
     if (handleCors(req, res)) return;
 
     try {
@@ -76,12 +81,84 @@ exports.chat = functions
     } catch (error) {
       sendError(res, error);
     }
-  });
+  }
+);
 
-exports.generateNotesFromPdf = functions
-  .region(region)
-  .runWith({ timeoutSeconds: 540, memory: "1GB" })
-  .https.onRequest(async (req, res) => {
+exports.realtimeAgent = onRequest(
+  {
+    region: region,
+    timeoutSeconds: 120,
+    memory: "512MiB",
+    secrets: ["OPENAI_API_KEY"],
+  },
+  async (req, res) => {
+    if (handleCors(req, res)) return;
+
+    try {
+      const payload = requestPayload(req);
+      const currentSummary = optionalString(payload.currentSummary);
+      const chunk = requiredString(payload, "chunk");
+
+      const openai = openAIClient();
+      const prompt = `
+You are an AI learning assistant agent. You monitor a live lecture transcript stream and the current slide's AI summary.
+
+Task:
+1. Identify if the professor is actively explaining or highlighting a specific element on the slide. If so, describe it as a target for our bounding box tool.
+2. If the professor provides new, important explanation or context not already in the summary, generate a concise bullet point in Markdown to append.
+
+Current Slide Summary:
+${currentSummary}
+
+Transcript Chunk:
+"${chunk}"
+
+Response format:
+You must reply with a valid JSON object matching this schema:
+{
+  "targets": [
+    {
+      "text": "Name of the element",
+      "color": "red or green or blue or orange",
+      "what to create the bounding box for": "description of the element/diagram component on the slide (e.g. 'the ALU block', 'the multiplexer near PC')"
+    }
+  ],
+  "additional_summary": "* **New Context**: Description of the addition (markdown format, or null if no new content)"
+}
+`;
+
+      const response = await openai.chat.completions.create({
+        model: process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini",
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+      });
+
+      const rawJson = response.choices?.[0]?.message?.content?.trim();
+      if (!rawJson) {
+        throw new Error("OpenAI response did not include an answer.");
+      }
+
+      res.json(JSON.parse(rawJson));
+    } catch (error) {
+      sendError(res, error);
+    }
+  }
+);
+
+exports.generateNotesFromPdf = onRequest(
+  {
+    region: region,
+    timeoutSeconds: 540,
+    memory: "1GiB",
+    secrets: ["OPENAI_API_KEY"],
+  },
+  async (req, res) => {
     if (handleCors(req, res)) return;
 
     let tempPdfPath;
@@ -153,7 +230,8 @@ exports.generateNotesFromPdf = functions
         await fsp.unlink(tempPdfPath).catch(() => {});
       }
     }
-  });
+  }
+);
 
 function handleCors(req, res) {
   res.set("Access-Control-Allow-Origin", "*");
@@ -182,9 +260,7 @@ function requestPayload(req) {
 }
 
 function openAIClient() {
-  const apiKey =
-    process.env.OPENAI_API_KEY ||
-    functions.config()?.openai?.key;
+  const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY is not configured for Firebase Functions.");
@@ -313,9 +389,9 @@ async function deleteUploadedOpenAIFile(openai, fileId) {
       return;
     }
 
-    functions.logger.warn("OpenAI SDK has no file delete method.", { fileId });
+    logger.warn("OpenAI SDK has no file delete method.", { fileId });
   } catch (error) {
-    functions.logger.warn("Failed to delete uploaded OpenAI file.", {
+    logger.warn("Failed to delete uploaded OpenAI file.", {
       fileId,
       message: error.message || String(error),
     });
@@ -366,7 +442,7 @@ function safeStorageId(value) {
 }
 
 function sendError(res, error) {
-  functions.logger.error(error);
+  logger.error(error);
   res.status(500).json({
     message: error.message || String(error),
   });
