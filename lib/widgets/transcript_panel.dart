@@ -78,7 +78,7 @@ class _TranscriptPanelState extends State<TranscriptPanel> {
         child: Column(
           children: [
             PanelHeader(
-              title: widget.isDemoMode ? '即時逐字稿 (Demo)' : '即時逐字稿',
+              title: '即時逐字稿',
               icon: Icons.subtitles,
               onClose: widget.onClose,
               index: widget.index,
@@ -177,9 +177,7 @@ class _EmptyTranscript extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            isDemoMode
-                ? '點擊上方播放按鈕，模擬即時課程逐字稿。'
-                : '點擊上方圖示或右下角按鈕開始紀錄課程',
+            isDemoMode ? '點擊上方播放按鈕，模擬即時課程逐字稿。' : '點擊上方圖示或右下角按鈕開始紀錄課程',
             style: const TextStyle(fontSize: 12, color: Color(0xFFA8A08E)),
           ),
           const SizedBox(height: 32),
@@ -223,7 +221,10 @@ class _TranscriptBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<String> chunks = text.split('\n\n').where((s) => s.trim().isNotEmpty).toList();
+    final List<String> chunks = text
+        .split('\n\n')
+        .where((s) => s.trim().isNotEmpty)
+        .toList();
 
     return ListView.builder(
       controller: controller,
@@ -294,11 +295,12 @@ class _TranscriptChunkCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: isFinished ? const Color(0xFF8E9775) : const Color(0xFFC88A58),
+                  color: isFinished
+                      ? const Color(0xFF8E9775)
+                      : const Color(0xFFC88A58),
                 ),
               ),
-              if (!isFinished)
-                const _PulsingDot(),
+              if (!isFinished) const _PulsingDot(),
             ],
           ),
           const SizedBox(height: 10),
@@ -344,7 +346,8 @@ class _PulsingDot extends StatefulWidget {
   State<_PulsingDot> createState() => _PulsingDotState();
 }
 
-class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderStateMixin {
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
@@ -385,7 +388,8 @@ class _BlinkingCursorInline extends StatefulWidget {
   State<_BlinkingCursorInline> createState() => _BlinkingCursorInlineState();
 }
 
-class _BlinkingCursorInlineState extends State<_BlinkingCursorInline> with SingleTickerProviderStateMixin {
+class _BlinkingCursorInlineState extends State<_BlinkingCursorInline>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
@@ -407,11 +411,7 @@ class _BlinkingCursorInlineState extends State<_BlinkingCursorInline> with Singl
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _controller,
-      child: Container(
-        width: 2,
-        height: 16,
-        color: const Color(0xFF8E9775),
-      ),
+      child: Container(width: 2, height: 16, color: const Color(0xFF8E9775)),
     );
   }
 }

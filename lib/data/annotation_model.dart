@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 abstract class Annotation {
   final String id; // Unique ID (Format: type_timestamp_random)
   final int pageIndex; // 1-indexed
-  final String type;   // "rect" | "text" ...
+  final String type; // "rect" | "text" ...
   final Color color;
 
   Annotation({
@@ -37,6 +37,7 @@ class RectAnnotation extends Annotation {
   final double width;
   final double height;
   final double strokeWidth;
+  final String? label;
 
   RectAnnotation({
     required super.id,
@@ -47,20 +48,22 @@ class RectAnnotation extends Annotation {
     required this.width,
     required this.height,
     this.strokeWidth = 2.0,
+    this.label,
   }) : super(type: 'rect');
 
   @override
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'pageIndex': pageIndex,
-        'type': type,
-        'color': '#${color.value.toRadixString(16).padLeft(8, '0')}',
-        'x': x,
-        'y': y,
-        'width': width,
-        'height': height,
-        'strokeWidth': strokeWidth,
-      };
+    'id': id,
+    'pageIndex': pageIndex,
+    'type': type,
+    'color': '#${color.value.toRadixString(16).padLeft(8, '0')}',
+    'x': x,
+    'y': y,
+    'width': width,
+    'height': height,
+    'strokeWidth': strokeWidth,
+    'label': label,
+  };
 
   factory RectAnnotation.fromJson(Map<String, dynamic> json) {
     return RectAnnotation(
@@ -72,6 +75,7 @@ class RectAnnotation extends Annotation {
       width: (json['width'] as num).toDouble(),
       height: (json['height'] as num).toDouble(),
       strokeWidth: (json['strokeWidth'] as num?)?.toDouble() ?? 2.0,
+      label: json['label'] as String?,
     );
   }
 
@@ -89,6 +93,43 @@ class RectAnnotation extends Annotation {
       height * size.height,
     );
     canvas.drawRect(rect, paint);
+
+    if (label != null && label!.isNotEmpty) {
+      final double scaledFontSize = 10.0 * (size.width / 850.0);
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: scaledFontSize > 8.0 ? scaledFontSize : 8.0,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+
+      final bgPaint = Paint()..color = color;
+      final double maxAllowedWidth = size.width * (1.0 - x);
+      textPainter.layout(
+        maxWidth: maxAllowedWidth > 50.0 ? maxAllowedWidth : 50.0,
+      );
+
+      double textY = (y * size.height) - textPainter.height - 4;
+      if (textY < 2) {
+        textY = (y * size.height) + 4;
+      }
+
+      final textOffset = Offset(x * size.width, textY);
+      final bgRect = Rect.fromLTWH(
+        textOffset.dx,
+        textOffset.dy,
+        textPainter.width + 4,
+        textPainter.height + 2,
+      );
+
+      canvas.drawRect(bgRect, bgPaint);
+      textPainter.paint(canvas, textOffset.translate(2, 1));
+    }
   }
 }
 
@@ -115,17 +156,17 @@ class TextAnnotation extends Annotation {
 
   @override
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'pageIndex': pageIndex,
-        'type': type,
-        'color': '#${color.value.toRadixString(16).padLeft(8, '0')}',
-        'x': x,
-        'y': y,
-        'text': text,
-        'fontSize': fontSize,
-        'fontFamily': fontFamily,
-        'autoWrap': autoWrap,
-      };
+    'id': id,
+    'pageIndex': pageIndex,
+    'type': type,
+    'color': '#${color.value.toRadixString(16).padLeft(8, '0')}',
+    'x': x,
+    'y': y,
+    'text': text,
+    'fontSize': fontSize,
+    'fontFamily': fontFamily,
+    'autoWrap': autoWrap,
+  };
 
   factory TextAnnotation.fromJson(Map<String, dynamic> json) {
     return TextAnnotation(
@@ -153,7 +194,9 @@ class TextAnnotation extends Annotation {
           color: color,
           fontSize: scaledFontSize,
           fontFamily: fontFamily,
-          backgroundColor: const Color(0xAAFFFFFF), // semi-transparent background to prevent overlaps
+          backgroundColor: const Color(
+            0xAAFFFFFF,
+          ), // semi-transparent background to prevent overlaps
         ),
       ),
       textDirection: TextDirection.ltr,

@@ -125,6 +125,99 @@ void main() {
     expect(viewModel.canRetry, isTrue);
     viewModel.dispose();
   });
+
+  test('persists and publishes a realtime summary addition', () async {
+    List<AiPageNote>? savedNotes;
+    final manager = NoteGenerationManager.testing(
+      loadSavedNotes: (_) async => oldNotes,
+      generateAndSaveNotes: ({required storageId, required pdfPath}) async {
+        return newNotes;
+      },
+      saveNotes: (storageId, notes) async {
+        savedNotes = notes;
+      },
+    );
+    final viewModel = LectureNotesViewModel(manager: manager);
+
+    await viewModel.loadSaved('lecture-1');
+    await viewModel.appendNoteToPage(
+      storageId: 'lecture-1',
+      pageNumber: 1,
+      additionalMarkdown: '* Teacher explanation',
+    );
+
+    expect(savedNotes, isNotNull);
+    expect(savedNotes!.single.markdown, contains('### Live Lecture Updates'));
+    expect(savedNotes!.single.markdown, contains('* Teacher explanation'));
+    await _waitFor(
+      () => viewModel.notes.single.markdown == savedNotes!.single.markdown,
+    );
+    expect(viewModel.notes, hasLength(1));
+    expect(viewModel.notes.single.pageNumber, savedNotes!.single.pageNumber);
+    expect(viewModel.notes.single.markdown, savedNotes!.single.markdown);
+    viewModel.dispose();
+  });
+
+  test('creates a live note when the current page has no summary', () async {
+    List<AiPageNote>? savedNotes;
+    final manager = NoteGenerationManager.testing(
+      loadSavedNotes: (_) async => const [],
+      generateAndSaveNotes: ({required storageId, required pdfPath}) async {
+        return newNotes;
+      },
+      saveNotes: (storageId, notes) async {
+        savedNotes = notes;
+      },
+    );
+    final viewModel = LectureNotesViewModel(manager: manager);
+
+    await viewModel.loadSaved('lecture-1');
+    await viewModel.appendNoteToPage(
+      storageId: 'lecture-1',
+      pageNumber: 2,
+      additionalMarkdown: '* New explanation',
+    );
+
+    expect(savedNotes, hasLength(1));
+    expect(savedNotes!.single.pageNumber, 2);
+    expect(savedNotes!.single.markdown, contains('* New explanation'));
+    viewModel.dispose();
+  });
+
+  test('preserves live updates when PDF generation finishes later', () async {
+    final generation = Completer<List<AiPageNote>>();
+    final manager = NoteGenerationManager.testing(
+      loadSavedNotes: (_) async => oldNotes,
+      generateAndSaveNotes: ({required storageId, required pdfPath}) {
+        return generation.future;
+      },
+      saveNotes: (storageId, notes) async {},
+    );
+
+    final operation = manager.generate(
+      storageId: 'lecture-1',
+      pdfPath: 'lecture.pdf',
+    );
+    await _waitFor(() => manager.stateFor('lecture-1').isGenerating);
+    await manager.updateNotes(
+      storageId: 'lecture-1',
+      notes: const [
+        AiPageNote(
+          pageNumber: 1,
+          markdown:
+              'Old summary\n\n### Live Lecture Updates\n* Teacher explanation',
+        ),
+      ],
+    );
+
+    generation.complete(newNotes);
+    await operation;
+
+    final note = manager.stateFor('lecture-1').notes.single;
+    expect(note.markdown, startsWith('New summary'));
+    expect(note.markdown, contains('### Live Lecture Updates'));
+    expect(note.markdown, contains('* Teacher explanation'));
+  });
 }
 
 Future<void> _waitFor(bool Function() condition) async {

@@ -242,6 +242,24 @@ firebase deploy --only functions:python
 ## 17. 本次未加入
 - 老師逐字稿自動補充 Summary。
 - Firestore realtime listener。
+
+## 23. Merge：transcript agent 與 bbox
+
+整合 feature/bbox 的 transcript segment consumer、自動 bbox 與 realtime agent。
+
+- `RealtimeAgentCoordinator` 訂閱每 10 秒的非空 segment。
+- segment 改以 queue 依序處理，不會因前一個 HTTP request 尚未完成而直接遺失。
+- 新增 Python `realtimeAgent` Function，回傳 `targets` 與 `additional_summary`。
+- realtime summary 由 `NoteGenerationManager.updateNotes()` 寫入本機 JSON／Markdown，再廣播給 Summary panel。
+- 若該頁尚無 PDF summary，先建立只有 `Live Lecture Updates` 的頁面筆記。
+- 若 PDF summary 較晚完成，合併並保留已收到的 realtime updates，不讓完整摘要覆蓋課堂補充。
+- `SlidesViewModel` 可呼叫 bbox Cloud Run API 進行全頁 detection，或只尋找 agent 指定 targets。
+- bbox 座標由 image pixel 正規化後存成原有 annotation model。
+- bbox generation status 存入 SQLite；已完成的 PDF 不重跑，未完成離頁會清除 partial annotations。
+- 修正 PDF render image 在讀取寬高前就被 dispose，以及 `ui.Image` 未釋放的問題。
+- 保留 Python Functions 架構，刪除 merge 帶回的 JavaScript `functions/index.js`。
+- 保留 `NoteGenerationManager`，不恢復已淘汰的 `NoteRepository`。
+- 新增 realtime note persistence、缺頁建立與 generation merge 測試。
 - 定時 polling。
 - FCM push notification。
 - 跨 App 重啟的工作恢復。

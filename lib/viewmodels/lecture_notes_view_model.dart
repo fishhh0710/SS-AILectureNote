@@ -55,6 +55,45 @@ class LectureNotesViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> appendNoteToPage({
+    required String storageId,
+    required int pageNumber,
+    required String additionalMarkdown,
+  }) async {
+    var pageFound = false;
+    final updatedNotes = _notes.map((note) {
+      if (note.pageNumber == pageNumber) {
+        pageFound = true;
+        final currentText = note.markdown;
+        String newMarkdown;
+        if (currentText.contains('### Live Lecture Updates')) {
+          newMarkdown = "$currentText\n$additionalMarkdown";
+        } else {
+          newMarkdown =
+              "$currentText\n\n### Live Lecture Updates\n$additionalMarkdown";
+        }
+        return AiPageNote(pageNumber: note.pageNumber, markdown: newMarkdown);
+      }
+      return note;
+    }).toList();
+
+    if (!pageFound) {
+      updatedNotes.add(
+        AiPageNote(
+          pageNumber: pageNumber,
+          markdown: '### Live Lecture Updates\n$additionalMarkdown',
+        ),
+      );
+    }
+
+    try {
+      await _manager.updateNotes(storageId: storageId, notes: updatedNotes);
+    } catch (e) {
+      _errorMessage = 'Failed to save live note update: $e';
+      notifyListeners();
+    }
+  }
+
   @override
   void dispose() {
     _disposed = true;

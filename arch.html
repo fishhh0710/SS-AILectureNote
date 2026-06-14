@@ -251,7 +251,7 @@ ViewModels ──► Repositories / App-level Managers ──► Services
 
       <p>
         App 入口是 <code>lib/main.dart</code>。它先使用 <code>firebase_options.dart</code> 初始化 Firebase，再建立 <code>GoRouter</code>。
-        Cloud Functions 入口是 <code>functions_python/main.py</code>，使用 Python 3.13，輸出 <code>chat</code>、<code>generateNotesFromPdf</code> 與 <code>azureSpeechToken</code> 三個 HTTP Functions。
+        Cloud Functions 入口是 <code>functions_python/main.py</code>，使用 Python 3.13，輸出 <code>chat</code>、<code>generateNotesFromPdf</code>、<code>realtimeAgent</code> 與 <code>azureSpeechToken</code> 四個 HTTP Functions。
       </p>
     </section>
 
@@ -289,9 +289,9 @@ ViewModels ──► Repositories / App-level Managers ──► Services
       <table>
         <thead><tr><th>面板</th><th>目前功能</th><th>主要依賴</th></tr></thead>
         <tbody>
-          <tr><td>Slides</td><td>匯入／開啟 PDF、投影片顯示、矩形與文字標記。</td><td><code>SlidesViewModel</code>、<code>PageAnnotationManager</code>、<code>pdfrx</code></td></tr>
+          <tr><td>Slides</td><td>匯入／開啟 PDF、投影片顯示、手動標記、整份 PDF 自動 bbox 與 agent 指定目標 bbox。</td><td><code>SlidesViewModel</code>、<code>PageAnnotationManager</code>、<code>BoundingBoxService</code>、<code>pdfrx</code></td></tr>
           <tr><td>Transcript</td><td>Azure 即時辨識、語言選擇、Demo Mode、錄音狀態與逐字稿顯示。</td><td><code>AzureSpeechService</code>、<code>TranscriptExportService</code></td></tr>
-          <tr><td>Summary</td><td>顯示 PDF 逐頁 Markdown 筆記、產生中／錯誤／重試狀態。</td><td><code>LectureNotesViewModel</code>、<code>NoteGenerationManager</code></td></tr>
+          <tr><td>Summary</td><td>顯示 PDF 逐頁 Markdown 筆記、產生狀態，並將課堂新增內容保存到目前頁的 <code>Live Lecture Updates</code>。</td><td><code>LectureNotesViewModel</code>、<code>NoteGenerationManager</code></td></tr>
           <tr><td>Chatbot</td><td>載入本機聊天紀錄，將 AI notes、逐字稿、history 與問題送到 Function。</td><td><code>ChatViewModel</code>、<code>ChatRepository</code></td></tr>
         </tbody>
       </table>
@@ -331,7 +331,7 @@ ViewModels ──► Repositories / App-level Managers ──► Services
       <h3>標記資料</h3>
       <p>
         PDF 標記沒有獨立資料表。<code>PageAnnotationManager</code> 將每頁的 rectangle/text annotations 序列化成 JSON，存回 SQLite 的節點內容；
-        <code>ValueNotifier</code> 提供畫面即時更新，dirty pages 再批次寫回資料庫。
+        <code>ValueNotifier</code> 提供畫面即時更新，dirty pages 再批次寫回資料庫。SQLite 也保存 bbox generation status；完成後重開 PDF 不重跑，未完成就離開時會清除 partial 結果，供下次重新產生。
       </p>
 
       <h3>App documents</h3>
@@ -382,10 +382,10 @@ ViewModels ──► Repositories / App-level Managers ──► Services
 }</code></pre>
       <p>
         寫檔後，Service 透過 <code>onSegmentExported</code> callback 將片段加入 broadcast <code>segmentStream</code>。
-        <code>LectureView</code> 已把這個 stream 傳給 Slides、Summary、Chatbot，讓未來 agent 可以在課程進行中逐段反應。
+        <code>LectureView</code> 另外建立 <code>RealtimeAgentCoordinator</code> 訂閱非空片段。Coordinator 以 queue 逐段呼叫 <code>realtimeAgent</code>，避免上一個 request 尚未完成時遺失後續 segment。
       </p>
-      <div class="note warning">
-        <strong>目前邊界：</strong>三個面板已宣告並接收 <code>segmentStream</code>，但面板內尚未呼叫 <code>listen()</code> 或使用 <code>StreamBuilder</code>，所以現在不會自動摘要、更新 chatbot context 或切換投影片。真正已運作的是分段寫檔與 stream 廣播。
+      <div class="note info">
+        <strong>Agent 輸出：</strong><code>additional_summary</code> 會加入目前頁並由 <code>NoteGenerationManager</code> 寫回本機 notes；<code>targets</code> 會交給 bbox service 尋找投影片元素並建立標記。Chatbot 尚未直接訂閱 segment。
       </div>
     </section>
 
@@ -448,6 +448,7 @@ ViewModels ──► Repositories / App-level Managers ──► Services
             <td>接收 <code>notes</code>、<code>transcript</code>、<code>history</code>、<code>question</code>，建立學習助理 prompt，呼叫 OpenAI Chat Completions，回傳 <code>{ answer }</code>。</td>
           </tr>
           <tr><td><code>generateNotesFromPdf</code></td><td>540 秒、1 GB</td><td>同步 HTTP Function。下載 Storage PDF、呼叫 OpenAI、保存 notes JSON 與 Firestore 狀態，完成後在同一個 response 回傳 pages。</td></tr>
+          <tr><td><code>realtimeAgent</code></td><td>120 秒、512 MB</td><td>接收目前頁 summary 與一段 transcript，讓 OpenAI 判斷新增的摘要內容及需要尋找的投影片元素，回傳 <code>{ targets, additional_summary }</code>。</td></tr>
           <tr>
             <td><code>azureSpeechToken</code></td>
             <td>60 秒、256 MB</td>
@@ -455,7 +456,7 @@ ViewModels ──► Repositories / App-level Managers ──► Services
           </tr>
         </tbody>
       </table>
-      <p class="caption">三個 Functions 都已以 Python 3.13 部署到 <code>ai-notes-555a6</code>。<code>azureSpeechToken</code> 已部署，但 project 尚未設定 <code>AZURE_SPEECH_KEY</code>，因此呼叫時會回傳設定錯誤。</p>
+      <p class="caption">四個 Functions 皆已以 Python 3.13 部署到 <code>ai-notes-555a6</code>。<code>azureSpeechToken</code> 已部署，但 project 尚未設定 <code>AZURE_SPEECH_KEY</code>，因此呼叫時會回傳設定錯誤。</p>
       <p>
         Functions 使用 Python 3.13 與 Firebase Functions 2nd Gen，region 由 <code>FUNCTION_REGION</code> 控制，預設 <code>us-central1</code>。
         OpenAI model 可由 <code>OPENAI_CHAT_MODEL</code>、<code>OPENAI_NOTE_MODEL</code> 或 <code>OPENAI_MODEL</code> 覆寫，預設為 <code>gpt-4o-mini</code>；Azure region 預設 <code>eastasia</code>。
@@ -465,6 +466,9 @@ ViewModels ──► Repositories / App-level Managers ──► Services
       <p>
         <code>FirebaseFunctionClient</code> 使用一般 HTTP POST，而不是 <code>cloud_functions</code> plugin。預設 URL 為
         <code>https://{region}-{projectId}.cloudfunctions.net/{functionName}</code>，亦可用 Dart define 覆寫 base URL、project、region 或個別 Function URL，方便 emulator 與部署環境切換。
+      </p>
+      <p>
+        Bbox 不走 Firebase Function。<code>BoundingBoxService</code> 將投影片頁面轉成 PNG，呼叫獨立 Cloud Run REST API 的 <code>/detect/pipeline</code> 或 <code>/detect/agent-pipeline</code>，再把 pixel coordinates 正規化為 0～1 的 PDF annotation 座標。
       </p>
       <div class="note danger">
         <strong>安全現況：</strong>HTTP endpoints 都允許 <code>Access-Control-Allow-Origin: *</code>，目前沒有 Firebase Auth、App Check 或 request-level authorization。正式公開前應限制呼叫來源、加入身分驗證與配額／濫用防護。OpenAI 與 Azure secrets 只應存在 Functions 環境設定。
@@ -503,7 +507,9 @@ ViewModels ──► Repositories / App-level Managers ──► Services
             <li>App 直接將 PCM audio 送往 Azure WebSocket。</li>
             <li>partial/final transcript 經 stream 更新 LectureView。</li>
             <li>完整 chunks 寫本機 JSON；每 10 秒增量寫 session segment。</li>
-            <li>segment 同時送入 broadcast stream，預留給面板／agent 使用。</li>
+            <li>segment 同時送入 broadcast stream，由 <code>RealtimeAgentCoordinator</code> 排隊處理。</li>
+            <li><code>realtimeAgent</code> 決定補充 summary、產生 bbox targets，或兩者皆不做。</li>
+            <li>summary 經 Manager 保存；targets 經 bbox Cloud Run API 轉成目前頁標記。</li>
           </ol>
         </div>
 
@@ -526,21 +532,23 @@ ViewModels ──► Repositories / App-level Managers ──► Services
         <thead><tr><th>路徑</th><th>角色</th></tr></thead>
         <tbody>
           <tr><td><code>lib/main.dart</code></td><td>Firebase 初始化、GoRouter、全域 theme。</td></tr>
-          <tr><td><code>lib/screens/lecture_view.dart</code></td><td>Lecture workspace 協調者：面板 layout、語音／Demo、10 秒 timer、segment stream、PDF AI notes。</td></tr>
-          <tr><td><code>lib/widgets/slides_panel.dart</code></td><td>PDF 匯入、保存、開啟與 annotation manager。</td></tr>
+          <tr><td><code>lib/screens/lecture_view.dart</code></td><td>Lecture workspace 協調者：面板 layout、語音／Demo、10 秒 timer、segment stream、PDF AI notes 與 realtime agent lifecycle。</td></tr>
+          <tr><td><code>lib/widgets/slides_panel.dart</code></td><td>PDF 匯入、保存、開啟、自動 bbox、目前頁追蹤與 annotation 顯示切換。</td></tr>
           <tr><td><code>lib/widgets/transcript_panel.dart</code></td><td>即時逐字稿 UI、錄音控制、Demo switch、狀態顯示。</td></tr>
           <tr><td><code>lib/widgets/summary_panel.dart</code></td><td>逐頁 Markdown AI notes 與產生狀態。</td></tr>
           <tr><td><code>lib/widgets/chatbot_panel.dart</code></td><td>聊天 UI；實際 session 與 request 狀態由 ChatViewModel 管理。</td></tr>
           <tr><td><code>lib/database/database_helper.dart</code></td><td>SQLite schema、課程樹 CRUD、聊天、AI notes／transcript 聚合、annotation persistence。</td></tr>
           <tr><td><code>lib/repositories/file_tree_repository.dart</code></td><td>Dashboard／CourseDetails 的節點操作與 Firebase 備份入口。</td></tr>
           <tr><td><code>lib/repositories/chat_repository.dart</code></td><td>SQLite 聊天 session + chat Function 的工作流程。</td></tr>
-          <tr><td><code>lib/services/note_generation_manager.dart</code></td><td>App-level summary 工作管理：PDF upload、長 HTTP request、本機 notes、狀態廣播、去重與重試。</td></tr>
+          <tr><td><code>lib/services/note_generation_manager.dart</code></td><td>App-level summary 工作管理：PDF upload、長 HTTP request、本機 notes、realtime 更新、狀態廣播、去重與重試。</td></tr>
           <tr><td><code>lib/services/azure_speech_service.dart</code></td><td>Azure WebSocket protocol、PCM framing、partial/final transcript 與本機 chunks。</td></tr>
           <tr><td><code>lib/services/transcript_export_service.dart</code></td><td>10 秒 delta segment、recording item 與 broadcast callback。</td></tr>
+          <tr><td><code>lib/services/realtime_agent_coordinator.dart</code></td><td>訂閱 transcript segments、依序呼叫 realtimeAgent，分派 summary 與 bbox 更新。</td></tr>
+          <tr><td><code>lib/services/bounding_box_service.dart</code></td><td>呼叫 bbox Cloud Run API，取得全頁或 agent-targeted detection 結果。</td></tr>
           <tr><td><code>lib/services/firebase_function_client.dart</code></td><td>共用 HTTP Function URL、POST、timeout 與錯誤解析。</td></tr>
           <tr><td><code>lib/services/firebase_upload_service.dart</code></td><td>Firebase Storage 備份、MD5 快取、cloudPath 回寫。</td></tr>
           <tr><td><code>lib/services/auth_service.dart</code></td><td>呼叫 <code>azureSpeechToken</code>；類別名稱為 <code>AzureAuthService</code>，不是使用者登入服務。</td></tr>
-          <tr><td><code>functions_python/main.py</code></td><td>Python 3.13：chat、同步 PDF notes、Azure token 三個 2nd Gen HTTP Functions。</td></tr>
+          <tr><td><code>functions_python/main.py</code></td><td>Python 3.13：chat、同步 PDF notes、realtime agent、Azure token 四個 2nd Gen HTTP Functions。</td></tr>
           <tr><td><code>docs/transcript_streaming_guideline.md</code></td><td>segment stream 的消費、subscription lifecycle 與測試範例。</td></tr>
         </tbody>
       </table>
@@ -555,7 +563,7 @@ ViewModels ──► Repositories / App-level Managers ──► Services
       <ul>
         <li><span class="tag">Local-first</span> 課程樹、聊天與主要索引以 SQLite 為準；Firebase 不是完整同步資料庫。</li>
         <li><span class="tag">No push</span> 專案沒有 <code>firebase_messaging</code> 或 local notification；目前「通知」是 UI <code>SnackBar</code> 與 Dart stream 事件。</li>
-        <li><span class="tag">Stream ready</span> segment stream 的 producer 已完成，但 Slides／Summary／Chatbot 的 consumer 邏輯尚未實作。</li>
+        <li><span class="tag">Realtime partial</span> Summary 與 Slides 已由 coordinator 消費 segment；Chatbot context、agent 重試與跨 App restart 的工作恢復尚未實作。</li>
         <li><span class="tag">App process</span> PDF notes request 可跨 Lecture 頁面繼續，但仍依賴 Flutter process；App 被關閉或系統終止時無法繼續或恢復。</li>
         <li><span class="tag">Backup only</span> Firebase 備份沒有 restore、刪除同步、衝突解決或多使用者登入；預設 userId 仍是固定字串。</li>
         <li><span class="tag">Security</span> Functions endpoint 尚未驗證呼叫者；若進入正式環境，Auth／App Check／Storage Rules／Firestore Rules 應視為必要工作。</li>

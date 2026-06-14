@@ -383,7 +383,9 @@ extension DatabaseHelperAnnotationExtension on DatabaseHelper {
 
     try {
       final decoded = jsonDecode(contentJson) as List<dynamic>;
-      return decoded.map((e) => Annotation.fromJson(e as Map<String, dynamic>)).toList();
+      return decoded
+          .map((e) => Annotation.fromJson(e as Map<String, dynamic>))
+          .toList();
     } catch (e) {
       print('解析頁面 $pageIndex 標記失敗: $e');
       return [];
@@ -391,10 +393,14 @@ extension DatabaseHelperAnnotationExtension on DatabaseHelper {
   }
 
   // 2. 儲存/更新特定頁面的標記
-  Future<void> savePageAnnotations(int pdfId, int pageIndex, List<Annotation> annotations) async {
+  Future<void> savePageAnnotations(
+    int pdfId,
+    int pageIndex,
+    List<Annotation> annotations,
+  ) async {
     final db = await database;
     final jsonString = jsonEncode(annotations.map((e) => e.toJson()).toList());
-    
+
     final existing = await db.query(
       'items',
       where: 'parentId = ? AND type = ? AND name = ?',
@@ -410,16 +416,13 @@ extension DatabaseHelperAnnotationExtension on DatabaseHelper {
         whereArgs: [nodeId],
       );
     } else {
-      await db.insert(
-        'items',
-        {
-          'parentId': pdfId,
-          'type': 'slide_annotation',
-          'name': 'page_$pageIndex',
-          'content': jsonString,
-          'createdAt': DateTime.now().toIso8601String(),
-        },
-      );
+      await db.insert('items', {
+        'parentId': pdfId,
+        'type': 'slide_annotation',
+        'name': 'page_$pageIndex',
+        'content': jsonString,
+        'createdAt': DateTime.now().toIso8601String(),
+      });
     }
   }
 
@@ -440,6 +443,56 @@ extension DatabaseHelperAnnotationExtension on DatabaseHelper {
       'items',
       where: 'parentId = ? AND type = ?',
       whereArgs: [pdfId, 'slide_annotation'],
+    );
+  }
+
+  // 5. 取得特定 PDF 的標記狀態 (status: "generating" | "completed")
+  Future<String?> getAnnotationStatus(int pdfId) async {
+    final db = await database;
+    final result = await db.query(
+      'items',
+      where: 'parentId = ? AND type = ? AND name = ?',
+      whereArgs: [pdfId, 'slide_annotation_status', 'status'],
+    );
+    if (result.isEmpty) return null;
+    return result.first['content'] as String?;
+  }
+
+  // 6. 設定特定 PDF 的標記狀態
+  Future<void> setAnnotationStatus(int pdfId, String status) async {
+    final db = await database;
+    final existing = await db.query(
+      'items',
+      where: 'parentId = ? AND type = ? AND name = ?',
+      whereArgs: [pdfId, 'slide_annotation_status', 'status'],
+    );
+
+    if (existing.isNotEmpty) {
+      final nodeId = existing.first['id'] as int;
+      await db.update(
+        'items',
+        {'content': status},
+        where: 'id = ?',
+        whereArgs: [nodeId],
+      );
+    } else {
+      await db.insert('items', {
+        'parentId': pdfId,
+        'type': 'slide_annotation_status',
+        'name': 'status',
+        'content': status,
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+    }
+  }
+
+  // 7. 刪除特定 PDF 的標記狀態
+  Future<void> deleteAnnotationStatus(int pdfId) async {
+    final db = await database;
+    await db.delete(
+      'items',
+      where: 'parentId = ? AND type = ?',
+      whereArgs: [pdfId, 'slide_annotation_status'],
     );
   }
 }

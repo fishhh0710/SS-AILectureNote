@@ -20,6 +20,7 @@ class SlidesPanel extends StatefulWidget {
   final VoidCallback onClose;
   final Future<void> Function(String filePath)? onPdfUploaded;
   final Stream<Map<String, dynamic>>? segmentStream;
+  final ValueNotifier<int>? currentPageNotifier;
 
   const SlidesPanel({
     super.key,
@@ -29,18 +30,26 @@ class SlidesPanel extends StatefulWidget {
     required this.fileId,
     this.onPdfUploaded,
     this.segmentStream,
+    this.currentPageNotifier,
   });
 
   @override
-  State<SlidesPanel> createState() => _SlidesPanelState();
+  State<SlidesPanel> createState() => SlidesPanelState();
 }
 
-class _SlidesPanelState extends State<SlidesPanel> {
+class SlidesPanelState extends State<SlidesPanel> {
   PdfDocument? _document;
   late SlidesViewModel _viewModel;
   bool _isLoading = false;
   String? _errorMessage;
   PageAnnotationManager? _annotationManager;
+  bool _showAnnotations = true;
+  final Set<int> _processingPages = {};
+  final ScrollController _scrollController = ScrollController();
+
+  PageAnnotationManager? get annotationManager => _annotationManager;
+  PdfDocument? get document => _document;
+  SlidesViewModel get viewModel => _viewModel;
 
   int? get _nodeId => int.tryParse(widget.fileId);
 
@@ -48,7 +57,20 @@ class _SlidesPanelState extends State<SlidesPanel> {
   void initState() {
     super.initState();
     _viewModel = SlidesViewModel(fileId: widget.fileId);
+    _scrollController.addListener(_onScroll);
     unawaited(_loadSavedPdf());
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients || _document == null) return;
+    final double offset = _scrollController.offset;
+    final int estimatedPage = (offset / 600.0).round() + 1;
+    final totalPages = _document?.pages.length ?? 1;
+    final finalPage = estimatedPage.clamp(1, totalPages);
+    if (widget.currentPageNotifier != null &&
+        widget.currentPageNotifier!.value != finalPage) {
+      widget.currentPageNotifier!.value = finalPage;
+    }
   }
 
   @override
@@ -191,10 +213,59 @@ class _SlidesPanelState extends State<SlidesPanel> {
     if (oldDocument != null) {
       unawaited(oldDocument.dispose());
     }
+
+    // Trigger auto-annotation of all PDF pages in parallel
+    unawaited(_processPdfAnnotations(loaded));
+  }
+
+  Future<void> _processPdfAnnotations(PdfDocument doc) async {
+    final annotationManager = _annotationManager;
+    if (annotationManager == null) return;
+
+    try {
+      final status = await annotationManager.getGenerationStatus();
+      if (status == 'completed') {
+        print(
+          'DEBUG: Bounding boxes already generated, skipping auto-annotation.',
+        );
+        return;
+      }
+
+      await annotationManager.clearAll();
+      await annotationManager.setGenerationStatus('generating');
+
+      setState(() {
+        _processingPages.clear();
+      });
+
+      await _viewModel.processAllPages(
+        document: doc,
+        annotationManager: annotationManager,
+        onPageProgress: (pageNum, isDone) {
+          if (!mounted) return;
+          setState(() {
+            if (isDone) {
+              _processingPages.remove(pageNum);
+            } else {
+              _processingPages.add(pageNum);
+            }
+          });
+        },
+      );
+
+      if (!annotationManager.isDisposed) {
+        await annotationManager.setGenerationStatus('completed');
+        print('DEBUG: Auto-annotation completed successfully.');
+      }
+    } catch (e) {
+      print('DEBUG: Error auto-annotating pages: $e');
+    }
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _annotationManager?.dispose();
     final document = _document;
     if (document != null) {
@@ -229,6 +300,27 @@ class _SlidesPanelState extends State<SlidesPanel> {
               icon: Icons.picture_in_picture,
               onClose: widget.onClose,
               actions: [
+                if (_document != null) ...[
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _showAnnotations = !_showAnnotations;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: Icon(
+                        _showAnnotations
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                        size: 14,
+                        color: const Color(0xFFA8A08E),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 InkWell(
                   onTap: _isLoading ? null : _pickAndLoadPdf,
                   borderRadius: BorderRadius.circular(12),
@@ -336,14 +428,33 @@ class _SlidesPanelState extends State<SlidesPanel> {
     }
 
     return ListView.builder(
+      controller: _scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
       itemCount: document.pages.length,
       itemBuilder: (context, idx) {
         final pageNum = idx + 1;
+        final isPageProcessing = _processingPages.contains(pageNum);
         return SlidePage(
           pageNumber: pageNum,
-          annotationListenable: _annotationManager?.getPageNotifier(pageNum),
-          child: PdfPageView(document: document, pageNumber: pageNum),
+          annotationListenable: _showAnnotations
+              ? _annotationManager?.getPageNotifier(pageNum)
+              : null,
+          child: Stack(
+            children: [
+              PdfPageView(document: document, pageNumber: pageNum),
+              if (isPageProcessing)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF8E9775),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );

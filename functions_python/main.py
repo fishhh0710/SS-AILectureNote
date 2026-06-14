@@ -150,6 +150,35 @@ Student question:
 """.strip()
 
 
+def _realtime_agent_prompt(current_summary: str, chunk: str) -> str:
+    return f"""
+You are an AI learning assistant agent. You monitor a live lecture transcript stream and the current slide's AI summary.
+
+Task:
+1. Identify if the professor is actively explaining or highlighting a specific element on the slide. If so, describe it as a target for our bounding box tool.
+2. If the professor provides new, important explanation or context not already in the summary, generate a concise bullet point in Markdown to append.
+
+Current Slide Summary:
+{current_summary}
+
+Transcript Chunk:
+"{chunk}"
+
+Response format:
+Return a valid JSON object:
+{{
+  "targets": [
+    {{
+      "text": "Name of the element",
+      "color": "red or green or blue or orange",
+      "what to create the bounding box for": "description of the element or diagram component"
+    }}
+  ],
+  "additional_summary": "* **New Context**: Description of the addition, or null if no new content"
+}}
+""".strip()
+
+
 def _extract_output_text(response: Any) -> str:
     output_text = getattr(response, "output_text", None)
     if isinstance(output_text, str):
@@ -321,6 +350,44 @@ def _notes_handler(req: https_fn.Request) -> https_fn.Response:
             Path(temp_pdf_path).unlink(missing_ok=True)
 
 
+def _realtime_agent_handler(req: https_fn.Request) -> https_fn.Response:
+    if req.method != "POST":
+        return _json_response({"message": "Only POST is supported."}, 405)
+    try:
+        payload = _request_payload(req)
+        current_summary = _optional_string(payload.get("currentSummary"))
+        chunk = _required_string(payload, "chunk")
+        response = _openai_client().chat.completions.create(
+            model=os.getenv("OPENAI_CHAT_MODEL")
+            or os.getenv("OPENAI_MODEL")
+            or "gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": _realtime_agent_prompt(current_summary, chunk),
+                }
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.7,
+        )
+        raw_json = (response.choices[0].message.content or "").strip()
+        if not raw_json:
+            raise RuntimeError("OpenAI response did not include an answer.")
+        result = json.loads(raw_json)
+        targets = result.get("targets")
+        if not isinstance(targets, list):
+            result["targets"] = []
+        additional_summary = result.get("additional_summary")
+        if additional_summary is not None and not isinstance(
+            additional_summary, str
+        ):
+            result["additional_summary"] = None
+        return _json_response(result)
+    except Exception as error:
+        logging.exception("Realtime agent function failed")
+        return _json_response({"message": str(error)}, 500)
+
+
 def _azure_token_handler(req: https_fn.Request) -> https_fn.Response:
     if req.method != "POST":
         return _json_response({"message": "Only POST is supported."}, 405)
@@ -368,3 +435,8 @@ def generateNotesFromPdf(req: https_fn.Request) -> https_fn.Response:
 @_http_function(timeout_sec=60, memory=options.MemoryOption.MB_256)
 def azureSpeechToken(req: https_fn.Request) -> https_fn.Response:
     return _azure_token_handler(req)
+
+
+@_http_function(timeout_sec=120, memory=options.MemoryOption.MB_512)
+def realtimeAgent(req: https_fn.Request) -> https_fn.Response:
+    return _realtime_agent_handler(req)

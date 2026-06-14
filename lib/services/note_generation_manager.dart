@@ -53,21 +53,26 @@ typedef GenerateAndSaveNotes =
       required String storageId,
       required String pdfPath,
     });
+typedef SaveNotes =
+    Future<void> Function(String storageId, List<AiPageNote> notes);
 
 class NoteGenerationManager {
   NoteGenerationManager._production()
     : _storage = FirebaseStorage.instance,
       _functionClient = FirebaseFunctionClient(),
       _loadSavedNotesOverride = null,
-      _generateAndSaveNotesOverride = null;
+      _generateAndSaveNotesOverride = null,
+      _saveNotesOverride = null;
 
   NoteGenerationManager._testing({
     required LoadSavedNotes loadSavedNotes,
     required GenerateAndSaveNotes generateAndSaveNotes,
+    SaveNotes? saveNotes,
   }) : _storage = null,
        _functionClient = null,
        _loadSavedNotesOverride = loadSavedNotes,
-       _generateAndSaveNotesOverride = generateAndSaveNotes;
+       _generateAndSaveNotesOverride = generateAndSaveNotes,
+       _saveNotesOverride = saveNotes;
 
   static final NoteGenerationManager instance =
       NoteGenerationManager._production();
@@ -76,10 +81,12 @@ class NoteGenerationManager {
   factory NoteGenerationManager.testing({
     required LoadSavedNotes loadSavedNotes,
     required GenerateAndSaveNotes generateAndSaveNotes,
+    SaveNotes? saveNotes,
   }) {
     return NoteGenerationManager._testing(
       loadSavedNotes: loadSavedNotes,
       generateAndSaveNotes: generateAndSaveNotes,
+      saveNotes: saveNotes,
     );
   }
 
@@ -95,6 +102,7 @@ class NoteGenerationManager {
   final FirebaseFunctionClient? _functionClient;
   final LoadSavedNotes? _loadSavedNotesOverride;
   final GenerateAndSaveNotes? _generateAndSaveNotesOverride;
+  final SaveNotes? _saveNotesOverride;
   final Map<String, NoteGenerationState> _states = {};
   final Map<String, Future<void>> _loadOperations = {};
   final Map<String, Future<void>> _generationOperations = {};
@@ -166,6 +174,32 @@ class NoteGenerationManager {
     await generate(storageId: storageId, pdfPath: pdfPath);
   }
 
+  Future<void> updateNotes({
+    required String storageId,
+    required List<AiPageNote> notes,
+  }) async {
+    await load(storageId);
+
+    final sortedNotes = [...notes]
+      ..sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
+    if (_saveNotesOverride != null) {
+      await _saveNotesOverride(storageId, sortedNotes);
+    } else {
+      await _saveNotes(storageId, sortedNotes);
+    }
+
+    final current = stateFor(storageId);
+    _emit(
+      current.copyWith(
+        status: current.isGenerating
+            ? NoteGenerationStatus.generating
+            : NoteGenerationStatus.completed,
+        notes: List.unmodifiable(sortedNotes),
+        clearError: true,
+      ),
+    );
+  }
+
   Future<void> _load(String storageId) async {
     try {
       final notes =
@@ -208,10 +242,21 @@ class NoteGenerationManager {
                 pdfPath: pdfPath,
               ) ??
               _generateAndSaveNotes(storageId: storageId, pdfPath: pdfPath));
+      final mergedNotes = _mergeLiveUpdates(
+        generatedNotes: notes,
+        currentNotes: stateFor(storageId).notes,
+      );
+      if (!_sameNotes(notes, mergedNotes)) {
+        if (_saveNotesOverride != null) {
+          await _saveNotesOverride(storageId, mergedNotes);
+        } else {
+          await _saveNotes(storageId, mergedNotes);
+        }
+      }
       _emit(
         stateFor(storageId).copyWith(
           status: NoteGenerationStatus.completed,
-          notes: notes,
+          notes: List.unmodifiable(mergedNotes),
           clearError: true,
         ),
       );
@@ -223,6 +268,46 @@ class NoteGenerationManager {
         ),
       );
     }
+  }
+
+  List<AiPageNote> _mergeLiveUpdates({
+    required List<AiPageNote> generatedNotes,
+    required List<AiPageNote> currentNotes,
+  }) {
+    const heading = '### Live Lecture Updates';
+    final liveByPage = <int, String>{};
+    for (final note in currentNotes) {
+      final headingIndex = note.markdown.indexOf(heading);
+      if (headingIndex >= 0) {
+        liveByPage[note.pageNumber] = note.markdown.substring(headingIndex);
+      }
+    }
+
+    final merged = generatedNotes.map((note) {
+      final liveSection = liveByPage.remove(note.pageNumber);
+      if (liveSection == null) return note;
+      return AiPageNote(
+        pageNumber: note.pageNumber,
+        markdown: '${note.markdown.trim()}\n\n$liveSection',
+      );
+    }).toList();
+
+    for (final entry in liveByPage.entries) {
+      merged.add(AiPageNote(pageNumber: entry.key, markdown: entry.value));
+    }
+    merged.sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
+    return merged;
+  }
+
+  bool _sameNotes(List<AiPageNote> first, List<AiPageNote> second) {
+    if (first.length != second.length) return false;
+    for (var index = 0; index < first.length; index++) {
+      if (first[index].pageNumber != second[index].pageNumber ||
+          first[index].markdown != second[index].markdown) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<List<AiPageNote>> _generateAndSaveNotes({
