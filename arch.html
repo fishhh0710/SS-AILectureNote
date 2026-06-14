@@ -194,8 +194,8 @@
     <section id="guide">
       <h2>閱讀指南</h2>
       <p>
-        Claw-Note 是 Flutter 講義管理 App。使用者可以建立課程與筆記、匯入 PDF、標記投影片、錄製或模擬即時逐字稿、產生逐頁 AI 筆記，並以講義內容和逐字稿向 chatbot 提問。
-        整體採用接近 MVVM 的分層：Widget 負責顯示，ViewModel 管理畫面狀態，Repository 組合使用案例，Service 處理 SQLite、檔案、Firebase、OpenAI 與 Azure Speech。
+        Claw-Note 是 Flutter 講義管理 App。使用者可以建立課程與筆記、匯入 PDF、標記投影片、錄製或模擬即時逐字稿、產生逐頁 AI 筆記，並以講義內容和逐字稿向 chatbot 提問。Realtime Agent 會判斷老師正在講哪一頁；Attention Agent 另外比較老師與學生頁面，在確認分心時才通知，並把錯過或困惑的內容寫進長期 Memory。
+        整體採用接近 MVVM 的分層：Widget 負責顯示，ViewModel 管理畫面狀態，Repository 組合使用案例，Service 處理 SQLite、檔案、Firebase、OpenAI 與 Azure Speech。跨畫面的長工作由 App-level Manager 持有，AI Agent 與 Memory 寫入集中在 Python Functions。
       </p>
       <div class="toc">
         <a href="#overview">1. 系統總覽</a>
@@ -244,7 +244,9 @@ Flutter Screens / Widgets
 ViewModels ──► Repositories / App-level Managers ──► Services
                                                     ├─ SQLite / App documents
                                                     ├─ Firebase Storage
-                                                    ├─ Firebase HTTP Functions ──► OpenAI
+                                                    ├─ Firebase Auth / FCM
+                                                    ├─ Firebase HTTP Functions ──► OpenAI Agents SDK
+                                                    │                         ├──► Firestore Memory
                                                     │                         └──► Azure token API
                                                     └─ Azure Speech WebSocket（音訊由 App 直接串流）</code></pre>
       </div>
@@ -291,8 +293,8 @@ ViewModels ──► Repositories / App-level Managers ──► Services
         <tbody>
           <tr><td>Slides</td><td>匯入／開啟 PDF、投影片顯示、手動標記、整份 PDF 自動 bbox 與 agent 指定目標 bbox。</td><td><code>SlidesViewModel</code>、<code>PageAnnotationManager</code>、<code>BoundingBoxService</code>、<code>pdfrx</code></td></tr>
           <tr><td>Transcript</td><td>Azure 即時辨識、語言選擇、Demo Mode、錄音狀態與逐字稿顯示。</td><td><code>AzureSpeechService</code>、<code>TranscriptExportService</code></td></tr>
-          <tr><td>Summary</td><td>顯示 PDF 逐頁 Markdown 筆記、產生狀態，並將課堂新增內容保存到目前頁的 <code>Live Lecture Updates</code>。</td><td><code>LectureNotesViewModel</code>、<code>NoteGenerationManager</code></td></tr>
-          <tr><td>Chatbot</td><td>載入本機聊天紀錄，將 AI notes、逐字稿、history 與問題送到 Function。</td><td><code>ChatViewModel</code>、<code>ChatRepository</code></td></tr>
+          <tr><td>Summary</td><td>顯示 PDF 逐頁 Markdown 筆記、產生狀態，並保存課堂補充。初次生成會讀取使用者的摘要格式偏好與相關學習狀態。</td><td><code>LectureNotesViewModel</code>、<code>NoteGenerationManager</code></td></tr>
+          <tr><td>Chatbot</td><td>載入本機聊天紀錄，將 AI notes、逐字稿、history 與問題送到 Chat Agent；Agent 可搜尋、建立、解決或刪除長期 Memory。</td><td><code>ChatViewModel</code>、<code>ChatRepository</code></td></tr>
         </tbody>
       </table>
     </section>
@@ -300,7 +302,7 @@ ViewModels ──► Repositories / App-level Managers ──► Services
     <section id="local-data">
       <h2>3. 本機資料</h2>
 
-      <h3>SQLite：<code>lecture_system_v2.db</code>，schema version 3</h3>
+      <h3>SQLite：<code>lecture_system_v2.db</code>，schema version 4</h3>
       <table>
         <thead><tr><th>Table</th><th>重要欄位</th><th>用途</th></tr></thead>
         <tbody>
@@ -318,6 +320,11 @@ ViewModels ──► Repositories / App-level Managers ──► Services
             <td><code>messages</code></td>
             <td><code>conversationId</code>、<code>role</code>、<code>content</code>、<code>sequenceNumber</code>、<code>createdAt</code></td>
             <td>依順序儲存 user／assistant 訊息，隨 conversation cascade delete。</td>
+          </tr>
+          <tr>
+            <td><code>student_page_events</code></td>
+            <td><code>lectureId</code>、<code>pageNumber</code>、<code>enteredAt</code>、<code>leftAt</code>、<code>durationSeconds</code></td>
+            <td>保存學生實際看過哪些頁面及停留時間，供 Attention Agent 的 request state 與後續學習分析使用。</td>
           </tr>
         </tbody>
       </table>
@@ -393,15 +400,30 @@ ViewModels ──► Repositories / App-level Managers ──► Services
       <div class="note info">
         <strong>Agent 輸出：</strong><code>{ page_number, new_points, questions, targets, update_note_at }</code>。<code>update_note_at</code> 只能是 <code>summary</code>、<code>slides</code> 或 <code>none</code>；後端會再次正規化，保證 Summary 與 bbox 不會同時更新。Summary 只寫入已存在的頁面筆記，缺少該頁 note 時直接捨棄。
       </div>
+      <h3>Attention Agent 與學生頁面</h3>
+      <p>
+        <code>StudentAttentionTracker</code> 只在 Flutter 端觀察學生頁面、進入時間、停留秒數、最近 20 次頁面紀錄與 App 前景／背景狀態。Realtime Agent 先獨立判斷老師頁面，完成後後端才把老師頁面與學生狀態交給 Attention Agent，因此老師頁面推論不會偷看學生目前所在頁面。
+      </p>
+      <p>
+        Attention 每次至少間隔 30 秒，且必須出現頁面不同、學生停留超過 30 秒、老師自上次檢查移動至少兩頁或 App 進入背景其中一項訊號才執行。輸出包含 <code>status</code>、<code>page_relevance</code>、<code>confidence</code>、<code>reasoning_summary</code>、<code>missed_content</code> 與 <code>confused_summary</code>。只有 <code>status=distracted</code>、App 在背景、有 FCM token 且距上次通知至少 120 秒時才推播；離開 App 本身不再直接觸發通知。
+      </p>
     </section>
 
     <section id="firebase">
       <h2>5. Firebase 架構</h2>
       <p>
-        Firebase 在 <code>main.dart</code> 由 <code>DefaultFirebaseOptions.currentPlatform</code> 初始化。Flutter client 目前直接使用
-        <code>firebase_core</code> 與 <code>firebase_storage</code>；Firestore 只由 Cloud Functions 的 Admin SDK 操作，Flutter 端沒有 <code>cloud_firestore</code> dependency。
+        Firebase 在 <code>main.dart</code> 由 <code>DefaultFirebaseOptions.currentPlatform</code> 初始化。Flutter client 使用
+        <code>firebase_core</code>、<code>firebase_auth</code>、<code>firebase_messaging</code> 與 <code>firebase_storage</code>；Firestore 仍只由 Cloud Functions 的 Admin SDK 操作，Flutter 端沒有 <code>cloud_firestore</code> dependency。
       </p>
       <p>目前所有 Flutter 平台與 Firebase CLI 的預設 project 都是 <code>ai-notes-555a6</code>，Storage bucket 為 <code>ai-notes-555a6.firebasestorage.app</code>。</p>
+
+      <h3>Firebase Auth 與通知</h3>
+      <p>
+        App 啟動 AI 功能前由 <code>UserIdentityService</code> 建立或重用匿名 Firebase 使用者。<code>FirebaseFunctionClient</code> 將 ID token 放入 <code>Authorization: Bearer ...</code>；<code>chat</code>、<code>generateNotesFromPdf</code> 及 Realtime 內的 Attention 階段都以驗證後的 <code>uid</code> 隔離資料。匿名帳號未來可再連結正式登入方式，不需要搬移既有 UID 資料。
+      </p>
+      <p>
+        <code>NotificationService</code> 管理 FCM token、前景 local notification 與背景 message handler。裝置 token 的雜湊索引保存在 Firestore；原始 token 只供後端送信。Android 已宣告通知權限，iOS 已宣告 <code>remote-notification</code> background mode，但仍需在 Apple Developer、Xcode 與 Firebase Console 配置 APNs。
+      </p>
 
       <h3>Firebase Storage</h3>
       <table>
@@ -430,19 +452,21 @@ ViewModels ──► Repositories / App-level Managers ──► Services
       </p>
 
       <h3>Cloud Firestore</h3>
-      <p><code>generateNotesFromPdf</code> 會更新 <code>ai_note_jobs/{safeStorageId}</code>，主要提供後端工作紀錄：</p>
+      <p>Firestore 保存後端工作狀態、Attention session 與每個使用者的長期 Memory。Flutter 不直接監聽這些文件；目前由 Functions 使用 Admin SDK 讀寫。</p>
       <table>
-        <thead><tr><th>欄位</th><th>寫入時機</th><th>說明</th></tr></thead>
+        <thead><tr><th>路徑</th><th>內容</th><th>主要寫入者</th></tr></thead>
         <tbody>
-          <tr><td><code>status</code></td><td>開始／成功／失敗</td><td><code>running</code>、<code>completed</code>、<code>failed</code>。</td></tr>
-          <tr><td><code>pdfStoragePath</code></td><td>開始</td><td>輸入 PDF 的 Storage path。</td></tr>
-          <tr><td><code>notesStoragePath</code></td><td>成功</td><td>輸出 notes JSON 的 Storage path。</td></tr>
-          <tr><td><code>pageCount</code></td><td>成功</td><td>產生的頁數。</td></tr>
-          <tr><td><code>error</code></td><td>失敗</td><td>Function 捕捉到的錯誤訊息。</td></tr>
-          <tr><td><code>updatedAt</code></td><td>每次更新</td><td>Firestore server timestamp。</td></tr>
+          <tr><td><code>ai_note_jobs/{safeStorageId}</code></td><td>PDF 工作的 <code>running/completed/failed</code>、輸入／輸出 Storage path、page count、memory count 與錯誤。</td><td><code>generateNotesFromPdf</code></td></tr>
+          <tr><td><code>users/{uid}/lecture_sessions/{sessionId}</code></td><td>上次 Attention 檢查時間、當時老師頁面、最近狀態與通知 cooldown。</td><td>Attention Agent</td></tr>
+          <tr><td><code>users/{uid}/attention_events/{eventId}</code></td><td>每次實際判斷的輸入訊號、老師／學生頁面與結構化輸出，供稽核與後續分析。</td><td>Attention Agent</td></tr>
+          <tr><td><code>users/{uid}/devices/{tokenHash}</code></td><td>FCM token、平台與最後更新時間。</td><td>Attention Agent</td></tr>
+          <tr><td><code>users/{uid}/memory_evidence/{evidenceId}</code></td><td>Memory 的來源證據，例如 chatbot 明確要求或 Attention 的 missed/confused output。</td><td><code>MemoryService</code></td></tr>
+          <tr><td><code>users/{uid}/memories/{memoryId}</code></td><td>整理後的學習狀況與偏好；包含 scope、confidence、importance、evidence count、status、provenance 與 768 維 embedding。</td><td><code>MemoryService</code></td></tr>
         </tbody>
       </table>
-      <p>Flutter 不讀取或監聽這份 Firestore document；完成訊號來自同一個長 HTTP response。Firestore 在目前流程中主要用於後端狀態與錯誤紀錄。</p>
+      <p>
+        Memory 分為 <code>learning</code> 與 <code>preference</code> domain，scope 可為 global、course 或 lecture，狀態可為 candidate、active、resolved、superseded、deleted。明確偏好立即生效；推論偏好需要累積至少兩份 evidence。學習狀況以正規化內容與 Firestore cosine vector search 去重，向量索引使用 <code>text-embedding-3-small</code> 的 768 維輸出。
+      </p>
 
       <h3>Cloud Functions</h3>
       <table>
@@ -451,10 +475,10 @@ ViewModels ──► Repositories / App-level Managers ──► Services
           <tr>
             <td><code>chat</code></td>
             <td>120 秒、512 MB</td>
-            <td>接收 <code>notes</code>、<code>transcript</code>、<code>history</code>、<code>question</code>，建立學習助理 prompt，呼叫 OpenAI Chat Completions，回傳 <code>{ answer }</code>。</td>
+            <td>使用 Agents SDK。先依問題搜尋相關 Memory，再由工具建立偏好／學習狀況、解決已掌握項目或依明確要求刪除 Memory，最後回傳 <code>{ answer }</code>。</td>
           </tr>
-          <tr><td><code>generateNotesFromPdf</code></td><td>540 秒、1 GB</td><td>同步 HTTP Function。下載 Storage PDF、呼叫 OpenAI、保存 notes JSON 與 Firestore 狀態，完成後在同一個 response 回傳 pages。</td></tr>
-          <tr><td><code>realtimeAgent</code></td><td>120 秒、512 MB</td><td>使用 OpenAI Agents SDK 的 <code>Agent + Runner + function_tool + output_type</code>。根據最近 10 段逐字稿、page summaries 與上次老師頁面，自行判斷老師頁面，並互斥選擇 Summary、Slides 或不更新。</td></tr>
+          <tr><td><code>generateNotesFromPdf</code></td><td>540 秒、1 GB</td><td>驗證使用者後下載 Storage PDF，搜尋摘要偏好與相關學習 Memory，呼叫 OpenAI、保存 notes JSON 與 Firestore 狀態，完成後在同一個 response 回傳 pages。</td></tr>
+          <tr><td><code>realtimeAgent</code></td><td>120 秒、512 MB</td><td>第一階段用 Agents SDK 根據最近 10 段逐字稿、page summaries 與上次老師頁面判斷老師頁面，互斥選擇 Summary、Slides 或 none；第二階段再執行 Attention Agent、Memory 寫入與必要的 FCM 通知。</td></tr>
           <tr>
             <td><code>azureSpeechToken</code></td>
             <td>60 秒、256 MB</td>
@@ -471,13 +495,13 @@ ViewModels ──► Repositories / App-level Managers ──► Services
       <h3>Flutter 如何呼叫 Functions</h3>
       <p>
         <code>FirebaseFunctionClient</code> 使用一般 HTTP POST，而不是 <code>cloud_functions</code> plugin。預設 URL 為
-        <code>https://{region}-{projectId}.cloudfunctions.net/{functionName}</code>，亦可用 Dart define 覆寫 base URL、project、region 或個別 Function URL，方便 emulator 與部署環境切換。
+        <code>https://{region}-{projectId}.cloudfunctions.net/{functionName}</code>，並在使用者登入後附上 Firebase ID token。亦可用 Dart define 覆寫 base URL、project、region 或個別 Function URL，方便 emulator 與部署環境切換。
       </p>
       <p>
         Bbox 不走 Firebase Function。<code>BoundingBoxService</code> 將投影片頁面轉成 PNG，呼叫獨立 Cloud Run REST API 的 <code>/detect/pipeline</code> 或 <code>/detect/agent-pipeline</code>，再把 pixel coordinates 正規化為 0～1 的 PDF annotation 座標。
       </p>
-      <div class="note danger">
-        <strong>安全現況：</strong>HTTP endpoints 都允許 <code>Access-Control-Allow-Origin: *</code>，目前沒有 Firebase Auth、App Check 或 request-level authorization。正式公開前應限制呼叫來源、加入身分驗證與配額／濫用防護。OpenAI 與 Azure secrets 只應存在 Functions 環境設定。
+      <div class="note warning">
+        <strong>安全現況：</strong><code>chat</code>、<code>generateNotesFromPdf</code> 與 Attention 資料已依 Firebase UID 驗證與隔離；OpenAI 與 Azure secrets 只存在 Functions 環境設定。尚未加入 App Check，CORS 仍允許所有來源，Storage／Firestore client rules 也應在正式公開前再次稽核。
       </div>
     </section>
 
@@ -489,8 +513,9 @@ ViewModels ──► Repositories / App-level Managers ──► Services
           <ol>
             <li>SlidesPanel 將 PDF 複製到 <code>lecture_slides/</code> 並保存 <code>filePath</code>。</li>
             <li>LectureNotesViewModel 呼叫 App-level singleton <code>NoteGenerationManager</code>。</li>
-            <li>Manager 上傳 PDF，並把實際 <code>storageBucket</code> 與 object path 傳給長時間 <code>generateNotesFromPdf</code> request，避免 App 與 Function 使用不同 default bucket。</li>
+            <li>Manager 上傳 PDF，並把 Firebase ID token、<code>courseId</code>、<code>lectureId</code>、實際 <code>storageBucket</code> 與 object path 傳給長時間 <code>generateNotesFromPdf</code> request。</li>
             <li>LectureView 關閉時只移除 ViewModel 的 stream subscription；Manager 與 HTTP client 不會 dispose，因此 App process 存活期間 request 會繼續。</li>
+            <li>Function 依 UID 搜尋摘要偏好與相關學習 Memory，再生成 PDF notes。</li>
             <li>Function 完成後 Manager 保存本機 <code>notes.json</code> 與逐頁 Markdown，再廣播 completed 狀態。</li>
             <li>重進 Lecture 時會讀取 Manager 現有狀態；新結果成功前保留舊摘要。</li>
           </ol>
@@ -500,8 +525,9 @@ ViewModels ──► Repositories / App-level Managers ──► Services
           <h3>問題 → Chatbot 回答</h3>
           <ol>
             <li>ChatRepository 載入或建立 conversation，先把 user message 寫入 SQLite。</li>
-            <li>組合 AI notes、目前逐字稿、recent history 與 question。</li>
-            <li><code>chat</code> Function 呼叫 OpenAI 並回傳答案。</li>
+            <li>組合 AI notes、目前逐字稿、recent history、question、courseId 與 lectureId。</li>
+            <li><code>chat</code> 先搜尋相關 Memory；Agent 視需要呼叫 remember、resolve 或 forget tools。</li>
+            <li>Chat Agent 回傳答案。</li>
             <li>assistant message 寫入 SQLite，ChatViewModel 通知 UI 更新。</li>
           </ol>
         </div>
@@ -518,8 +544,21 @@ ViewModels ──► Repositories / App-level Managers ──► Services
             <li><code>realtimeAgent</code> 使用 context tool 判斷老師頁面，並互斥選擇 summary、slides 或 none。</li>
             <li>summary 經 Manager 去重後寫入 <code>Professor Additions</code>／<code>Professor Questions</code>；該頁沒有既有 note 就捨棄。</li>
             <li>slides targets 經 bbox Cloud Run API 轉成 Agent 判斷頁面的標記。</li>
+            <li>老師頁面決定後，後端才比較學生頁面、停留時間、頁面歷史與 App lifecycle，必要時執行 Attention Agent。</li>
+            <li><code>missed_content</code>／<code>confused_summary</code> 寫入 learning Memory；只有 <code>distracted</code> 才可能送 FCM。</li>
           </ol>
           <p class="caption">Demo Mode 與正式麥克風所需的 token endpoint 均已可用；完整麥克風串流仍需在 App 中實際錄音驗證裝置權限、Azure WebSocket 與 segment 產生。</p>
+        </div>
+
+        <div class="card">
+          <h3>Memory 證據 → 長期資料</h3>
+          <ol>
+            <li>Chat 或 Attention 產生一筆帶 provenance 的 evidence。</li>
+            <li><code>MemoryService</code> 依 UID、domain、scope 與內容尋找既有 canonical memory。</li>
+            <li>偏好以穩定 key 更新；學習狀況以正規化文字及向量相似度合併。</li>
+            <li>Memory 保存 confidence、importance、evidence count 與狀態，不把每句聊天都當永久事實。</li>
+            <li>Chat Agent 可搜尋、解決或刪除；Summary 只讀 active 且 scope 相符的項目。</li>
+          </ol>
         </div>
 
         <div class="card">
@@ -553,14 +592,20 @@ ViewModels ──► Repositories / App-level Managers ──► Services
           <tr><td><code>lib/services/azure_speech_service.dart</code></td><td>Azure WebSocket protocol、PCM framing、partial/final transcript 與本機 chunks。</td></tr>
           <tr><td><code>lib/services/transcript_export_service.dart</code></td><td>10 秒 delta segment、recording item 與 broadcast callback。</td></tr>
           <tr><td><code>lib/services/realtime_agent_coordinator.dart</code></td><td>訂閱 transcript segments、依序呼叫 realtimeAgent，分派 summary 與 bbox 更新。</td></tr>
+          <tr><td><code>lib/services/student_attention_tracker.dart</code></td><td>追蹤學生頁面、停留時間、最近頁面歷史與 App lifecycle，並保存本機 page events。</td></tr>
+          <tr><td><code>lib/services/notification_service.dart</code></td><td>FCM token、前景 local notification、背景 message handler 與平台權限。</td></tr>
+          <tr><td><code>lib/services/user_identity_service.dart</code></td><td>建立或重用匿名 Firebase 使用者，提供後端資料隔離所需 UID。</td></tr>
           <tr><td><code>lib/services/bounding_box_service.dart</code></td><td>呼叫 bbox Cloud Run API，取得全頁或 agent-targeted detection 結果。</td></tr>
-          <tr><td><code>lib/services/firebase_function_client.dart</code></td><td>共用 HTTP Function URL、POST、timeout 與錯誤解析。</td></tr>
+          <tr><td><code>lib/services/firebase_function_client.dart</code></td><td>共用 HTTP Function URL、Firebase ID token、POST、timeout 與錯誤解析。</td></tr>
           <tr><td><code>lib/services/firebase_upload_service.dart</code></td><td>Firebase Storage 備份、MD5 快取、cloudPath 回寫。</td></tr>
           <tr><td><code>lib/services/auth_service.dart</code></td><td>呼叫 <code>azureSpeechToken</code>；類別名稱為 <code>AzureAuthService</code>，不是使用者登入服務。</td></tr>
           <tr><td><code>functions_python/main.py</code></td><td>四個 2nd Gen HTTP Functions 的公開入口、region、timeout、memory 與 CORS 設定。</td></tr>
-          <tr><td><code>functions_python/function_common.py</code></td><td>JSON response、request payload、欄位驗證、storage ID 清理與 OpenAI client。</td></tr>
-          <tr><td><code>functions_python/lecture_ai.py</code></td><td>Chat 與 PDF page notes 的 prompt、OpenAI 呼叫、Storage 和 Firestore job 狀態。</td></tr>
-          <tr><td><code>functions_python/realtime_agent.py</code></td><td>Realtime Agent schema、context tool、頁面判斷、輸出正規化與 handler。</td></tr>
+          <tr><td><code>functions_python/function_common.py</code></td><td>JSON response、request payload、Firebase Auth、欄位驗證、storage ID 清理與 OpenAI client。</td></tr>
+          <tr><td><code>functions_python/lecture_ai.py</code></td><td>PDF page notes prompt、Memory context、OpenAI 呼叫、Storage 和 Firestore job 狀態。</td></tr>
+          <tr><td><code>functions_python/realtime_agent.py</code></td><td>Realtime Agent schema、context tool、頁面判斷、輸出正規化及 Attention 第二階段協調。</td></tr>
+          <tr><td><code>functions_python/attention_agent.py</code></td><td>30 秒 gate、學生理解／分心判斷、事件紀錄、learning Memory 與 FCM。</td></tr>
+          <tr><td><code>functions_python/memory_service.py</code></td><td>evidence、canonical memory、scope、狀態、embedding、向量搜尋與去重。</td></tr>
+          <tr><td><code>functions_python/chat_agent.py</code></td><td>Memory-aware Chat Agent、結構化輸出與五個 Memory tools。</td></tr>
           <tr><td><code>functions_python/speech.py</code></td><td>Azure Speech 短期 token handler。</td></tr>
           <tr><td><code>docs/transcript_streaming_guideline.md</code></td><td>segment stream 的消費、subscription lifecycle 與測試範例。</td></tr>
         </tbody>
@@ -575,11 +620,12 @@ ViewModels ──► Repositories / App-level Managers ──► Services
       <h2>8. 現況與設計邊界</h2>
       <ul>
         <li><span class="tag">Local-first</span> 課程樹、聊天與主要索引以 SQLite 為準；Firebase 不是完整同步資料庫。</li>
-        <li><span class="tag">No push</span> 專案沒有 <code>firebase_messaging</code> 或 local notification；目前「通知」是 UI <code>SnackBar</code> 與 Dart stream 事件。</li>
-        <li><span class="tag">Realtime partial</span> Demo 可驅動 Agent、Summary 與 Slides，輸出已做互斥與空值正規化；Chatbot context、agent request 重試與跨 App restart 的工作恢復尚未實作。</li>
+        <li><span class="tag">Attention push</span> FCM 與前景 local notification 已接上，只在 Agent 判為 <code>distracted</code> 時送出；實機 token 與 iOS APNs 仍需在目標裝置驗證。</li>
+        <li><span class="tag">Memory</span> Chat、Attention 與 Summary 已共用 evidence/canonical Memory；目前沒有獨立的 Memory 管理 UI 或排程式離線整理工作。</li>
+        <li><span class="tag">Realtime</span> Demo 可驅動 Realtime、Attention、Summary 與 Slides，輸出已做互斥與空值正規化；request 重試與跨 App restart 的 realtime 工作恢復尚未實作。</li>
         <li><span class="tag">App process</span> PDF notes request 可跨 Lecture 頁面繼續，但仍依賴 Flutter process；App 被關閉或系統終止時無法繼續或恢復。</li>
-        <li><span class="tag">Backup only</span> Firebase 備份沒有 restore、刪除同步、衝突解決或多使用者登入；預設 userId 仍是固定字串。</li>
-        <li><span class="tag">Security</span> Functions endpoint 尚未驗證呼叫者；若進入正式環境，Auth／App Check／Storage Rules／Firestore Rules 應視為必要工作。</li>
+        <li><span class="tag">Identity</span> AI 與 Memory 使用匿名 Firebase Auth；Dashboard 備份仍沿用固定 userId，尚未統一成登入 UID，也沒有 restore、刪除同步或衝突解決。</li>
+        <li><span class="tag">Security</span> 重要 AI endpoint 已驗證 Firebase token，但 App Check、精細配額、CORS 限制及 production rules 稽核仍未完成。</li>
       </ul>
       <div class="note">
         維護架構文件時，請直接修改既有模組描述。例如語音流程改變，就更新「逐字稿流程」與相關檔案索引；只有新增全新子系統時才增加新章節，避免文件變成按日期堆疊的 changelog。

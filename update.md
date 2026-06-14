@@ -295,3 +295,71 @@ firebase deploy --only functions:python
 - Azure Speech token 邏輯移到小型 `speech.py`。
 - 四個已部署 Function 名稱、URL、HTTP contract 與資源設定維持不變。
 - 測試改為直接測試各模組的公開 helper 與 handler。
+
+## 26. Attention Agent 與學生頁面追蹤
+
+- 新增 `StudentAttentionTracker`，追蹤學生目前頁面、進入時間、停留秒數、最近 20 次頁面歷史與 App lifecycle。
+- SQLite schema 升級為 version 4，新增 `student_page_events` 保存頁面進出與停留時間。
+- Realtime Agent 判斷老師頁面時仍看不到學生頁面；老師頁面決定後才進入 Attention 第二階段。
+- Attention 至少間隔 30 秒，並要求頁面不同、停留過久、老師移動多頁或 App 背景其中一項訊號。
+- Attention 輸出 `following`、`confused`、`behind`、`distracted` 或 `unclear`。
+- 同時輸出 `missed_content` 與 `confused_summary`，即使 UI 現在不直接顯示也保留給 Memory。
+- 每次實際判斷寫入 `users/{uid}/attention_events`。
+- session 狀態寫入 `users/{uid}/lecture_sessions`，保存上次檢查、老師頁面與通知 cooldown。
+
+## 27. 分心通知
+
+- 移除「App 一進背景就通知」的舊 lifecycle notification。
+- 新增 Firebase Messaging 與 local notifications。
+- 只有 Attention status 為 `distracted`、App 在背景且有有效 FCM token 時才送出通知。
+- 同一 session 的通知至少間隔 120 秒。
+- FCM token 以 token hash 作為 Firestore device document ID。
+- Android 已加入通知權限。
+- iOS 已加入 `remote-notification` background mode；APNs key 與 Signing capability 仍需在 Apple/Firebase 設定。
+
+## 28. Firebase 身分驗證
+
+- 啟用 Firebase Anonymous Auth。
+- 新增 `UserIdentityService` 建立或重用匿名使用者。
+- `FirebaseFunctionClient` 自動附上 Firebase ID token。
+- `chat` 與 `generateNotesFromPdf` 無 token 時回傳 401。
+- Attention 的 Firestore、Memory 與通知資料使用驗證後 UID 隔離。
+- 匿名帳號之後可連結正式登入 provider，保留同一 UID 下的資料。
+
+## 29. Memory 系統
+
+- 新增 `MemoryService`，區分 `learning` 與 `preference` domain。
+- scope 支援 global、course、lecture。
+- canonical memory 保存 confidence、importance、explicit、evidenceCount、status、provenance 與 metadata。
+- 每次來源先寫入 `memory_evidence`，再合併到 `memories`。
+- 明確偏好立即 active；推論偏好至少需要兩份 evidence。
+- 偏好使用穩定 preference key 更新，不會每次建立重複文件。
+- 學習狀況先做正規化內容比對，再使用 Firestore vector search 合併語意重複項目。
+- embedding 使用 `text-embedding-3-small`，固定為 768 維。
+- 建立 collection group `memories` 的 cosine vector index。
+- status 支援 candidate、active、resolved、superseded、deleted。
+- 支援搜尋、解決與忘記 Memory，方便未來加入管理 UI 或正式帳號同步。
+
+## 30. Memory 整合點
+
+- Attention 的 `missed_content` 寫入 lecture-scoped `missed_content` learning memory。
+- Attention 的 `confused_summary` 寫入 lecture-scoped `confusion` learning memory。
+- Chatbot 改為 OpenAI Agents SDK Agent。
+- Chat Agent tools 包含搜尋、記住偏好、記住學習狀況、解決學習狀況與刪除 Memory。
+- Chat 只保存明確且可重用的偏好或重要學習狀態，不保存一般問候與一次性問題。
+- PDF Summary 生成前搜尋 active 的偏好與相關學習 Memory。
+- 使用者偏好的摘要格式可以覆蓋預設 Main Idea／Key Terms 版型，但不能改寫 PDF 事實或略過頁面。
+- Flutter 的 Chat 與 Summary request 現在都會傳送 courseId 與 lectureId。
+
+## 31. 驗證與部署
+
+- Python：17 tests passed。
+- Flutter：10 tests passed。
+- `dart analyze lib test` 沒有 error，保留 24 個既有 info lint。
+- `flutter build apk --debug` 成功。
+- 四個 Python 3.13 Functions 已完整部署到 `ai-notes-555a6`。
+- 正式環境 Realtime smoke test 成功判斷老師頁面並執行 Attention、寫入 learning Memory。
+- 正式環境 Chat smoke test 成功保存摘要格式偏好，下一次對話能取回。
+- 正式環境 PDF smoke test 以同一使用者 Memory 生成 38 頁 notes，回傳 `memoryCount: 1`，輸出採用偏好的編號清單格式。
+- 無驗證 token 的 Chat 與 PDF Summary request 均實測回傳 401。
+- 尚未以真實 Android/iOS FCM token 驗證推播到實機；後端只有在 `distracted` 狀態才會嘗試送信。
