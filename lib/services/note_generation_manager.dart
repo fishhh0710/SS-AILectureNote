@@ -200,6 +200,45 @@ class NoteGenerationManager {
     );
   }
 
+  Future<bool> appendRealtimeUpdate({
+    required String storageId,
+    required int pageNumber,
+    required List<String> newPoints,
+    required List<String> questions,
+  }) async {
+    await load(storageId);
+
+    final current = stateFor(storageId);
+    final noteIndex = current.notes.indexWhere(
+      (note) => note.pageNumber == pageNumber,
+    );
+    if (noteIndex < 0) return false;
+
+    final note = current.notes[noteIndex];
+    var markdown = note.markdown.trim();
+    final additions = _newMarkdownItems(markdown, newPoints);
+    markdown = _appendSection(
+      markdown,
+      heading: '### Professor Additions',
+      items: additions,
+    );
+    final newQuestions = _newMarkdownItems(markdown, questions);
+    markdown = _appendSection(
+      markdown,
+      heading: '### Professor Questions',
+      items: newQuestions,
+    );
+    if (additions.isEmpty && newQuestions.isEmpty) return false;
+
+    final updatedNotes = [...current.notes];
+    updatedNotes[noteIndex] = AiPageNote(
+      pageNumber: pageNumber,
+      markdown: markdown,
+    );
+    await updateNotes(storageId: storageId, notes: updatedNotes);
+    return true;
+  }
+
   Future<void> _load(String storageId) async {
     try {
       final notes =
@@ -242,7 +281,7 @@ class NoteGenerationManager {
                 pdfPath: pdfPath,
               ) ??
               _generateAndSaveNotes(storageId: storageId, pdfPath: pdfPath));
-      final mergedNotes = _mergeLiveUpdates(
+      final mergedNotes = _mergeRealtimeUpdates(
         generatedNotes: notes,
         currentNotes: stateFor(storageId).notes,
       );
@@ -270,16 +309,24 @@ class NoteGenerationManager {
     }
   }
 
-  List<AiPageNote> _mergeLiveUpdates({
+  List<AiPageNote> _mergeRealtimeUpdates({
     required List<AiPageNote> generatedNotes,
     required List<AiPageNote> currentNotes,
   }) {
-    const heading = '### Live Lecture Updates';
+    const headings = [
+      '### Live Lecture Updates',
+      '### Professor Additions',
+      '### Professor Questions',
+    ];
     final liveByPage = <int, String>{};
     for (final note in currentNotes) {
-      final headingIndex = note.markdown.indexOf(heading);
-      if (headingIndex >= 0) {
-        liveByPage[note.pageNumber] = note.markdown.substring(headingIndex);
+      final indices = headings
+          .map(note.markdown.indexOf)
+          .where((index) => index >= 0)
+          .toList();
+      if (indices.isNotEmpty) {
+        indices.sort();
+        liveByPage[note.pageNumber] = note.markdown.substring(indices.first);
       }
     }
 
@@ -297,6 +344,52 @@ class NoteGenerationManager {
     }
     merged.sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
     return merged;
+  }
+
+  List<String> _newMarkdownItems(String markdown, List<String> items) {
+    final existing = markdown
+        .split('\n')
+        .map((line) => line.trim().toLowerCase())
+        .toSet();
+    final result = <String>[];
+    for (final item in items) {
+      var text = item.trim();
+      if (text.isEmpty ||
+          const {'null', 'none', 'n/a'}.contains(text.toLowerCase())) {
+        continue;
+      }
+      text = text.replaceFirst(RegExp(r'^[-*]\s*'), '').trim();
+      if (text.isEmpty) continue;
+      final line = '- $text';
+      if (existing.add(line.toLowerCase())) result.add(line);
+    }
+    return result;
+  }
+
+  String _appendSection(
+    String markdown, {
+    required String heading,
+    required List<String> items,
+  }) {
+    if (items.isEmpty) return markdown;
+    final headingIndex = markdown.indexOf(heading);
+    if (headingIndex < 0) {
+      return '${markdown.trim()}\n\n$heading\n${items.join('\n')}';
+    }
+
+    final sectionStart = headingIndex + heading.length;
+    final nextHeading = RegExp(
+      r'^###\s+',
+      multiLine: true,
+    ).firstMatch(markdown.substring(sectionStart));
+    final insertAt = nextHeading == null
+        ? markdown.length
+        : sectionStart + nextHeading.start;
+    final before = markdown.substring(0, insertAt).trimRight();
+    final after = markdown.substring(insertAt).trimLeft();
+    return after.isEmpty
+        ? '$before\n${items.join('\n')}'
+        : '$before\n${items.join('\n')}\n\n$after';
   }
 
   bool _sameNotes(List<AiPageNote> first, List<AiPageNote> second) {

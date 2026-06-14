@@ -287,7 +287,6 @@ class _LectureViewState extends State<LectureView> {
           storageId: widget.fileId,
           slidesViewModel: state.viewModel,
           notesViewModel: _notesViewModel,
-          currentPageNotifier: _currentPageNotifier,
           segmentStream: _segmentStreamController.stream,
           getAnnotationManager: () =>
               _slidesPanelKey.currentState?.annotationManager,

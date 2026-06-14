@@ -204,7 +204,7 @@ dart format
 flutter analyze
 flutter test
 python -m unittest discover -s functions_python
-python -m py_compile functions_python/main.py
+python -m compileall functions_python
 git diff --check
 ```
 `flutter test`：5 tests passed。
@@ -226,6 +226,10 @@ Function 名稱與 HTTP contract 維持不變，因此 Flutter 不需要切換 U
 Python source 位於：
 ```text
 functions_python/main.py
+functions_python/function_common.py
+functions_python/lecture_ai.py
+functions_python/realtime_agent.py
+functions_python/speech.py
 ```
 部署命令：
 ```bash
@@ -249,9 +253,9 @@ firebase deploy --only functions:python
 
 - `RealtimeAgentCoordinator` 訂閱每 10 秒的非空 segment。
 - segment 改以 queue 依序處理，不會因前一個 HTTP request 尚未完成而直接遺失。
-- 新增 Python `realtimeAgent` Function，回傳 `targets` 與 `additional_summary`。
+- 新增 Python `realtimeAgent` Function；其初版回傳 `targets` 與 `additional_summary`，後續已由第 24 節的結構化 Agent contract 取代。
 - realtime summary 由 `NoteGenerationManager.updateNotes()` 寫入本機 JSON／Markdown，再廣播給 Summary panel。
-- 若該頁尚無 PDF summary，先建立只有 `Live Lecture Updates` 的頁面筆記。
+- 初版會在缺少 PDF summary 時建立 live note；第 24 節已改為直接捨棄，避免產生沒有基礎摘要的頁面筆記。
 - 若 PDF summary 較晚完成，合併並保留已收到的 realtime updates，不讓完整摘要覆蓋課堂補充。
 - `SlidesViewModel` 可呼叫 bbox Cloud Run API 進行全頁 detection，或只尋找 agent 指定 targets。
 - bbox 座標由 image pixel 正規化後存成原有 annotation model。
@@ -265,3 +269,29 @@ firebase deploy --only functions:python
 - 跨 App 重啟的工作恢復。
 - 後端工作取消。
 - Auth 或 App Check。
+
+## 24. Realtime Agent workflow
+
+- 將 `realtimeAgent` 從直接 Chat Completions 改為 OpenAI Agents SDK。
+- 使用單一 `Agent`、`Runner`、結構化 `output_type` 與一次性的 context `function_tool`。
+- Agent 不接收學生目前頁面，只接收上次老師頁面作為弱參考。
+- Coordinator 保存最近 10 份非空 transcript segments；最新一份是本次判斷內容，前 9 份只作上下文。
+- Agent 自行搜尋 page summaries 並判斷老師頁面。
+- 新輸出為 `page_number`、`new_points`、`questions`、`targets`、`update_note_at`。
+- `update_note_at` 只允許 `summary`、`slides`、`none`。
+- 後端強制 Summary 與 bbox 互斥，並過濾空字串與字串 `null`。
+- `NoteGenerationManager` 統一處理 realtime Summary 持久化與去重。
+- 新增內容分別寫入 `Professor Additions` 與 `Professor Questions`。
+- Agent 選到沒有既有 AI note 的頁面時直接捨棄，不建立新 note。
+- PDF Summary 較晚完成時，仍保留已寫入的 Professor 區段。
+
+## 25. Python Functions 模組整理
+
+- 保留 `main.py` 作為 Firebase Functions 唯一入口。
+- `main.py` 只處理 Function 註冊及 region、timeout、memory、CORS 設定。
+- 共用 request、response、驗證與 OpenAI client 移到 `function_common.py`。
+- Chat 與 PDF notes 都屬於一般課程 AI 功能，集中到 `lecture_ai.py`。
+- Realtime Agent 的 schema、tool、prompt、正規化與 handler 移到 `realtime_agent.py`。
+- Azure Speech token 邏輯移到小型 `speech.py`。
+- 四個已部署 Function 名稱、URL、HTTP contract 與資源設定維持不變。
+- 測試改為直接測試各模組的公開 helper 與 handler。

@@ -126,7 +126,7 @@ void main() {
     viewModel.dispose();
   });
 
-  test('persists and publishes a realtime summary addition', () async {
+  test('persists structured realtime summary additions', () async {
     List<AiPageNote>? savedNotes;
     final manager = NoteGenerationManager.testing(
       loadSavedNotes: (_) async => oldNotes,
@@ -140,15 +140,19 @@ void main() {
     final viewModel = LectureNotesViewModel(manager: manager);
 
     await viewModel.loadSaved('lecture-1');
-    await viewModel.appendNoteToPage(
+    final updated = await viewModel.appendRealtimeUpdate(
       storageId: 'lecture-1',
       pageNumber: 1,
-      additionalMarkdown: '* Teacher explanation',
+      newPoints: const ['- Teacher explanation'],
+      questions: const ['Why does this work?'],
     );
 
+    expect(updated, isTrue);
     expect(savedNotes, isNotNull);
-    expect(savedNotes!.single.markdown, contains('### Live Lecture Updates'));
-    expect(savedNotes!.single.markdown, contains('* Teacher explanation'));
+    expect(savedNotes!.single.markdown, contains('### Professor Additions'));
+    expect(savedNotes!.single.markdown, contains('- Teacher explanation'));
+    expect(savedNotes!.single.markdown, contains('### Professor Questions'));
+    expect(savedNotes!.single.markdown, contains('- Why does this work?'));
     await _waitFor(
       () => viewModel.notes.single.markdown == savedNotes!.single.markdown,
     );
@@ -158,7 +162,7 @@ void main() {
     viewModel.dispose();
   });
 
-  test('creates a live note when the current page has no summary', () async {
+  test('discards realtime updates when the page has no summary', () async {
     List<AiPageNote>? savedNotes;
     final manager = NoteGenerationManager.testing(
       loadSavedNotes: (_) async => const [],
@@ -172,16 +176,48 @@ void main() {
     final viewModel = LectureNotesViewModel(manager: manager);
 
     await viewModel.loadSaved('lecture-1');
-    await viewModel.appendNoteToPage(
+    final updated = await viewModel.appendRealtimeUpdate(
       storageId: 'lecture-1',
       pageNumber: 2,
-      additionalMarkdown: '* New explanation',
+      newPoints: const ['- New explanation'],
+      questions: const [],
     );
 
-    expect(savedNotes, hasLength(1));
-    expect(savedNotes!.single.pageNumber, 2);
-    expect(savedNotes!.single.markdown, contains('* New explanation'));
+    expect(updated, isFalse);
+    expect(savedNotes, isNull);
+    expect(viewModel.notes, isEmpty);
     viewModel.dispose();
+  });
+
+  test('deduplicates repeated realtime additions', () async {
+    List<AiPageNote>? savedNotes;
+    final manager = NoteGenerationManager.testing(
+      loadSavedNotes: (_) async => oldNotes,
+      generateAndSaveNotes: ({required storageId, required pdfPath}) async {
+        return newNotes;
+      },
+      saveNotes: (storageId, notes) async {
+        savedNotes = notes;
+      },
+    );
+
+    await manager.appendRealtimeUpdate(
+      storageId: 'lecture-1',
+      pageNumber: 1,
+      newPoints: const ['- Teacher explanation', '- Teacher explanation'],
+      questions: const [],
+    );
+    await manager.appendRealtimeUpdate(
+      storageId: 'lecture-1',
+      pageNumber: 1,
+      newPoints: const ['Teacher explanation'],
+      questions: const [],
+    );
+
+    expect(
+      RegExp('Teacher explanation').allMatches(savedNotes!.single.markdown),
+      hasLength(1),
+    );
   });
 
   test('preserves live updates when PDF generation finishes later', () async {
@@ -205,7 +241,7 @@ void main() {
         AiPageNote(
           pageNumber: 1,
           markdown:
-              'Old summary\n\n### Live Lecture Updates\n* Teacher explanation',
+              'Old summary\n\n### Professor Additions\n- Teacher explanation',
         ),
       ],
     );
@@ -215,8 +251,8 @@ void main() {
 
     final note = manager.stateFor('lecture-1').notes.single;
     expect(note.markdown, startsWith('New summary'));
-    expect(note.markdown, contains('### Live Lecture Updates'));
-    expect(note.markdown, contains('* Teacher explanation'));
+    expect(note.markdown, contains('### Professor Additions'));
+    expect(note.markdown, contains('- Teacher explanation'));
   });
 }
 
