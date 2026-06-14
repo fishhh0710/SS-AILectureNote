@@ -24,6 +24,8 @@ class ChatFunctionService {
   final FirebaseFunctionClient _functionClient;
 
   Future<String> ask({
+    required String courseId,
+    required String lectureId,
     required String notes,
     required String transcript,
     required String history,
@@ -33,6 +35,8 @@ class ChatFunctionService {
       functionName: _functionName,
       overrideUrl: _functionUrl,
       body: {
+        'courseId': courseId,
+        'lectureId': lectureId,
         'notes': notes,
         'transcript': transcript,
         'history': history,

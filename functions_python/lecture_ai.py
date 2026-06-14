@@ -92,28 +92,6 @@ Rules:
 """.strip()
 
 
-def _chat_prompt(notes: str, transcript: str, history: str, question: str) -> str:
-    return f"""
-You are an AI study assistant for a lecture-note app.
-
-Answer the student's question using the lecture notes and transcript first.
-If the provided context is insufficient, say what is missing and answer only at a high level.
-Keep the answer concise, structured, and useful for studying.
-
-AI notes:
-{notes or "(none)"}
-
-Lecture transcript:
-{transcript or "(none)"}
-
-Recent chat history:
-{history or "(none)"}
-
-Student question:
-{question}
-""".strip()
-
-
 def _extract_output_text(response: Any) -> str:
     output_text = getattr(response, "output_text", None)
     if isinstance(output_text, str):
@@ -175,38 +153,6 @@ def _job_document(job_path: str, safe_id: str):
     if len(segments) % 2 == 0:
         return database.document(job_path)
     return database.collection("ai_note_jobs").document(safe_id)
-
-
-def chat_handler(req: https_fn.Request) -> https_fn.Response:
-    if req.method != "POST":
-        return json_response({"message": "Only POST is supported."}, 405)
-    try:
-        payload = request_payload(req)
-        question = required_string(payload, "question")
-        response = openai_client().chat.completions.create(
-            model=os.getenv("OPENAI_CHAT_MODEL")
-            or os.getenv("OPENAI_MODEL")
-            or "gpt-4o-mini",
-            messages=[
-                {
-                    "role": "user",
-                    "content": _chat_prompt(
-                        optional_string(payload.get("notes")),
-                        optional_string(payload.get("transcript")),
-                        optional_string(payload.get("history")),
-                        question,
-                    ),
-                }
-            ],
-            temperature=0.7,
-        )
-        answer = (response.choices[0].message.content or "").strip()
-        if not answer:
-            raise RuntimeError("OpenAI response did not include an answer.")
-        return json_response({"answer": answer})
-    except Exception as error:
-        logging.exception("Chat function failed")
-        return json_response({"message": str(error)}, 500)
 
 
 def notes_handler(req: https_fn.Request) -> https_fn.Response:

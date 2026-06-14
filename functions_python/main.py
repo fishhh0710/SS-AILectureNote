@@ -6,7 +6,8 @@ from typing import Any, Callable
 from firebase_admin import initialize_app
 from firebase_functions import https_fn, options
 
-from lecture_ai import chat_handler, notes_handler
+from chat_agent import chat_handler
+from lecture_ai import notes_handler
 from realtime_agent import realtime_agent_handler
 from speech import azure_token_handler
 

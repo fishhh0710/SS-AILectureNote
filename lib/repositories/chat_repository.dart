@@ -50,6 +50,8 @@ class ChatRepository {
 
   Future<ChatMessage> requestAssistantReply({
     required int conversationId,
+    required String courseId,
+    required String lectureId,
     required String aiNotes,
     required String transcript,
     required String question,
@@ -60,6 +62,8 @@ class ChatRepository {
         .join('\n');
 
     final answer = await _chatService.ask(
+      courseId: courseId,
+      lectureId: lectureId,
       notes: aiNotes,
       transcript: transcript,
       history: history,

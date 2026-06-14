@@ -5,6 +5,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Literal
 
 from firebase_admin import firestore
@@ -83,7 +84,21 @@ def memory_document_id(uid: str, memory: MemoryWrite) -> str:
 
 
 def _without_embedding(data: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in data.items() if key != "embedding"}
+    return {
+        key: _json_safe(value)
+        for key, value in data.items()
+        if key != "embedding"
+    }
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
 
 
 class MemoryService:

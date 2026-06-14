@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 import attention_agent
+import chat_agent
 import function_common
 import memory_service
 import realtime_agent
@@ -170,6 +171,34 @@ class FunctionContractTests(unittest.TestCase):
         )
         self.assertEqual([item.kind for item in writes], ["missed_content", "confusion"])
         self.assertTrue(all(item.scope == "lecture" for item in writes))
+
+    def test_chat_prompt_includes_memory_and_course_context(self):
+        prompt = chat_agent.build_chat_prompt(
+            notes="Recursion notes",
+            transcript="Teacher transcript",
+            history="user: explain this",
+            question="Use examples when explaining",
+            memories=[
+                {
+                    "domain": "preference",
+                    "preferenceKey": "explanation.examples",
+                    "content": "Use concrete examples",
+                }
+            ],
+        )
+        self.assertIn("Use concrete examples", prompt)
+        self.assertIn("Recursion notes", prompt)
+        self.assertIn("Use examples when explaining", prompt)
+
+    def test_memory_serialization_converts_firestore_timestamps(self):
+        result = memory_service.MemorySearchResult(
+            memory_id="memory-1",
+            data={
+                "content": "Use examples",
+                "updatedAt": datetime(2026, 6, 15, tzinfo=timezone.utc),
+            },
+        ).to_dict()
+        self.assertEqual(result["updatedAt"], "2026-06-15T00:00:00+00:00")
 
     @patch.dict(speech.os.environ, {}, clear=True)
     def test_azure_handler_reports_missing_key(self):

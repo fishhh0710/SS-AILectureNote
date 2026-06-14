@@ -525,6 +525,8 @@ class _LectureViewState extends State<LectureView> {
           index: index,
           onClose: () => setState(() => _showChatbot = false),
           notebookId: int.tryParse(widget.fileId) ?? 0,
+          courseId: widget.courseId,
+          lectureId: widget.fileId,
           aiNotes: notesString, // 目前畫面上最新最真實的筆記內容
           transcript: _liveTranscript, // 目前最新錄製的即時逐字稿
           segmentStream: _segmentStreamController.stream,

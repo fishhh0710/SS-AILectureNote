@@ -10,6 +10,8 @@ class ChatbotPanel extends StatefulWidget {
   final int index;
   final VoidCallback onClose;
   final int notebookId;
+  final String courseId;
+  final String lectureId;
   final String aiNotes;
   final String transcript;
   final Stream<Map<String, dynamic>>? segmentStream;
@@ -20,6 +22,8 @@ class ChatbotPanel extends StatefulWidget {
     required this.index,
     required this.onClose,
     required this.notebookId,
+    required this.courseId,
+    required this.lectureId,
     required this.aiNotes,
     required this.transcript,
     this.segmentStream,
@@ -57,6 +61,8 @@ class _ChatbotPanelState extends State<ChatbotPanel> {
 
     _viewModel.updateLectureContext(
       notebookId: widget.notebookId,
+      courseId: widget.courseId,
+      lectureId: widget.lectureId,
       aiNotes: widget.aiNotes,
       transcript: widget.transcript,
     );
@@ -75,6 +81,8 @@ class _ChatbotPanelState extends State<ChatbotPanel> {
   ChatViewModel _createViewModel() {
     final viewModel = ChatViewModel(
       notebookId: widget.notebookId,
+      courseId: widget.courseId,
+      lectureId: widget.lectureId,
       aiNotes: widget.aiNotes,
       transcript: widget.transcript,
     );
