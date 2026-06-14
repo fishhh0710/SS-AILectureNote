@@ -41,6 +41,8 @@ class _SlidesPanelState extends State<SlidesPanel> {
   bool _isLoading = false;
   String? _errorMessage;
   PageAnnotationManager? _annotationManager;
+  bool _showAnnotations = true;
+  final Set<int> _processingPages = {};
 
   int? get _nodeId => int.tryParse(widget.fileId);
 
@@ -191,6 +193,37 @@ class _SlidesPanelState extends State<SlidesPanel> {
     if (oldDocument != null) {
       unawaited(oldDocument.dispose());
     }
+
+    // Trigger auto-annotation of all PDF pages in parallel
+    unawaited(_processPdfAnnotations(loaded));
+  }
+
+  Future<void> _processPdfAnnotations(PdfDocument doc) async {
+    final annotationManager = _annotationManager;
+    if (annotationManager == null) return;
+
+    setState(() {
+      _processingPages.clear();
+    });
+
+    try {
+      await _viewModel.processAllPages(
+        document: doc,
+        annotationManager: annotationManager,
+        onPageProgress: (pageNum, isDone) {
+          if (!mounted) return;
+          setState(() {
+            if (isDone) {
+              _processingPages.remove(pageNum);
+            } else {
+              _processingPages.add(pageNum);
+            }
+          });
+        },
+      );
+    } catch (e) {
+      print('DEBUG: Error auto-annotating pages: $e');
+    }
   }
 
   @override
@@ -229,6 +262,25 @@ class _SlidesPanelState extends State<SlidesPanel> {
               icon: Icons.picture_in_picture,
               onClose: widget.onClose,
               actions: [
+                if (_document != null) ...[
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _showAnnotations = !_showAnnotations;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: Icon(
+                        _showAnnotations ? Icons.visibility : Icons.visibility_off,
+                        size: 14,
+                        color: const Color(0xFFA8A08E),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 InkWell(
                   onTap: _isLoading ? null : _pickAndLoadPdf,
                   borderRadius: BorderRadius.circular(12),
@@ -340,10 +392,26 @@ class _SlidesPanelState extends State<SlidesPanel> {
       itemCount: document.pages.length,
       itemBuilder: (context, idx) {
         final pageNum = idx + 1;
+        final isPageProcessing = _processingPages.contains(pageNum);
         return SlidePage(
           pageNumber: pageNum,
-          annotationListenable: _annotationManager?.getPageNotifier(pageNum),
-          child: PdfPageView(document: document, pageNumber: pageNum),
+          annotationListenable: _showAnnotations ? _annotationManager?.getPageNotifier(pageNum) : null,
+          child: Stack(
+            children: [
+              PdfPageView(document: document, pageNumber: pageNum),
+              if (isPageProcessing)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF8E9775),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
