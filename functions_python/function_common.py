@@ -5,6 +5,7 @@ import os
 import re
 from typing import Any
 
+from firebase_admin import auth
 from firebase_functions import https_fn
 from openai import OpenAI
 
@@ -45,3 +46,14 @@ def openai_client() -> OpenAI:
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not configured for Firebase Functions.")
     return OpenAI(api_key=api_key)
+
+
+def authenticated_user_id(req: https_fn.Request) -> str:
+    header = req.headers.get("Authorization", "")
+    if not header.startswith("Bearer "):
+        raise PermissionError("Firebase authentication is required.")
+    decoded = auth.verify_id_token(header.removeprefix("Bearer ").strip())
+    uid = decoded.get("uid")
+    if not isinstance(uid, str) or not uid:
+        raise PermissionError("Firebase authentication token is missing uid.")
+    return uid

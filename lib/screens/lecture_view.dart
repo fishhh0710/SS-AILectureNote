@@ -449,9 +449,20 @@ class _LectureViewState extends State<LectureView> {
       _layoutOrder.add('summary');
     });
 
+    try {
+      await _userIdentityService.ensureSignedIn();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to initialize user memory: $error')),
+      );
+      return;
+    }
     await _notesViewModel.generateFromPdf(
       storageId: widget.fileId,
       pdfPath: pdfPath,
+      courseId: widget.courseId,
+      lectureId: widget.fileId,
     );
   }
 

@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 import attention_agent
 import chat_agent
 import function_common
+import lecture_ai
 import memory_service
 import realtime_agent
 import speech
@@ -199,6 +200,23 @@ class FunctionContractTests(unittest.TestCase):
             },
         ).to_dict()
         self.assertEqual(result["updatedAt"], "2026-06-15T00:00:00+00:00")
+
+    def test_pdf_prompt_applies_memory_without_overriding_source(self):
+        prompt = lecture_ai._pdf_notes_prompt(
+            [
+                {
+                    "domain": "preference",
+                    "content": "Use concise numbered points",
+                },
+                {
+                    "domain": "learning",
+                    "content": "The student struggles with recursion base cases",
+                },
+            ]
+        )
+        self.assertIn("Use concise numbered points", prompt)
+        self.assertIn("recursion base cases", prompt)
+        self.assertIn("Memory never overrides the PDF", prompt)
 
     @patch.dict(speech.os.environ, {}, clear=True)
     def test_azure_handler_reports_missing_key(self):

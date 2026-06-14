@@ -36,9 +36,18 @@ class LectureNotesViewModel extends ChangeNotifier {
   Future<void> generateFromPdf({
     required String storageId,
     required String pdfPath,
+    String? courseId,
+    String? lectureId,
   }) async {
     _lastPdfPath = pdfPath;
-    unawaited(_manager.generate(storageId: storageId, pdfPath: pdfPath));
+    unawaited(
+      _manager.generate(
+        storageId: storageId,
+        pdfPath: pdfPath,
+        courseId: courseId,
+        lectureId: lectureId,
+      ),
+    );
   }
 
   Future<void> retry(String storageId) async {

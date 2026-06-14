@@ -106,6 +106,8 @@ class NoteGenerationManager {
   final Map<String, NoteGenerationState> _states = {};
   final Map<String, Future<void>> _loadOperations = {};
   final Map<String, Future<void>> _generationOperations = {};
+  final Map<String, String> _courseIds = {};
+  final Map<String, String> _lectureIds = {};
   final Set<String> _loadedStorageIds = {};
   final StreamController<NoteGenerationState> _stateController =
       StreamController<NoteGenerationState>.broadcast();
@@ -141,7 +143,11 @@ class NoteGenerationManager {
   Future<void> generate({
     required String storageId,
     required String pdfPath,
+    String? courseId,
+    String? lectureId,
   }) async {
+    _courseIds[storageId] = courseId ?? _courseIds[storageId] ?? storageId;
+    _lectureIds[storageId] = lectureId ?? _lectureIds[storageId] ?? storageId;
     await load(storageId);
 
     final existing = _generationOperations[storageId];
@@ -436,6 +442,8 @@ class NoteGenerationManager {
       timeout: const Duration(minutes: 10),
       body: {
         'storageId': storageId,
+        'courseId': _courseIds[storageId] ?? storageId,
+        'lectureId': _lectureIds[storageId] ?? storageId,
         'storageBucket': _storage.bucket,
         'pdfStoragePath': pdfStoragePath,
         'jobPath': jobPath,

@@ -8,8 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 from agents import Agent, Runner
-from firebase_admin import auth, firestore, messaging
-from firebase_functions import https_fn
+from firebase_admin import firestore, messaging
 from pydantic import BaseModel, Field
 
 from memory_service import MemoryService, MemoryWrite
@@ -97,17 +96,6 @@ def attention_memory_writes(
             )
         )
     return writes
-
-
-def authenticated_user_id(req: https_fn.Request) -> str:
-    header = req.headers.get("Authorization", "")
-    if not header.startswith("Bearer "):
-        raise PermissionError("Firebase authentication is required for attention monitoring.")
-    decoded = auth.verify_id_token(header.removeprefix("Bearer ").strip())
-    uid = decoded.get("uid")
-    if not isinstance(uid, str) or not uid:
-        raise PermissionError("Firebase authentication token is missing uid.")
-    return uid
 
 
 def _parse_datetime(value: Any) -> datetime | None:

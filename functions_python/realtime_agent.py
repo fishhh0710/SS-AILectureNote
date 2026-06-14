@@ -10,8 +10,9 @@ from agents import Agent, RunContextWrapper, Runner, function_tool
 from firebase_functions import https_fn
 from pydantic import BaseModel, Field
 
-from attention_agent import authenticated_user_id, evaluate_attention
+from attention_agent import evaluate_attention
 from function_common import (
+    authenticated_user_id,
     json_response,
     request_payload,
     required_string,

@@ -9,8 +9,13 @@ from agents import Agent, RunContextWrapper, Runner, function_tool
 from firebase_functions import https_fn
 from pydantic import BaseModel
 
-from attention_agent import authenticated_user_id
-from function_common import json_response, optional_string, request_payload, required_string
+from function_common import (
+    authenticated_user_id,
+    json_response,
+    optional_string,
+    request_payload,
+    required_string,
+)
 from memory_service import MemoryService, MemoryWrite
 
 

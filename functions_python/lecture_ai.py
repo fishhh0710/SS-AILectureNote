@@ -11,6 +11,7 @@ from firebase_admin import firestore, storage
 from firebase_functions import https_fn
 
 from function_common import (
+    authenticated_user_id,
     json_response,
     openai_client,
     optional_string,
@@ -18,6 +19,7 @@ from function_common import (
     required_string,
     safe_storage_id,
 )
+from memory_service import MemoryService
 
 
 PAGE_NOTES_SCHEMA = {
@@ -48,8 +50,9 @@ PAGE_NOTES_SCHEMA = {
 }
 
 
-def _pdf_notes_prompt() -> str:
-    return """
+def _pdf_notes_prompt(memory_context: list[dict[str, Any]] | None = None) -> str:
+    memory_section = json.dumps(memory_context or [], ensure_ascii=False)
+    return f"""
 You are an academic PDF note-taking assistant.
 
 Task:
@@ -66,7 +69,8 @@ Each item must contain:
 - page_number: the page number, starting from 1
 - markdown: the Markdown note for that page
 
-Markdown format for each page:
+Default Markdown format for each page, used only when memory does not request a different
+presentation structure:
 
 # Page <page_number>: <short inferred title>
 
@@ -89,6 +93,18 @@ Rules:
 - Do not invent information that is not supported by the PDF.
 - The markdown field should contain Markdown only.
 - Do not wrap Markdown in markdown fences.
+
+User memory context:
+{memory_section}
+
+Memory rules:
+- Active preference memories must change language, formatting, detail level, examples, and
+  explanation style when requested. They may override the default Main Idea / Key Terms layout.
+- Preferences never override the requirement to return one accurate Markdown note per PDF page.
+- Learning memories may suggest concepts that deserve clearer explanation when those concepts are
+  actually present on a PDF page.
+- Memory never overrides the PDF and must never introduce unsupported facts.
+- Ignore memories unrelated to the PDF page being summarized.
 """.strip()
 
 
@@ -107,7 +123,9 @@ def _extract_output_text(response: Any) -> str:
     return "".join(parts)
 
 
-def _generate_page_notes(pdf_path: str) -> dict[str, Any]:
+def _generate_page_notes(
+    pdf_path: str, memory_context: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     client = openai_client()
     with open(pdf_path, "rb") as pdf_file:
         uploaded_file = client.files.create(file=pdf_file, purpose="user_data")
@@ -122,7 +140,10 @@ def _generate_page_notes(pdf_path: str) -> dict[str, Any]:
                     "role": "user",
                     "content": [
                         {"type": "input_file", "file_id": uploaded_file.id},
-                        {"type": "input_text", "text": _pdf_notes_prompt()},
+                        {
+                            "type": "input_text",
+                            "text": _pdf_notes_prompt(memory_context),
+                        },
                     ],
                 }
             ],
@@ -155,6 +176,27 @@ def _job_document(job_path: str, safe_id: str):
     return database.collection("ai_note_jobs").document(safe_id)
 
 
+def _summary_memories(
+    *, uid: str, course_id: str, lecture_id: str
+) -> list[dict[str, Any]]:
+    service = MemoryService()
+    preferences = service.list_active(
+        uid=uid,
+        domains={"preference"},
+        course_id=course_id,
+        lecture_id=lecture_id,
+        limit=12,
+    )
+    learning = service.list_active(
+        uid=uid,
+        domains={"learning"},
+        course_id=course_id,
+        lecture_id=lecture_id,
+        limit=12,
+    )
+    return [item.to_dict() for item in [*preferences, *learning]]
+
+
 def notes_handler(req: https_fn.Request) -> https_fn.Response:
     if req.method != "POST":
         return json_response({"message": "Only POST is supported."}, 405)
@@ -163,7 +205,10 @@ def notes_handler(req: https_fn.Request) -> https_fn.Response:
     job_ref = None
     try:
         payload = request_payload(req)
+        uid = authenticated_user_id(req)
         storage_id = required_string(payload, "storageId")
+        course_id = required_string(payload, "courseId")
+        lecture_id = required_string(payload, "lectureId")
         storage_bucket = optional_string(payload.get("storageBucket"))
         pdf_storage_path = required_string(payload, "pdfStoragePath")
         safe_id = safe_storage_id(storage_id)
@@ -184,7 +229,12 @@ def notes_handler(req: https_fn.Request) -> https_fn.Response:
             temp_pdf_path = temp_file.name
         bucket.blob(pdf_storage_path).download_to_filename(temp_pdf_path)
 
-        notes = _generate_page_notes(temp_pdf_path)
+        memory_context = _summary_memories(
+            uid=uid,
+            course_id=course_id,
+            lecture_id=lecture_id,
+        )
+        notes = _generate_page_notes(temp_pdf_path, memory_context)
         notes_storage_path = f"ai_note_jobs/{safe_id}/notes/notes.json"
         notes_blob = bucket.blob(notes_storage_path)
         notes_blob.metadata = {"storageId": storage_id}
@@ -198,6 +248,7 @@ def notes_handler(req: https_fn.Request) -> https_fn.Response:
                 "status": "completed",
                 "notesStoragePath": notes_storage_path,
                 "pageCount": len(notes["pages"]),
+                "memoryCount": len(memory_context),
                 "updatedAt": firestore.SERVER_TIMESTAMP,
             },
             merge=True,
@@ -209,8 +260,11 @@ def notes_handler(req: https_fn.Request) -> https_fn.Response:
                 "storageBucket": bucket.name,
                 "jobPath": job_ref.path,
                 "notesStoragePath": notes_storage_path,
+                "memoryCount": len(memory_context),
             }
         )
+    except PermissionError as error:
+        return json_response({"message": str(error)}, 401)
     except Exception as error:
         logging.exception("PDF note generation failed")
         if job_ref is not None:
