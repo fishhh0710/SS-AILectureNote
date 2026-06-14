@@ -1,5 +1,8 @@
 # Note Agent Flutter Integration
 
+> 注意：這是早期 FastAPI prototype 的歷史文件，不是目前正式資料流。
+> 現行版本使用 `NoteGenerationManager`、Firebase Storage 與 `generateNotesFromPdf` Cloud Function；請以根目錄的 `arch.html` 和 `update.md` 為準。
+
 這個檔案是文件，說明 Flutter 怎麼接 `python_server` 裡的 note agent，以及 `SummaryPanel` 的資料流和 UI 架構。
 
 ## 目前 Backend 有沒有用

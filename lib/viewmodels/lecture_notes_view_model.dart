@@ -1,14 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/ai_page_note.dart';
-import '../repositories/note_repository.dart';
+import '../services/note_generation_manager.dart';
 
 class LectureNotesViewModel extends ChangeNotifier {
-  LectureNotesViewModel({NoteRepository? repository})
-    : _repository = repository ?? NoteRepository();
+  LectureNotesViewModel({NoteGenerationManager? manager})
+    : _manager = manager ?? NoteGenerationManager.instance;
 
-  final NoteRepository _repository;
-  int _requestId = 0;
+  final NoteGenerationManager _manager;
+  StreamSubscription<NoteGenerationState>? _subscription;
+  String? _storageId;
+  bool _disposed = false;
 
   List<AiPageNote> _notes = const [];
   bool _isGenerating = false;
@@ -22,68 +26,39 @@ class LectureNotesViewModel extends ChangeNotifier {
   bool get canRetry => _lastPdfPath != null && !_isGenerating;
 
   Future<void> loadSaved(String storageId) async {
-    final requestId = ++_requestId;
-
-    try {
-      final notes = await _repository.loadSavedNotes(storageId);
-      if (requestId != _requestId) return;
-
-      _notes = notes;
-      notifyListeners();
-    } catch (e) {
-      if (requestId != _requestId) return;
-
-      _errorMessage = 'Failed to load saved AI notes: $e';
-      notifyListeners();
-    }
+    _storageId = storageId;
+    await _subscription?.cancel();
+    _subscription = _manager.watch(storageId).listen(_applyState);
+    await _manager.load(storageId);
+    _applyState(_manager.stateFor(storageId));
   }
 
   Future<void> generateFromPdf({
     required String storageId,
     required String pdfPath,
   }) async {
-    final requestId = ++_requestId;
-
     _lastPdfPath = pdfPath;
-    _notes = const [];
-    _isGenerating = true;
-    _errorMessage = null;
-    notifyListeners();
-
-    try {
-      final notes = await _repository.generateAndSaveNotes(
-        storageId: storageId,
-        pdfPath: pdfPath,
-      );
-      if (requestId != _requestId) return;
-
-      _notes = notes;
-      _isGenerating = false;
-      notifyListeners();
-    } catch (e) {
-      if (requestId != _requestId) return;
-
-      _isGenerating = false;
-      _errorMessage = e.toString();
-      notifyListeners();
-    }
+    unawaited(_manager.generate(storageId: storageId, pdfPath: pdfPath));
   }
 
   Future<void> retry(String storageId) async {
-    final pdfPath = _lastPdfPath;
-    if (pdfPath == null || _isGenerating) return;
-
-    await generateFromPdf(storageId: storageId, pdfPath: pdfPath);
+    unawaited(_manager.retry(storageId));
   }
 
-  void cancelPending() {
-    _requestId++;
+  void _applyState(NoteGenerationState state) {
+    if (_disposed || state.storageId != _storageId) return;
+
+    _notes = state.notes;
+    _isGenerating = state.isGenerating;
+    _errorMessage = state.errorMessage;
+    _lastPdfPath = state.lastPdfPath ?? _lastPdfPath;
+    notifyListeners();
   }
 
   @override
   void dispose() {
-    cancelPending();
-    _repository.dispose();
+    _disposed = true;
+    unawaited(_subscription?.cancel());
     super.dispose();
   }
 }
