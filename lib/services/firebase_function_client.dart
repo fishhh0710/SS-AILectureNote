@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 class FirebaseFunctionException implements Exception {
@@ -51,12 +52,17 @@ class FirebaseFunctionClient {
       overrideUrl: overrideUrl,
     );
 
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final token = await user.getIdToken();
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+    }
+
     final response = await _client
-        .post(
-          uri,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(body),
-        )
+        .post(uri, headers: headers, body: jsonEncode(body))
         .timeout(timeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {

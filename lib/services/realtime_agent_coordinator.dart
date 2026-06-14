@@ -4,6 +4,7 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../services/annotation_manager.dart';
 import '../services/firebase_function_client.dart';
+import '../services/notification_service.dart';
 import '../viewmodels/lecture_notes_view_model.dart';
 import '../viewmodels/slides_view_model.dart';
 
@@ -25,6 +26,9 @@ class RealtimeAgentCoordinator {
     required this.segmentStream,
     required this.getAnnotationManager,
     required this.getPdfDocument,
+    required this.sessionId,
+    required this.getStudentState,
+    this.notificationToken,
     FirebaseFunctionClient? functionClient,
   }) : _functionClient = functionClient ?? FirebaseFunctionClient() {
     _subscribe();
@@ -36,6 +40,9 @@ class RealtimeAgentCoordinator {
   final Stream<Map<String, dynamic>> segmentStream;
   final PageAnnotationManager? Function() getAnnotationManager;
   final PdfDocument? Function() getPdfDocument;
+  final String sessionId;
+  final Map<String, dynamic> Function() getStudentState;
+  final String? notificationToken;
   final FirebaseFunctionClient _functionClient;
 
   StreamSubscription<Map<String, dynamic>>? _subscription;
@@ -100,6 +107,9 @@ class RealtimeAgentCoordinator {
                 .toList(),
             'recentSegments': chunk.recentSegments,
             'latestSegment': chunk.latestSegment,
+            'sessionId': sessionId,
+            'studentState': getStudentState(),
+            'notificationToken': notificationToken,
           },
         ),
       );
@@ -107,6 +117,7 @@ class RealtimeAgentCoordinator {
       final pageNumber = _positiveInt(decoded['page_number']);
       if (pageNumber == null || pageNumber > doc.pages.length) return;
       _lastTeacherPage = pageNumber;
+      await _handleAttention(decoded['attention'], pageNumber);
 
       final action = decoded['update_note_at'] as String? ?? 'none';
       if (action == 'summary') {
@@ -139,6 +150,18 @@ class RealtimeAgentCoordinator {
       // ignore: avoid_print
       print('DEBUG [Agent]: Realtime processing failed: $error');
     }
+  }
+
+  Future<void> _handleAttention(Object? value, int teacherPage) async {
+    if (value is! Map) return;
+    final attention = Map<String, dynamic>.from(value);
+    if (attention['checked'] != true || attention['status'] != 'distracted') {
+      return;
+    }
+    if (attention['notification_sent'] == true) return;
+    await NotificationService.instance.showDistractionNotification(
+      teacherPage: teacherPage,
+    );
   }
 
   int? _positiveInt(Object? value) {

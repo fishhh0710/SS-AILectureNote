@@ -10,7 +10,13 @@ from agents import Agent, RunContextWrapper, Runner, function_tool
 from firebase_functions import https_fn
 from pydantic import BaseModel, Field
 
-from function_common import json_response, request_payload, required_string
+from attention_agent import authenticated_user_id, evaluate_attention
+from function_common import (
+    json_response,
+    request_payload,
+    required_string,
+    safe_storage_id,
+)
 
 
 class RealtimeTarget(BaseModel):
@@ -217,9 +223,11 @@ def realtime_agent_handler(req: https_fn.Request) -> https_fn.Response:
     try:
         payload = request_payload(req)
         latest_segment = required_string(payload, "latestSegment")
+        page_summaries = _parse_page_summaries(payload.get("pageSummaries"))
+        recent_segments = parse_recent_segments(payload.get("recentSegments"))
         context = RealtimeAgentContext(
-            page_summaries=_parse_page_summaries(payload.get("pageSummaries")),
-            recent_segments=parse_recent_segments(payload.get("recentSegments")),
+            page_summaries=page_summaries,
+            recent_segments=recent_segments,
             latest_segment=latest_segment,
             last_teacher_page=_parse_optional_page(payload.get("lastTeacherPage")),
         )
@@ -237,7 +245,36 @@ def realtime_agent_handler(req: https_fn.Request) -> https_fn.Response:
         output = run_result.final_output
         if not isinstance(output, RealtimeAgentOutput):
             output = RealtimeAgentOutput.model_validate(output)
-        return json_response(normalize_realtime_output(output))
+        response = normalize_realtime_output(output)
+        student_state = payload.get("studentState")
+        session_id = payload.get("sessionId")
+        if (
+            response["page_number"] is not None
+            and isinstance(student_state, dict)
+            and isinstance(session_id, str)
+            and session_id.strip()
+        ):
+            try:
+                response["attention"] = evaluate_attention(
+                    uid=authenticated_user_id(req),
+                    session_id=safe_storage_id(session_id),
+                    student_state=student_state,
+                    teacher_page=response["page_number"],
+                    page_summaries=page_summaries,
+                    transcript_segments=[*recent_segments, latest_segment],
+                    notification_token=(
+                        payload.get("notificationToken", "").strip()
+                        if isinstance(payload.get("notificationToken"), str)
+                        else ""
+                    ),
+                )
+            except Exception as error:
+                logging.exception("Attention evaluation failed")
+                response["attention"] = {
+                    "checked": False,
+                    "error": str(error),
+                }
+        return json_response(response)
     except Exception as error:
         logging.exception("Realtime agent function failed")
         return json_response({"message": str(error)}, 500)
