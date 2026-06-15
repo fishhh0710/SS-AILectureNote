@@ -1,0 +1,1274 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claw-Note 原始碼架構與語法完全手冊</title>
+  <style>
+    :root {
+      --bg: #fbfaf7;
+      --paper: #ffffff;
+      --ink: #2c2b29;
+      --muted: #6b6964;
+      --line: #e4decb;
+      --soft: #f4efdf;
+      --primary: #8e9775;
+      --primary-dark: #6e7759;
+      --primary-light: #e9ecd8;
+      --secondary: #536f91;
+      --orange: #b27342;
+      --red: #a35656;
+      --code-text: #594a2b;
+      --code-bg: #f5f2eb;
+      --dark-bg: #222320;
+      --dark-text: #f0ede5;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      line-height: 1.68;
+    }
+
+    /* 頂部 Header */
+    header {
+      padding: 50px 30px 35px;
+      background: #efebe2;
+      border-bottom: 1px solid var(--line);
+      position: relative;
+    }
+
+    header > div {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    header h1 {
+      margin: 0 0 10px;
+      font-size: clamp(28px, 4.5vw, 40px);
+      color: var(--ink);
+      font-family: "Serif", Georgia, "Times New Roman", serif;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      letter-spacing: 0.5px;
+    }
+
+    /* 佈局容器 */
+    .container {
+      display: flex;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 30px;
+      gap: 30px;
+    }
+
+    /* 側邊導覽 */
+    aside {
+      width: 280px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 30px;
+      height: calc(100vh - 60px);
+      overflow-y: auto;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    aside::-webkit-scrollbar {
+      width: 4px;
+    }
+    aside::-webkit-scrollbar-thumb {
+      background: var(--line);
+      border-radius: 4px;
+    }
+
+    aside h2 {
+      font-size: 15px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin: 0 0 15px;
+      border-bottom: 2px solid var(--soft);
+      padding-bottom: 6px;
+    }
+
+    .nav-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .nav-list li {
+      margin-bottom: 8px;
+    }
+
+    .nav-list a {
+      display: block;
+      padding: 6px 10px;
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 14px;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .nav-list a:hover {
+      background: var(--soft);
+      color: var(--primary-dark);
+      padding-left: 14px;
+    }
+
+    .nav-list .sub-list {
+      list-style: none;
+      padding-left: 15px;
+      margin: 5px 0 0;
+    }
+
+    .nav-list .sub-list a {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* 主要內容區 */
+    main {
+      flex-grow: 1;
+      min-width: 0; /* 防止 code 區塊撐爆 flex */
+    }
+
+    section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 35px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+    }
+
+    section h2 {
+      margin-top: 0;
+      font-size: 24px;
+      border-bottom: 2px solid var(--soft);
+      padding-bottom: 10px;
+      color: var(--primary-dark);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h3 {
+      font-size: 19px;
+      margin: 30px 0 12px;
+      color: var(--ink);
+      border-left: 4px solid var(--primary);
+      padding-left: 10px;
+    }
+
+    h4 {
+      font-size: 16px;
+      margin: 20px 0 8px;
+      color: var(--secondary);
+    }
+
+    p {
+      margin: 10px 0 15px;
+      color: #3e3d3b;
+    }
+
+    /* 連結設定 */
+    a.file-link {
+      color: var(--secondary);
+      text-decoration: none;
+      font-weight: 600;
+      border-bottom: 1px dashed var(--secondary);
+      transition: color 0.15s ease;
+    }
+    a.file-link:hover {
+      color: var(--primary);
+      border-bottom-style: solid;
+    }
+
+    /* 程式碼樣式 */
+    code {
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: var(--code-bg);
+      color: var(--code-text);
+      font-family: "Cascadia Mono", Consolas, Menlo, Monaco, monospace;
+      font-size: 0.9em;
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 15px 0;
+      padding: 18px;
+      color: var(--dark-text);
+      background: var(--dark-bg);
+      border-radius: 8px;
+      font: 13px/1.6 "Cascadia Mono", Consolas, monospace;
+      border: 1px solid #333;
+    }
+
+    pre code {
+      padding: 0;
+      color: inherit;
+      background: transparent;
+    }
+
+    /* 表格樣式 */
+    table {
+      width: 100%;
+      margin-top: 15px;
+      margin-bottom: 20px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--soft);
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    tr:hover td {
+      background: #fdfdfb;
+    }
+
+    /* Callout 區塊 */
+    .note {
+      margin: 20px 0;
+      padding: 16px 20px;
+      background: #fbfaf6;
+      border-left: 4px solid var(--primary);
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .note-title {
+      font-weight: bold;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .note.info { border-left-color: var(--secondary); background: #f3f7fa; color: #2e435a; }
+    .note.warning { border-left-color: var(--orange); background: #fdf7f2; color: #6d4b32; }
+    .note.danger { border-left-color: var(--red); background: #fdf3f3; color: #6d3232; }
+
+    /* 語法解釋卡片 */
+    .concept-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .concept-card {
+      background: #FAF9F6;
+      border: 1px solid var(--line);
+      border-top: 4px solid var(--secondary);
+      border-radius: 8px;
+      padding: 20px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .concept-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+    }
+
+    .concept-card h3 {
+      margin-top: 0;
+      border-left: none;
+      padding-left: 0;
+      font-size: 17px;
+      color: var(--secondary);
+    }
+
+    /* 標記標籤 */
+    .tag {
+      display: inline-block;
+      margin-right: 5px;
+      margin-bottom: 5px;
+      padding: 2px 8px;
+      color: #3e3d3b;
+      background: var(--soft);
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      border: 1px solid var(--line);
+    }
+    .tag.primary { background: var(--primary-light); color: var(--primary-dark); border-color: var(--primary); }
+    .tag.secondary { background: #eef3f7; color: var(--secondary); border-color: #d1dfed; }
+
+    /* 檔案說明卡片 */
+    .file-card {
+      margin-bottom: 25px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .file-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--soft);
+      padding-bottom: 8px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .file-path {
+      font-family: monospace;
+      font-size: 15px;
+      font-weight: bold;
+    }
+
+    /* 架構圖 */
+    .diagram {
+      overflow-x: auto;
+      margin: 20px 0;
+      padding: 20px;
+      background: var(--dark-bg);
+      border-radius: 8px;
+      color: var(--dark-text);
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: pre;
+    }
+
+    @media (max-width: 960px) {
+      .container { flex-direction: column; }
+      aside { width: 100%; height: auto; position: static; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>Claw-Note 原始碼架構與語法完全手冊</h1>
+      <p class="subtitle">針對專案中所有 42 個 <code>.dart</code> 檔案之職責、關鍵函式、檔案關聯與 Dart/Flutter 語法深度解密</p>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- 側邊目錄導覽 -->
+    <aside>
+      <h2>手冊目錄</h2>
+      <ul class="nav-list">
+        <li><a href="#intro">1. 前言與 MVVM 架構理念</a></li>
+        <li><a href="#syntax">2. Dart / Flutter 語法解密</a>
+          <ul class="sub-list">
+            <li><a href="#sync-async">非同步程式設計</a></li>
+            <li><a href="#stream-section">Stream 深度剖析</a></li>
+            <li><a href="#state-section">狀態管理與監聽</a></li>
+            <li><a href="#other-syntax">其他語法與機制</a></li>
+          </ul>
+        </li>
+        <li><a href="#architecture">3. 系統架構關係圖</a></li>
+        <li><a href="#directory-details">4. 資料夾與檔案詳解</a>
+          <ul class="sub-list">
+            <li><a href="#dir-root-data">根目錄與資料層</a></li>
+            <li><a href="#dir-repo-vm">倉庫與視圖模型層</a></li>
+            <li><a href="#dir-service">核心服務層</a></li>
+            <li><a href="#dir-views">視圖與元件層</a></li>
+          </ul>
+        </li>
+        <li><a href="#data-flows">5. 核心端到端資料流</a></li>
+      </ul>
+    </aside>
+
+    <!-- 主要內容 -->
+    <main>
+      
+      <!-- 第一節：前言 -->
+      <section id="intro">
+        <h2>1. 前言與 MVVM 架構理念</h2>
+        <p>
+          Claw-Note 是一款功能強大的智慧型課堂講義管理應用程式。本專案以 Flutter 作為前端框架，本地端使用 SQLite 作為離線快取與樹狀檔案管理，雲端則緊密整合了 Firebase Auth、Firebase Storage 與透過 Python 編寫的 Firebase Cloud Functions 作為 AI 中樞後端。
+        </p>
+        <p>
+          為了確保程式碼的可維護性、測試性與職責分離，專案採用了 <strong>MVVM (Model-View-ViewModel)</strong> 的架構變體：
+        </p>
+        <ul>
+          <li><strong>Model (資料模型/實體)</strong>：定義純粹的資料結構與序列化邏輯（如 <code>annotation_model.dart</code>、<code>models.dart</code>、<code>ai_page_note.dart</code>）。</li>
+          <li><strong>View (視圖/畫面)</strong>：負責 UI 佈局、接收使用者手勢，不直接執行計算或編排 API Request。視圖訂閱 ViewModel 的改變並渲染（如 <code>screens/</code>、<code>widgets/</code>）。</li>
+          <li><strong>ViewModel (介面狀態管理)</strong>：保存 UI 對應的狀態（如 loading、error、數據清單），繼承自 <code>ChangeNotifier</code>，在狀態變更時發布廣播（如 <code>viewmodels/</code>）。</li>
+          <li><strong>Repository & Service (倉庫與服務)</strong>：ViewModel 不直接存取資料庫或網絡。ViewModel 調用 Repository 來編排業務邏輯，Repository 進一步使用具體的 Service（如 SQLite、Azure 語音、Firebase API）來處理實體資料。</li>
+        </ul>
+      </section>
+
+      <!-- 第二節：語法解密 -->
+      <section id="syntax">
+        <h2>2. Dart / Flutter 語法與概念大解密</h2>
+        <p>在閱讀 Claw-Note 原始碼前，必須先掌握 Dart 在非同步與狀態監聽上的核心語法，這也是初學者最常感到困惑的部分。</p>
+        
+        <div class="concept-grid">
+          
+          <!-- Future / async / await -->
+          <div class="concept-card" id="sync-async">
+            <h3>Future, async & await</h3>
+            <p><strong>什麼是 Future？</strong><br>
+              <code>Future&lt;T&gt;</code> 代表一個「在未來才會完成的非同步計算結果」，類似於 JS 中的 <code>Promise</code>。它有三種狀態：未完成 (Uncompleted)、完成並回傳值 (Completed with value) 與失敗 (Completed with error)。
+            </p>
+            <p><strong>async & await 的功用：</strong><br>
+              <code>async</code> 關鍵字用來標記一個函式為非同步函式，使其內部可以使用 <code>await</code>。<code>await</code> 會「暫停」當前函式的執行，等待 <code>Future</code> 完成並取得值後再往下執行，而<strong>不會阻塞 Flutter 的 UI 主執行緒</strong>。
+            </p>
+            <pre><code>Future&lt;String&gt; fetchData() async {
+  // 模擬 2 秒的網絡延遲
+  await Future.delayed(Duration(seconds: 2));
+  return "資料載入成功";
+}</code></pre>
+          </div>
+
+          <!-- Stream 深度剖析 -->
+          <div class="concept-card" id="stream-section">
+            <h3>Stream & 訂閱機制</h3>
+            <p><strong>什麼是 Stream？</strong><br>
+              如果說 <code>Future</code> 是完成一次性任務（如獲取單次 HTTP 響應），那麼 <code>Stream</code> 就是「源源不絕的非同步資料流」。它就像一條生產線或水管，水管的一端負責送入資料，另一端則有監聽者（Listener）負責接收。
+            </p>
+            <div class="note info">
+              <strong>生動比喻：</strong> <code>Stream</code> 就像是「即時收音機廣播」。電台源源不絕地播出聲音訊號，只要收音機開著並轉到該頻道（訂閱 <code>listen</code>），就能即時聽到聲音。
+            </div>
+            <p><strong>核心組件：</strong></p>
+            <ul>
+              <li><code>StreamController</code>：控制串流的閥門。可以調用 <code>add()</code> 塞入新資料，其 <code>.stream</code> 屬性可供外部監聽。</li>
+              <li><code>StreamSubscription</code>：訂閱物件。當呼叫 <code>stream.listen()</code> 時會回傳此物件。必須在元件銷毀時調用 <code>cancel()</code> 以免記憶體洩漏！</li>
+            </ul>
+            <p><strong>廣播串流 (Broadcast Stream)：</strong><br>
+              預設 Stream 只能被單一 Listener 監聽（Single-subscription）。在課堂視圖中，我們使用了 <code>.broadcast()</code> 建立廣播串流，這允許<strong>多個面板</strong>（如 ChatbotPanel、SummaryPanel）同時監聽同一個音訊逐字稿片段。
+            </p>
+          </div>
+
+          <!-- ChangeNotifier / ValueNotifier -->
+          <div class="concept-card" id="state-section">
+            <h3>ChangeNotifier & ValueNotifier</h3>
+            <p><strong>ChangeNotifier：</strong><br>
+              這是 Flutter SDK 提供的一個簡單類別。它允許類別維護多個監聽者。當 ViewModel 內部狀態改變時，呼叫 <code>notifyListeners()</code> 會通知所有訂閱此類別的 Widget 調用 <code>setState()</code> 重繪 UI。
+            </p>
+            <pre><code>class CounterViewModel extends ChangeNotifier {
+  int _count = 0;
+  int get count => _count;
+
+  void increment() {
+    _count++;
+    notifyListeners(); // 廣播給所有 UI 進行重繪
+  }
+}</code></pre>
+            <p><strong>ValueNotifier：</strong><br>
+              <code>ValueNotifier&lt;T&gt;</code> 是 <code>ChangeNotifier</code> 的輕量級子類別，專門用於「只持有一個變數值」的場景。只要將 <code>notifier.value</code> 賦予新值，它便會自動呼叫 <code>notifyListeners()</code>。
+            </p>
+            <p>本專案在 <code>slides_panel.dart</code> 與 <code>annotation_manager.dart</code> 中，利用 <code>ValueNotifier&lt;List&lt;Annotation&gt;&gt;</code> 實現了：當 BBox API 運算結束或使用者手動添加標記時，投影片繪圖 Canvas 能在<strong>毫秒內自動重繪</strong>，而無需重置整頁 UI。
+            </p>
+          </div>
+
+          <!-- unawaited -->
+          <div class="concept-card" id="other-syntax">
+            <h3>unawaited 函式</h3>
+            <p><strong>為什麼要用 unawaited？</strong><br>
+              在 Dart 的非同步設計中，如果呼叫了一個回傳 <code>Future</code> 的函式但沒有使用 <code>await</code>，編譯器（linter）會發出警告，提醒你可能漏掉了等待。
+            </p>
+            <p>
+              但在很多場景下，我們<strong>刻意不想等待</strong>它。例如：開始錄音時，我們希望在背景非同步執行學生的專注度記錄初始化或 Firebase 備份，不希望 UI 被卡住等待。這時呼叫 <code>unawaited(myFutureTask())</code> 即可明確告訴編譯器：「我知道它是非同步的，且我故意不想等待它完成」。
+            </p>
+          </div>
+
+          <!-- WidgetsBindingObserver -->
+          <div class="concept-card">
+            <h3>WidgetsBindingObserver (生命週期)</h3>
+            <p>
+              這是 Flutter 監聽 App 生命週期的介面。當用戶收到來電、切換到別的應用程式（App 進入背景），或是重新回到 Claw-Note（進入前景），Flutter 會透過此 Observer 發出通知。
+            </p>
+            <p>
+              本專案的 <code>StudentAttentionTracker</code> 繼承了它，藉此追蹤學生是否將 App 切換到背景，並將此「分心行為」傳送給後端的 Attention Agent 進行冷靜分析。
+            </p>
+          </div>
+
+          <!-- StatefulBuilder & StateSetter -->
+          <div class="concept-card">
+            <h3>StatefulBuilder & StateSetter</h3>
+            <p>
+              在 Flutter 中，彈出視窗（如 <code>showDialog</code>）本質上是推入一個獨立的路由頁面。此時如果在原畫面調用 <code>setState</code>，彈窗內部的內容（例如備份進度條與文字）是<strong>不會更新</strong>的。
+            </p>
+            <p>
+              為了解決此問題，我們使用 <code>StatefulBuilder</code> 包裹彈窗內容。它提供了一個專屬的 <code>StateSetter</code>（通常命名為 <code>setDialogState</code>），當 ViewModel 更新備份進度時，調用 <code>setDialogState(() {})</code> 就能局部且精確地刷新 Dialog 的狀態。
+            </p>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- 第三節：架構關係圖 -->
+      <section id="architecture">
+        <h2>3. 系統架構關係圖</h2>
+        <p>下圖展示了 Claw-Note 前後端、本地 SQLite 與 AI 元件之間的相依性及資料流：</p>
+        
+        <div class="diagram">
++---------------------------------------------------------------------------------------+
+|                                  Flutter UI (View)                                    |
+|   [Dashboard]            [CourseDetails]                  [LectureView]               |
+|        |                        |                    /     /         \     \          |
+|    新建/備份                瀏覽子目錄             Slides Transcript Summary Chatbot  |
++--------+------------------------+-------------------/------/-----------/-----/--------+
+         |                        |                  /      /           /     /
+         v                        v                 v      v           v     v
++--------------------------------------------------+   +-------+   +-------+   +-------+
+|                   ViewModels                     |   |Slides |   |Notes  |   |Chat   |
+|     DashboardVM         CourseDetailsVM          |   |  VM   |   |  VM   |   |  VM   |
++--------+------------------------+----------------+   +---+---+   +---+---+   +---+---+
+         |                        |                        |           |           |
+         \                        /                        |           |           |
+          \----------------------/                         |           |           |
+                     |                                     |           |           |
+                     v                                     v           v           v
++--------------------------------------------------+   +-------------------------------+
+|                  Repositories                    |   |        Repositories           |
+|              FileTreeRepository                  |   |       ChatRepository          |
++--------------------+-----------------------------+   +---------------+---------------+
+                     |                                                 |
+                     +-----------------------+   +---------------------+
+                                             |   |
+                                             v   v
++---------------------------------------------------------------------------------------+
+|                                    Services 層                                         |
+|                                                                                       |
+|  [SQLite (DatabaseHelper)]  <--- 儲存/讀取課程樹、聊天歷史、標記、專注度事件記錄       |
+|                                                                                       |
+|  [FirebaseUploadService]   ---> 計算 MD5 緩存，將 PDF/音訊 備份到 Firebase Storage    |
+|                                                                                       |
+|  [AzureSpeechService]      ---> 擷取 16kHz PCM，以 WebSocket 發送二進位至 Azure STT   |
+|                                                                                       |
+|  [TranscriptExportService] ---> 每 10 秒導出 seg_NNN.json 片段並以 Stream 廣播        |
+|                                                                                       |
+|  [RealtimeAgentCoordinator]---> 訂閱 Stream，發送狀態並調用後端 HTTP 雲端 API          |
+|                                                                                       |
+|  [NoteGenerationManager]   ---> 協調 PDF 上傳、調用 Functions 生成，並防遺失去重合併  |
++---------------------------------------------------------------------------------------+
+        </div>
+      </section>
+
+      <!-- 第四節：資料夾與檔案詳解 -->
+      <section id="directory-details">
+        <h2>4. 資料夾與檔案完全手冊</h2>
+        <p>本節將深入專案 <code>lib/</code> 目錄下的所有子資料夾，並列出每個 <code>.dart</code> 檔案的詳細說明。</p>
+
+        <!-- A. 根目錄與資料層 -->
+        <h3 id="dir-root-data">A. 根目錄與資料結構層 (Root & Data / Database / Models)</h3>
+        <p>負責應用的初始化、全域設定、本地資料庫 schema 與純粹的資料模型實體結構。</p>
+
+        <!-- firebase_options.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/firebase_options.dart</span>
+            <span class="tag secondary">設定/環境</span>
+          </div>
+          <p><strong>核心職責：</strong> 儲存由 FlutterFire CLI 自動產生的金鑰與專案識別碼，讓 Flutter 應用程式能正確初始化 Firebase 連線。</p>
+          <table>
+            <thead><tr><th>重要屬性/類別</th><th>職責與邏輯</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>DefaultFirebaseOptions</code> 類別</td>
+                <td>提供 <code>currentPlatform</code> 靜態屬性，偵測當前作業系統（Android, iOS, macOS, Web, Windows），回傳對應的 <code>FirebaseOptions</code> 初始化參數。</td>
+              </tr>
+            </tbody>
+          </table>
+          <p><strong>關聯相依：</strong> 僅被 <a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/main.dart">lib/main.dart</a> 引入，用於初始化 Firebase 的核心連線。</p>
+        </div>
+
+        <!-- main.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/main.dart</span>
+            <span class="tag primary">核心入口</span>
+          </div>
+          <p><strong>核心職責：</strong> 應用的啟動入口，初始化 Firebase 與本地推播通知服務，配置 GoRouter 宣告式路由導覽，並建立全域主題設定。</p>
+          <table>
+            <thead><tr><th>重要函式/變數</th><th>參數與返回值</th><th>職責與內部邏輯</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>main()</code></td>
+                <td><code>Future&lt;void&gt;</code></td>
+                <td>先確保 Flutter Engine 綁定初始化，隨後以 <code>Firebase.initializeApp()</code> 啟動 Firebase；向 FCM 註冊背景推播處理器，最後調用 <code>runApp(const MyApp())</code>。</td>
+              </tr>
+              <tr>
+                <td><code>_router</code> 變數</td>
+                <td><code>GoRouter</code></td>
+                <td>設定三層路由：<code>/</code> 對應 Dashboard，<code>/course/:courseId</code> 對應 CourseDetails，<code>/lecture/:courseId/:fileId</code> 對應 LectureView。使用 <code>ShellRoute</code> 與 <code>LayoutWrapper</code> 為所有畫面提供側邊導覽。</td>
+              </tr>
+            </tbody>
+          </table>
+          <p><strong>關聯相依：</strong> 依賴 <a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/services/notification_service.dart">notification_service.dart</a>。調用並連結所有頂層畫面（Screens）與佈局外殼（LayoutWrapper）。</p>
+        </div>
+
+        <!-- lib/data/annotation_model.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/data/annotation_model.dart</span>
+            <span class="tag secondary">資料模型</span>
+          </div>
+          <p><strong>核心職責：</strong> 定義 PDF 投影片上的自訂標記（矩形標記與文字標記）。負責標記的 JSON 序列化與 Canvas 繪圖渲染。</p>
+          <table>
+            <thead><tr><th>主要類別與函式</th><th>參數與返回值</th><th>職責與內部邏輯</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>Annotation</code> (抽象類別)</td>
+                <td>成員：<code>id</code>, <code>pageIndex</code>, <code>type</code>, <code>color</code></td>
+                <td>標記的基底類別。包含 <code>factory Annotation.fromJson</code>，能根據 JSON 的 <code>type</code> 自動分流實例化為矩形或文字標記。定義 <code>draw()</code> 抽象方法。</td>
+              </tr>
+              <tr>
+                <td><code>RectAnnotation</code></td>
+                <td>成員：<code>x</code>, <code>y</code>, <code>width</code>, <code>height</code> (使用相對座標 0.0 ~ 1.0)</td>
+                <td>繼承自 <code>Annotation</code>。實作 <code>draw()</code> 方法，在 Canvas 上繪製矩形與半透明背景的文字標籤。相對座標乘以 Canvas 實際寬高，以適應不同解析度與縮放。</td>
+              </tr>
+              <tr>
+                <td><code>TextAnnotation</code></td>
+                <td>成員：<code>text</code>, <code>fontSize</code>, <code>autoWrap</code></td>
+                <td>繼承自 <code>Annotation</code>。使用 <code>TextPainter</code> 在 Canvas 上繪製自訂文字標記，字型大小根據 850.0 基準寬度動態調整比例，防止縮放失真。</td>
+              </tr>
+            </tbody>
+          </table>
+          <p><strong>關聯相依：</strong> 被本地資料庫的標記保存擴充協調，以及簡報繪製視圖 <a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/widgets/slide_page.dart">slide_page.dart</a> 使用。</p>
+        </div>
+
+        <!-- lib/data/transcript_data.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/data/transcript_data.dart</span>
+            <span class="tag secondary">資料模型 & 靜態資料</span>
+          </div>
+          <p><strong>核心職責：</strong> 定義逐字稿頁面與章節結構，並提供 Demo 演示模式下所使用的範例硬體課程逐字稿靜態資料。</p>
+          <table>
+            <thead><tr><th>主要類別/變數</th><th>類型與描述</th><th>用途</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>TranscriptPage</code></td>
+                <td>類別：包含頁碼與 <code>TranscriptSection</code> 列表</td>
+                <td>映射投影片頁面對應的逐字稿段落。</td>
+              </tr>
+              <tr>
+                <td><code>chapter4_1TranscriptData</code></td>
+                <td><code>List&lt;TranscriptPage&gt;</code> 靜態資料</td>
+                <td>內含計算機組織第四章 Datapath 與 Control Signals 的真實中文講義逐字稿，用於模擬 Demo 模式下的逐字打字流。</td>
+              </tr>
+            </tbody>
+          </table>
+          <p><strong>關聯相依：</strong> 用於 <a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/screens/lecture_view.dart">lecture_view.dart</a> 中的 Demo 錄製模式。</p>
+        </div>
+
+        <!-- lib/database/database_helper.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/database/database_helper.dart</span>
+            <span class="tag primary">資料存取 (SQL)</span>
+          </div>
+          <p><strong>核心職責：</strong> 管理 SQLite 本地資料庫。建立檔案系統樹、聊天對話與訊息、以及學生專注度歷史紀錄等資料表，並支援級聯刪除 (Cascade Delete) 與標記資料聚合。</p>
+          <table>
+            <thead><tr><th>關鍵函式</th><th>參數與返回值</th><th>職責與內部邏輯</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>_createDB()</code></td>
+                <td><code>Database db, int version</code></td>
+                <td>建立 <code>items</code>（遞迴樹狀表，關聯 parentId）、<code>conversations</code>、<code>messages</code> 與 <code>student_page_events</code> 表。初始化建立 <code>Database</code> 與 <code>Temp</code> 根系統資料夾。</td>
+              </tr>
+              <tr>
+                <td><code>insertCourse()</code></td>
+                <td><code>AppNode course</code> <br>回傳 <code>Future&lt;int&gt;</code></td>
+                <td>特殊的新增邏輯。新增一個課程節點後，會自動在該課程節點底下插入 <code>Recordings</code> 與 <code>AI notes</code> 系統資料夾，供系統後續自動歸檔使用。</td>
+              </tr>
+              <tr>
+                <td><code>getCombinedAiNotes()</code></td>
+                <td><code>int courseId</code> <br>回傳 <code>Future&lt;String&gt;</code></td>
+                <td>自動尋找該課程底下 <code>AI notes</code> 資料夾中的所有子項目，將每一頁的 Markdown 筆記內容串聯成一個大字串，為 Chatbot 提供上下文。</td>
+              </tr>
+              <tr>
+                <td><code>getPageAnnotations()</code></td>
+                <td><code>int pdfId, int pageIndex</code> <br>回傳 <code>Future&lt;List&lt;Annotation&gt;&gt;</code></td>
+                <td>讀取資料庫中類型為 <code>slide_annotation</code> 且名稱為 <code>page_{pageIndex}</code> 的節點，將其 JSON 內容反序列化為 Annotation 物件清單。</td>
+              </tr>
+            </tbody>
+          </table>
+          <p><strong>關聯相依：</strong> 依賴 <code>sqflite</code>。被專案中幾乎所有的 Repository 與 Service 呼叫以存取本地狀態。</p>
+        </div>
+
+        <!-- lib/database/models.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/database/models.dart</span>
+            <span class="tag secondary">資料模型</span>
+          </div>
+          <p><strong>核心職責：</strong> 定義與 SQLite 本地資料表欄位一對一映射的資料模型，包含 `AppNode` 與 `ChatMessage`，並提供地圖序列化方法。</p>
+          <table>
+            <thead><tr><th>模型類別</th><th>核心屬性</th><th>主要職責</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>AppNode</code></td>
+                <td><code>id</code>, <code>parentId</code>, <code>type</code>, <code>name</code>, <code>content</code>, <code>filePath</code>, <code>cloudPath</code></td>
+                <td>表示本地檔案系統樹中的一個節點。<code>type</code> 可以是 <code>course</code>、<code>folder</code>、<code>notebook</code>、<code>recording</code>、<code>ai_note</code> 或 <code>system_folder</code>。</td>
+              </tr>
+              <tr>
+                <td><code>ChatMessage</code></td>
+                <td><code>id</code>, <code>conversationId</code>, <code>role</code>, <code>content</code>, <code>sequenceNumber</code></td>
+                <td>表示聊天對話中的一筆訊息（使用者或 AI 助手）。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- lib/models/ai_page_note.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/models/ai_page_note.dart</span>
+            <span class="tag secondary">資料模型</span>
+          </div>
+          <p><strong>核心職責：</strong> 定義單頁 AI 筆記的模型。提供 JSON 欄位兼容轉換，負責從後端 Python API 產生的 JSON 物件中解構出頁碼與 Markdown 內容。</p>
+          <table>
+            <thead><tr><th>工廠方法</th><th>屬性</th><th>邏輯</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>AiPageNote.fromJson()</code></td>
+                <td><code>pageNumber</code> (int), <br><code>markdown</code> (String)</td>
+                <td>同時兼容 <code>page_number</code>（後端命名）與 <code>pageNumber</code>（前端命名）鍵值，解析並去除 Markdown 文字頭尾的空白。</td>
+              </tr>
+            </tbody>
+          </table>
+          <p><strong>關聯相依：</strong> 被 <code>NoteGenerationManager</code> 與 <code>LectureNotesViewModel</code> 廣泛使用。</p>
+        </div>
+
+
+        <!-- B. 業務倉庫與視圖模型層 -->
+        <h3 id="dir-repo-vm">B. 業務倉庫與視圖模型層 (Repositories & ViewModels)</h3>
+        <p>此層為介面與服務的中介層，負責組合本地/外部資料庫呼叫（Repository），並管理 Widget UI 顯示狀態（ViewModel）。</p>
+
+        <!-- lib/repositories/chat_repository.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/repositories/chat_repository.dart</span>
+            <span class="tag primary">業務邏輯</span>
+          </div>
+          <p><strong>核心職責：</strong> 協調聊天歷史紀錄的讀寫與呼叫雲端 AI Function。將使用者的問題存入資料庫，並調用 Chat 雲端 API，取得回覆後再度寫入本地資料庫。</p>
+          <table>
+            <thead><tr><th>主要方法</th><th>參數與返回值</th><th>職責與內部邏輯</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>loadLatestSession()</code></td>
+                <td><code>int notebookId</code> <br>回傳 <code>Future&lt;ChatSession&gt;</code></td>
+                <td>嘗試尋找該筆記本的最新對話 ID。若無則建立一個新的對話 Session，並寫入系統初始預設的歡迎訊息。</td>
+              </tr>
+              <tr>
+                <td><code>requestAssistantReply()</code></td>
+                <td><code>conversationId</code>, <code>courseId</code>, <code>lectureId</code>, <code>aiNotes</code>, <code>transcript</code>, <code>question</code></td>
+                <td>從本地資料庫拉取最新 10 筆訊息作為對話歷史。將歷史、逐字稿、AI筆記與問題包裹發送至 Cloud Functions <code>chat</code>，取得文字回覆後寫入本地並返回。</td>
+              </tr>
+            </tbody>
+          </table>
+          <p><strong>關聯相依：</strong> 依賴 <a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/services/chat_function_service.dart">chat_function_service.dart</a> 與 <code>DatabaseHelper</code>。</p>
+        </div>
+
+        <!-- lib/repositories/file_tree_repository.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/repositories/file_tree_repository.dart</span>
+            <span class="tag primary">業務邏輯</span>
+          </div>
+          <p><strong>核心職責：</strong> 管理檔案與課程樹的 CRUD 操作。在課程建立時自動建立其附屬的系統檔案結構，並封裝 Firebase 雲端備份服務的調用。</p>
+          <table>
+            <thead><tr><th>主要方法</th><th>參數與返回值</th><th>職責與內部邏輯</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>createChild()</code></td>
+                <td><code>parentId</code>, <code>type</code>, <code>name</code></td>
+                <td>建立子節點。如果 <code>type</code> 是 <code>course</code>，則調用資料庫的 <code>insertCourse</code>（自動包含子系統資料夾）；否則插入普通節點。</td>
+              </tr>
+              <tr>
+                <td><code>backupToFirebase()</code></td>
+                <td><code>userId</code>, <code>onProgress</code> (Callback)</td>
+                <td>調用 <code>FirebaseUploadService.uploadAllFiles</code> 將本地的所有課堂實體檔案（如講義 PDF 與錄音）同步上傳到雲端儲存空間。</td>
+              </tr>
+            </tbody>
+          </table>
+          <p><strong>關聯相依：</strong> 依賴 <a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/services/firebase_upload_service.dart">firebase_upload_service.dart</a>。被 Dashboard 與 CourseDetails ViewModel 使用。</p>
+        </div>
+
+        <!-- viewmodels/ (All 5 ViewModels) -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/viewmodels/ (目錄下所有 ViewModels)</span>
+            <span class="tag primary">狀態管理</span>
+          </div>
+          <p><strong>核心職責：</strong> 維護並公開 UI 狀態，並在資料改變時呼叫 <code>notifyListeners()</code> 以驅動畫面重新渲染。</p>
+          <table>
+            <thead><tr><th>ViewModel 檔案</th><th>持有的核心狀態與方法</th><th>與 Repository/Service 的互動</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/viewmodels/dashboard_view_model.dart">dashboard_view_model.dart</a></td>
+                <td>狀態：<code>nodes</code>, <code>isLoading</code>, <code>backupProgress</code> (0.0~1.0), <code>backupStatus</code><br>方法：<code>loadData()</code>, <code>createNode()</code>, <code>uploadToFirebase()</code></td>
+                <td>調用 <code>FileTreeRepository</code> 進行節點管理，並訂閱進度回呼以更新備份進度。</td>
+              </tr>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/viewmodels/course_details_view_model.dart">course_details_view_model.dart</a></td>
+                <td>狀態：<code>parentNode</code>, <code>children</code> 節點列表, <code>isLoading</code><br>方法：<code>createNode()</code>, <code>deleteNode()</code>, <code>renameNode()</code></td>
+                <td>讀取特定課程/資料夾 ID 下的子項目，為 <code>CourseDetails</code> 畫面提供網格資料來源。</td>
+              </tr>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/viewmodels/chat_view_model.dart">chat_view_model.dart</a></td>
+                <td>狀態：<code>messages</code> 訊息歷史, <code>isSending</code> 傳送忙碌狀態<br>方法：<code>load()</code>, <code>sendMessage()</code>, <code>updateLectureContext()</code></td>
+                <td>調用 <code>ChatRepository</code> 進行對話管理。當用戶切換投影片頁面或有新逐字稿時，藉由 <code>updateLectureContext</code> 更新上下文快照。</td>
+              </tr>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/viewmodels/lecture_notes_view_model.dart">lecture_notes_view_model.dart</a></td>
+                <td>狀態：<code>notes</code> (Markdown清單), <code>isGenerating</code>, <code>errorMessage</code><br>方法：<code>loadSaved()</code>, <code>generateFromPdf()</code>, <code>appendRealtimeUpdate()</code></td>
+                <td><strong>訂閱機制：</strong> 監聽 <code>NoteGenerationManager.watch(storageId)</code> 廣播串流，動態接收 AI 生成筆記的進度與最終結果，並通知介面重繪。</td>
+              </tr>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/viewmodels/slides_view_model.dart">slides_view_model.dart</a></td>
+                <td>核心邏輯：PDF 像素擷取與標記定位。<br>方法：<code>processPage()</code> (通用偵測), <code>processPageWithTargets()</code> (AI 指導偵測)</td>
+                <td>將 <code>PdfPage</code> 渲染為高解析度圖片像素 buffer，經 <code>decodeImageFromPixels</code> 轉為 PNG 位元組，發送給 <code>BoundingBoxService</code> 取得 BBox，過濾重疊區域後，將相對坐標寫入 <code>PageAnnotationManager</code>。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+
+        <!-- C. 核心服務層 -->
+        <h3 id="dir-service">C. 核心服務層 (Services)</h3>
+        <p>處理所有具體的底層技術實作，包含音訊錄製、Azure 語音辨識 WebSocket、雲端 Functions 連接、專注度事件偵測以及通知推播。</p>
+
+        <!-- lib/services/annotation_manager.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/services/annotation_manager.dart</span>
+            <span class="tag secondary">服務</span>
+          </div>
+          <p><strong>核心職責：</strong> 管理每頁 PDF 的標記生命週期。使用記憶體緩存與防抖動技術 (Debounce) 批次寫入資料庫，並防止在關閉時保存不完整的標記。</p>
+          <table>
+            <thead><tr><th>主要方法/邏輯</th><th>參數與返回值</th><th>內部工作流程與防抖機制</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>getPageNotifier()</code></td>
+                <td><code>int pageIndex</code> <br>回傳 <code>ValueNotifier&lt;List&lt;Annotation&gt;&gt;</code></td>
+                <td>如果快取中已有該頁的 Notifier 則直接返回，以達到瞬間渲染；若無，則異步自本地 SQLite 載入標記資料並回填。</td>
+              </tr>
+              <tr>
+                <td><code>_markPageAsDirty()</code></td>
+                <td><code>int pageIndex</code></td>
+                <td>當新增/刪除標記時，將該頁標記為「髒頁 (dirty)」，取消先前的計時器，並重新設定一個 <strong>600 毫秒的計時器</strong>。600 毫秒內若無新操作，才批次寫入 SQLite，大幅降低資料庫負擔。</td>
+              </tr>
+              <tr>
+                <td><code>dispose()</code></td>
+                <td>無</td>
+                <td>釋放所有 Notifier。若偵測到標記產生狀態為 <code>generating</code>，說明是中途關閉簡報，會自動清空並丟棄已生成的暫存標記。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- lib/services/auth_service.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/services/auth_service.dart</span>
+            <span class="tag secondary">服務</span>
+          </div>
+          <p><strong>核心職責：</strong> 透過本地 ID Token 向 Firebase Functions <code>azureSpeechToken</code> 請求一個短期的 Azure Speech 驗證 Token，避免金鑰直接曝露在客戶端程式碼中。</p>
+        </div>
+
+        <!-- lib/services/azure_speech_service.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/services/azure_speech_service.dart</span>
+            <span class="tag primary">硬體 & 網路</span>
+          </div>
+          <p><strong>核心職責：</strong> 連接 Azure Speech 即時語音轉文字 WebSocket API。開啟本機 16kHz PCM 麥克風錄音，並將音訊二進位流以專用 framing 格式推送至雲端，解析 hypothesis 與 finalized 轉譯字元。</p>
+          <div class="note warning">
+            <strong>Azure 封裝協議關鍵：</strong> Raw PCM 音訊流在發送給 Azure 之前，第一個二進位封包必須包含 RIFF WAV 標頭（<code>_buildWavHeader()</code>），否則 Azure 會拒絕解析！此外，每個語音封包都必須加上自訂的文字標頭，格式為：
+            <pre><code>Path: audio\r\nX-RequestId: {ID}\r\nX-Timestamp: {TIME}\r\nContent-Type: audio/x-wav\r\n\r\n{二進位音訊數據}</code></pre>
+          </div>
+          <table>
+            <thead><tr><th>主要成員與方法</th><th>參數與返回值</th><th>職責與內部邏輯</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>startListening()</code></td>
+                <td><code>String token</code></td>
+                <td>請求麥克風權限。產生唯一的 RequestId，建立 Azure WebSocket。連線成功後，先發送 <code>speech.config</code> JSON 配置（設定目標語言如 zh-TW），再啟動 <code>record</code> 串流，並訂閱音訊流將數據打包送出。</td>
+              </tr>
+              <tr>
+                <td><code>_handleAzureResponse()</code></td>
+                <td><code>dynamic event</code></td>
+                <td>解析 Azure 傳回的字串。若包含 <code>speech.hypothesis</code> 代表暫時性結果，更新 UI 顯示；若包含 <code>speech.phrase</code> 代表該句結束，將其轉為 <code>TranscriptChunk</code> 寫入本地，並調用 <code>saveTranscript()</code> 存檔。</td>
+              </tr>
+              <tr>
+                <td><code>transcriptStream</code></td>
+                <td><code>Stream&lt;String&gt;</code> (Broadcast)</td>
+                <td>供 UI 訂閱，即時將已識別文字呈現在 TranscriptPanel 上。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- lib/services/bounding_box_service.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/services/bounding_box_service.dart</span>
+            <span class="tag secondary">服務</span>
+          </div>
+          <p><strong>核心職責：</strong> 與外部 Python Cloud Run 圖像偵測 API 通訊。上傳投影片圖片，偵測圖片中的元件邊界座標（X1, Y1, X2, Y2）與色彩資訊。</p>
+          <table>
+            <thead><tr><th>主要方法</th><th>參數與用途</th><th>端點說明</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>fetchAnnotatedPipeline()</code></td>
+                <td><code>List&lt;int&gt; imageBytes</code> <br>回傳所有偵測到的標籤與矩形坐標</td>
+                <td>POST 請求至 <code>/detect/pipeline</code>。用於初始化的簡報投影片自動標記定位。</td>
+              </tr>
+              <tr>
+                <td><code>fetchAgentPipeline()</code></td>
+                <td><code>imageBytes</code>, <code>String targetsJson</code> (模型指定的標的物)<br>回傳匹配的目標矩形</td>
+                <td>POST 請求至 <code>/detect/agent-pipeline</code>。用於實時課堂中，AI Agent 判斷出老師提到特定詞彙或公式時，動態在投影片上框選目標。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- lib/services/chat_function_service.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/services/chat_function_service.dart</span>
+            <span class="tag secondary">服務</span>
+          </div>
+          <p><strong>核心職責：</strong> 封裝對 Firebase Functions <code>chat</code> 的呼叫，並檢查回傳的 JSON 是否包含 <code>answer</code> 欄位。</p>
+        </div>
+
+        <!-- lib/services/firebase_function_client.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/services/firebase_function_client.dart</span>
+            <span class="tag primary">網路安全性</span>
+          </div>
+          <p><strong>核心職責：</strong> 作為專案中呼叫 Firebase Cloud Functions 的統一 HTTP Client。自動將目前 Firebase Auth 登入使用者的 <code>ID Token</code> 注入 Authorization 標頭，實現後端零信任的安全隔離。</p>
+          <table>
+            <thead><tr><th>主要方法</th><th>參數與返回值</th><th>安全性與 token 注入邏輯</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>postJson()</code></td>
+                <td><code>functionName</code>, <code>body</code> <br>回傳 <code>Future&lt;Map&lt;String, dynamic&gt;&gt;</code></td>
+                <td>發送 POST 請求。在發送前，讀取 <code>FirebaseAuth.instance.currentUser</code>。若不為空，調用 <code>user.getIdToken()</code> 異步取得令牌，寫入 <code>headers['Authorization'] = 'Bearer $token'</code>，然後發送並處理 HTTP 錯誤。</td>
+              </tr>
+              <tr>
+                <td><code>unwrapPayload()</code></td>
+                <td><code>Map&lt;String, dynamic&gt; response</code></td>
+                <td>解包輔助方法。提取 Firebase Functions 協議規定的 <code>data</code> 或 <code>result</code> 內部物件。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- lib/services/firebase_upload_service.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/services/firebase_upload_service.dart</span>
+            <span class="tag secondary">服務</span>
+          </div>
+          <p><strong>核心職責：</strong> 實作增量備份。計算本地簡報與錄音檔的 MD5 雜湊值，只將「新增或已修改」的檔案上傳至 Firebase Storage <code>users/{userId}/referenced_files/</code>，並同步更新 SQLite 中節點的 <code>cloudPath</code>。</p>
+        </div>
+
+        <!-- lib/services/gemini_live_speech_service.dart & speech_service.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/services/gemini_live_speech_service.dart & speech_service.dart</span>
+            <span class="tag secondary">服務</span>
+          </div>
+          <p><strong>核心職責：</strong> 提供多種語音轉文字管道的抽象化或測試服務。<code>gemini_live_speech_service.dart</code> 為 Gemini Live API 的實時語音預留實作端點。</p>
+        </div>
+
+        <!-- lib/services/note_generation_manager.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/services/note_generation_manager.dart</span>
+            <span class="tag primary">核心管理器</span>
+          </div>
+          <p><strong>核心職責：</strong> 全局管理課堂簡報摘要（Notes）的生成流程與實時更新。當簡報重新生成時，負責將舊有的「實時課堂筆記」與新生成的「投影片摘要」進行防丟失去重合併。</p>
+          <table>
+            <thead><tr><th>主要方法</th><th>參數與用途</th><th>職責與去重合併演算法</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>generate()</code></td>
+                <td><code>storageId</code>, <code>pdfPath</code>, <code>courseId</code>, <code>lectureId</code></td>
+                <td>向 Firebase Storage 上傳簡報 PDF，隨後調用 <code>generateNotesFromPdf</code> 雲端函式。取得筆記 JSON 後與本地舊筆記合併，寫入本地 <code>notes.json</code> 與 <code>notes/page_NNN.md</code>。</td>
+              </tr>
+              <tr>
+                <td><code>appendRealtimeUpdate()</code></td>
+                <td><code>storageId</code>, <code>pageNumber</code>, <code>newPoints</code>, <code>questions</code></td>
+                <td>當實時代理分析出老師有新的板書重點時，在該頁 Markdown 末尾追加 <code>### Professor Additions</code> 與 <code>### Professor Questions</code> 區段。會先解析舊有文字，進行<strong>大小寫無關的重複行去重</strong>後再行追加，防止重複寫入。</td>
+              </tr>
+              <tr>
+                <td><code>_mergeRealtimeUpdates()</code></td>
+                <td><code>generatedNotes</code>, <code>currentNotes</code></td>
+                <td><strong>防遺失演算法：</strong> 重新生成筆記時，先掃描現有筆記中是否含有 <code>Live Lecture Updates</code> 等實時追加區段。若有，則提取該區段，並在雲端生成新摘要完成後，自動將實時段落附加到新摘要末尾，確保學生在課堂上記錄的板書不會被覆寫消失。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- lib/services/notification_service.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/services/notification_service.dart</span>
+            <span class="tag secondary">服務</span>
+          </div>
+          <p><strong>核心職責：</strong> 初始化並請求本機通知權限。向 Firebase Messaging 獲取 FCM Token，並訂閱雲端推播。當接收到類型為 <code>attention_distraction</code> 的推播時，代表 Attention Agent 判斷學生已分心，即時彈出本機通知提醒學生老師目前的頁碼。</p>
+        </div>
+
+        <!-- lib/services/realtime_agent_coordinator.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/services/realtime_agent_coordinator.dart</span>
+            <span class="tag primary">核心協調器</span>
+          </div>
+          <p><strong>核心職責：</strong> 實時課堂的核心協調中樞。監聽每 10 秒產生的逐字稿片段，使用佇列 (Queue) 依序調用後端 <code>realtimeAgent</code> Functions 判定老師頁碼，並動態分派任務去更新 AI 摘要或在投影片畫板上框選重點。</p>
+          <div class="note info">
+            <strong>資訊隔離安全機制：</strong> 協調器向後端傳送的狀態中，<strong>絕對不會包含學生當前看見的頁面</strong>。後端 Realtime Lecture Agent 僅基於逐字稿與既有頁面內容判斷老師所在頁面。判斷完成後，後端才結合學生狀態進行 Attention 分心檢測。這防止了 Realtime Agent「作弊偷看」學生的頁面。
+          </div>
+          <table>
+            <thead><tr><th>重要成員與方法</th><th>職責與工作隊列 (Queue) 排水邏輯</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>_subscribe()</code></td>
+                <td>監聽 <code>segmentStream</code>。將非空片段包裝為 <code>_QueuedTranscriptChunk</code>（包含當前片段與最近 9 個歷史片段組成的滾動窗口），存入 <code>_pendingChunks</code> 佇列，隨後調用 <code>_drainQueue()</code>。</td>
+              </tr>
+              <tr>
+                <td><code>_drainQueue()</code></td>
+                <td>防併發排水鎖。若目前有任務正在運行，則直接返回。否則啟動 while 迴圈，逐一將佇列首部的片段移出並傳送至後端 Functions，保證異步網路請求順序執行且不漏失。</td>
+              </tr>
+              <tr>
+                <td><code>_processTranscriptChunk()</code></td>
+                <td>發送 POST 至 <code>realtimeAgent</code>。取得回傳後，如果 <code>update_note_at</code> 為 <code>summary</code>，調用 notesViewModel 寫入板書追加；若為 <code>slides</code>，則調用 slidesViewModel 動態發送影像進行特定目標框選。呼叫 <code>_handleAttention</code> 評估是否需要透過 <code>NotificationService</code> 彈出通知。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- lib/services/student_attention_tracker.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/services/student_attention_tracker.dart</span>
+            <span class="tag primary">專注度追蹤</span>
+          </div>
+          <p><strong>核心職責：</strong> 追蹤學生當前觀看的頁面、停留時間與應用程式的前背景狀態。實作 <code>WidgetsBindingObserver</code>，將學生的閱讀事件寫入 SQLite <code>student_page_events</code> 表，並產生快照供實時代理使用。</p>
+          <table>
+            <thead><tr><th>主要方法</th><th>職責與進入/離開時間計算</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>start()</code> 與 <code>stop()</code></td>
+                <td>開始/結束追蹤。向 <code>currentPageNotifier</code> 註冊監聽器，並向 Flutter 引擎註冊生命週期觀察者。</td>
+              </tr>
+              <tr>
+                <td><code>_handlePageChanged()</code></td>
+                <td>當學生滾動投影片使頁碼改變時，計算當前時間與 <code>_currentPageEnteredAt</code> 的差值，作為停留秒數。將此事件寫入 SQLite，並更新當前頁碼與新一頁的進入時間。</td>
+              </tr>
+              <tr>
+                <td><code>snapshot()</code></td>
+                <td>格式化輸出目前的追蹤快照。包含當前頁碼、在當前頁停留的秒數、最近 20 次頁面歷史、App 是否在前景、以及退到背景的時間點。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- lib/services/transcript_export_service.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/services/transcript_export_service.dart</span>
+            <span class="tag primary">資料導出</span>
+          </div>
+          <p><strong>核心職責：</strong> 每 10 秒導出一次逐字稿片段。比較本次與上次的文本，計算出「新增的差值 (DeltaText)」，寫成本地 <code>seg_NNN.json</code> 段落檔，更新本地 SQLite 錄音記錄，並以廣播串流發送片段。</p>
+          <table>
+            <thead><tr><th>核心演算法</th><th>邏輯與 empty 佔位</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>exportSegment()</code></td>
+                <td>
+                  計算增量：<br>
+                  1. 若當前全文以上次全文開頭且長度增加，差值即為 <code>substring(lastText.length)</code>。<br>
+                  2. 若完全沒有變化，差值為空字串，且 JSON 欄位 <code>is_empty</code> 設為 <code>true</code>。<br>
+                  將 payload 寫入本地 transcripts 資料夾下該錄音 session 子目錄內。呼叫 <code>onSegmentExported</code> 廣播回呼，並將全文更新到 SQLite <code>items</code> 表該 recording 節點中。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- lib/services/user_identity_service.dart -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/services/user_identity_service.dart</span>
+            <span class="tag secondary">服務</span>
+          </div>
+          <p><strong>核心職責：</strong> 確保使用者登入。使用 Firebase Auth 的 <code>signInAnonymously()</code> 進行匿名登入，並返回使用者物件。這允許使用者即開即用，且能保持各個使用者在 Firestore 中的 Long-term Memory 數據隔離。</p>
+        </div>
+
+
+        <!-- D. 視圖與元件層 -->
+        <h3 id="dir-views">D. 視圖與元件層 (Screens / Views / Widgets)</h3>
+        <p>此層專注於介面繪製與使用者操作互動。包含最複雜的課堂多面板工作區。</p>
+
+        <!-- screens/ (3 Screens) -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/screens/ (Dashboard, CourseDetails, LectureView)</span>
+            <span class="tag primary">畫面 UI</span>
+          </div>
+          <p><strong>核心職責：</strong> 應用程式的三個頂層骨架畫面，負責協調狀態初始化與子組件的佈局。</p>
+          <table>
+            <thead><tr><th>畫面名稱</th><th>UI 佈局與事件處理</th><th>關聯與 ViewModel 繫結</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/screens/dashboard.dart">dashboard.dart</a></td>
+                <td>提供一個 SpeedDial 懸浮按鈕（可展開新增 Course/Folder/Notebook）。顯示 GridView 卡片清單，並在點擊 Firebase 備份時，顯示一個由 StatefulBuilder 驅動的備份進度 Dialog。</td>
+                <td>繫結 <code>DashboardViewModel</code>。監聽 ViewModel 的改變並調用 <code>setState()</code> 重繪。</td>
+              </tr>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/screens/course_details.dart">course_details.dart</a></td>
+                <td>顯示特定課程資料夾底下的內容。</td>
+                <td>繫結 <code>CourseDetailsViewModel</code>。</td>
+              </tr>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/screens/lecture_view.dart">lecture_view.dart</a></td>
+                <td>
+                  <strong>課堂四面板工作區：</strong><br>
+                  1. 支持側邊欄按鈕切換各面板顯示/隱藏。<br>
+                  2. 使用 <code>ReorderableListView</code> 實現面板<strong>左右拖曳重新排序</strong>。<br>
+                  3. 在面板間插入 GestureDetector 拖動條，實現<strong>寬度動態比例調整</strong>。<br>
+                  4. 管理錄音與 Demo 打字模擬器的 Timer，訂閱並分發串流。
+                </td>
+                <td>整合 <code>LectureNotesViewModel</code>、<code>StudentAttentionTracker</code> 與 <code>RealtimeAgentCoordinator</code>。將資料與回調分發給四個面板 Widget。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- widgets/ (9 Widgets) -->
+        <div class="file-card">
+          <div class="file-card-header">
+            <span class="file-path">lib/widgets/ (目錄下所有 UI 元件)</span>
+            <span class="tag secondary">元件 UI</span>
+          </div>
+          <p><strong>核心職責：</strong> 實作具體的面板渲染、簡報 PDF 頁面繪製、標記手寫渲染與聊天泡泡列表。</p>
+          <table>
+            <thead><tr><th>元件名稱</th><th>核心渲染邏輯</th><th>事件與 ViewModel 綁定</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/widgets/slides_panel.dart">slides_panel.dart</a></td>
+                <td>利用 <code>FilePicker</code> 上傳簡報 PDF。使用 <code>pdfrx</code> 的 <code>PdfPageView</code> 渲染每一頁 PDF，並在簡報上疊加 <code>SlidePage</code> 標記畫布。透過 scroll 監聽當前可見的頁碼，即時回傳給 <code>currentPageNotifier</code>。</td>
+                <td>綁定 <code>SlidesViewModel</code>。在 PDF 載入完畢後，調用 <code>processAllPages()</code> concurrency 發起 API 進行全頁面 BBox 的預生成。</td>
+              </tr>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/widgets/slide_page.dart">slide_page.dart</a></td>
+                <td><strong>自訂繪圖畫布 (CustomPaint)：</strong> 包裹一個 <code>CustomPaint</code> 元件，並將其 painter 設為 <code>AnnotationPainter</code>。透過 <code>ValueListenableBuilder</code> 監聽該頁 Notifier 的改變，當標記增加、刪除或座標改變時，瞬間調用 <code>canvas.drawRect</code> 與 <code>TextPainter</code> 重新渲染標記。</td>
+                <td>接收來自 <code>PageAnnotationManager</code> 的 Notifier，確保標記渲染與 SQLite/緩存 保持同步。</td>
+              </tr>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/widgets/transcript_panel.dart">transcript_panel.dart</a></td>
+                <td>渲染錄製按鈕與即時逐字稿文本。提供 locale 語系切換下拉選單與 Demo 模式開關。</td>
+                <td>調用 <code>LectureView</code> 發送的錄音切換回呼。</td>
+              </tr>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/widgets/summary_panel.dart">summary_panel.dart</a></td>
+                <td>使用 <code>flutter_markdown</code> 套件渲染逐頁的 AI 筆記內容。在生成中顯示圓形進度條，生成失敗則提供重試按鈕。</td>
+                <td>展示 <code>LectureNotesViewModel</code> 中的 notes 狀態。</td>
+              </tr>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/widgets/chatbot_panel.dart">chatbot_panel.dart</a></td>
+                <td>渲染對話清單。使用 <code>ScrollController</code> 在新訊息產生或載入時，自動向下平滑滾動（animateTo maxScrollExtent）到最底部。</td>
+                <td>綁定並監聽 <code>ChatViewModel</code>，發送 TextField 的文字。</td>
+              </tr>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/widgets/layout_wrapper.dart">layout_wrapper.dart</a></td>
+                <td>繪製全局側邊導覽列（包含 Dashboard 與 CourseDetails 的返回入口）。</td>
+                <td>Shell 嵌套佈局。</td>
+              </tr>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/widgets/panel_header.dart">panel_header.dart</a></td>
+                <td>顯示面板頂部標題、圖示、拖曳 Handle (用於排序) 與關閉按鈕。</td>
+                <td>無狀態元件。</td>
+              </tr>
+              <tr>
+                <td><a class="file-link" href="file:///c:/Users/USER/Desktop/Now/SDS/final%20project/SS-AILectureNote/lib/widgets/annotation_test_controls.dart">annotation_test_controls.dart</a></td>
+                <td>提供調試按鈕，允許手動在第一頁添加紅色矩形或文字標記，作為標記系統的開發驗證工具。</td>
+                <td>直接存取 <code>PageAnnotationManager</code>。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </section>
+
+      <!-- 第五節：核心端到端資料流 -->
+      <section id="data-flows">
+        <h2>5. 核心端到端資料流說明</h2>
+        <p>為方便您串接與理解，以下詳細解密專案中三大最關鍵的 AI 資料流運作順序：</p>
+
+        <h3>1. 簡報上傳與 AI 筆記生成資料流</h3>
+        <ol>
+          <li>使用者在 <code>SlidesPanel</code> 上傳簡報 PDF。</li>
+          <li><code>SlidesPanel</code> 將 PDF 複製到本地 App 儲存路徑，並回寫 SQLite <code>filePath</code>。</li>
+          <li>呼叫 <code>LectureNotesViewModel.generateFromPdf()</code>，其底層調用全域單例 <code>NoteGenerationManager</code>。</li>
+          <li><code>NoteGenerationManager</code> 先將 PDF 上傳到 Firebase Storage (路徑：<code>ai_note_jobs/{safeStorageId}/source/...</code>)。</li>
+          <li>上傳完成後，調用 <code>FirebaseFunctionClient.postJson()</code> 呼叫雲端 <code>generateNotesFromPdf</code> 函數，附帶當前使用者的 ID Token 進行身分驗證。</li>
+          <li><strong>雲端處理中 (最長 10 分鐘)</strong>：Functions 偵測用戶在 Firestore 的學習偏好與 Memory，讀取 PDF，調用 OpenAI 產生逐頁 Markdown 摘要。</li>
+          <li>Functions 生成完畢後，將結果寫回 Firebase Storage，並在 HTTP 回應中返回 JSON 資料。</li>
+          <li><code>NoteGenerationManager</code> 接收到回應後，讀取舊筆記中的板書更新進行<strong>防遺失合併 (Cosine Deduplication Merge)</strong>。</li>
+          <li>將最終合併的筆記寫入本地 <code>notes.json</code> 與 <code>notes/page_NNN.md</code>。</li>
+          <li><code>LectureNotesViewModel</code> 透過 Watch Stream 接收到 Completed 狀態，通知 <code>SummaryPanel</code> 渲染 Markdown。</li>
+        </ol>
+
+        <h3>2. 課堂錄音、實時老師定位與板書追加資料流</h3>
+        <ol>
+          <li>使用者在 <code>TranscriptPanel</code> 點擊「開始錄音」（或開啟 Demo Mode）。</li>
+          <li>應用程式透過 <code>AzureSpeechService</code> 啟動麥克風，直接建立與 Azure Speech 的 WebSocket 連線。</li>
+          <li>即時語音辨識結果透過 <code>transcriptStream</code> 廣播至 UI，即時呈現在 <code>TranscriptPanel</code>。</li>
+          <li>同時，<code>LectureView</code> 啟動一個 10 秒的計時器，定期調用 <code>TranscriptExportService.exportSegment()</code>。</li>
+          <li><code>TranscriptExportService</code> 計算這 10 秒內新增的差值文字 (DeltaText)，寫入本地 <code>seg_NNN.json</code>。</li>
+          <li>導出的 JSON 物件被送入 <code>segmentStream</code>。</li>
+          <li><code>RealtimeAgentCoordinator</code> 監聽該 Stream，將非空片段存入排水佇列 (Queue)。</li>
+          <li>佇列依序調用雲端 <code>realtimeAgent</code> 函式，傳入近 10 份逐字稿片段與既有簡報摘要。</li>
+          <li><strong>AI 代理分析</strong>：後端的 Realtime Lecture Agent 判定老師此時正在講第 X 頁，並判定是否需要更新摘要。</li>
+          <li>如果需要更新，回傳結構化的板書重點 (new_points) 與提問 (questions)。</li>
+          <li><code>RealtimeAgentCoordinator</code> 取得結果後，調用 <code>LectureNotesViewModel.appendRealtimeUpdate()</code> 寫入本地，<code>SummaryPanel</code> 即時渲染出「### Professor Additions」與「### Professor Questions」。</li>
+        </ol>
+
+        <h3>3. 專注度偵測與 FCM 通知推播資料流</h3>
+        <ol>
+          <li>在錄音啟動時，<code>StudentAttentionTracker</code> 開始追蹤。</li>
+          <li>當學生滾動簡報頁碼、或將 App 切換到背景時，Tracker 計算停留秒數並寫入 SQLite <code>student_page_events</code>。</li>
+          <li>在上述「實時老師定位流程」中，<code>RealtimeAgentCoordinator</code> 在發送請求時，會調用 <code>Tracker.snapshot()</code> 將學生的狀態一併上傳，同時附帶目前裝置的 <code>notificationToken</code>。</li>
+          <li>後端 <code>realtimeAgent</code> Functions 在分析出老師所在頁面後，將<strong>老師頁面</strong>與<strong>學生狀態快照</strong>輸入給 <code>Attention Agent</code>。</li>
+          <li><strong>分心判定</strong>：若偵測到學生停留頁碼與老師講授頁碼嚴重偏離，且學生已停留該頁超過 30 秒，則判定為 <code>distracted</code>（分心）。</li>
+          <li>後端調用 Firebase Admin SDK，將分心事件寫入 <code>users/{uid}/attention_events/</code>。</li>
+          <li>同時，利用 Admin SDK 向裝置的 <code>notificationToken</code> 發送一個 Push Notification。</li>
+          <li>學生的手機接收到 FCM 推播，<code>NotificationService</code> 攔截推播並彈出 Local Notification：「你似乎暫時離開了課程，老師目前正在講授第 X 頁。」提醒學生專注。</li>
+        </ol>
+      </section>
+
+    </main>
+  </div>
+
+</body>
+</html>
