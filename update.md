@@ -372,3 +372,14 @@ firebase deploy --only functions:python
 - 移除 `MemoryWrite`、canonical memory、memory evidence 與 Chat Agent tool 的 `confidence`。
 - 讀取舊版 `candidate` preference 時會視為 `active` 並回寫狀態，同時移除 canonical memory 的舊 confidence 欄位。
 - 語音辨識服務本身的 confidence 屬於 Azure／speech recognition 結果，不是 Memory 信心程度，因此維持不變。
+
+## 33. Android 實機 PDFium 與錄音關閉修正
+
+- Android 實機啟動時，`pdfrx 2.3.x` 可能拋出 `Failed to load PDFium module: Native assets file not found`。
+- 此問題與 pdfrx 官方 issue #645 的 Android 錯誤相同，因此將 `pdfrx` 精確固定為已知可用的 `2.2.24`。
+- 執行 `flutter clean` 後重新取得 dependencies，避免 2.3.x Native Assets build cache 殘留。
+- 新 APK 已確認包含 arm64-v8a、armeabi-v7a 與 x86_64 的 `libpdfium.so`。
+- `AzureSpeechService.stopListening()` 改為可重入，同時間的 error、WebSocket close、按鈕停止與頁面 dispose 會共用同一個 stop future。
+- 只有錄音實際啟動後才呼叫 `AudioRecorder.stop()`，避免 recorder 尚未建立時產生 PlatformException。
+- `dispose()` 會等待 stop 完成後再關閉 streams 與 recorder，避免 stop/dispose race。
+- Flutter 10 tests passed，Android debug APK build passed。
