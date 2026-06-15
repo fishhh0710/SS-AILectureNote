@@ -156,8 +156,12 @@ class DatabaseHelper {
   // Fetch items inside a specific folder (or root if parentId is null)
   Future<List<AppNode>> getItemsByParent(int? parentId) async {
     final db = await instance.database;
-    final whereString = parentId == null ? 'parentId IS NULL' : 'parentId = ?';
-    final args = parentId == null ? [] : [parentId];
+    final whereString = parentId == null 
+        ? 'parentId IS NULL AND type != ?' 
+        : 'parentId = ? AND type != ?';
+    final args = parentId == null 
+        ? ['system_folder'] 
+        : [parentId, 'system_folder'];
 
     final result = await db.query(
       'items',
@@ -186,7 +190,7 @@ class DatabaseHelper {
 
   // ================= 2. Specialized Operations =================
 
-  // Create a Course and automatically generate its nested system folders
+  // Create a Course
   Future<int> insertCourse(AppNode course) async {
     final db = await instance.database;
 
@@ -196,24 +200,6 @@ class DatabaseHelper {
     }
 
     final courseId = await db.insert('items', course.toMap());
-    final now = DateTime.now().toIso8601String();
-
-    // Auto-create "Recordings" system folder inside this course
-    await db.insert('items', {
-      'parentId': courseId,
-      'type': 'system_folder',
-      'name': 'Recordings',
-      'createdAt': now,
-    });
-
-    // Auto-create "AI notes" system folder inside this course
-    await db.insert('items', {
-      'parentId': courseId,
-      'type': 'system_folder',
-      'name': 'AI notes',
-      'createdAt': now,
-    });
-
     return courseId;
   }
 

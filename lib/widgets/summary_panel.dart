@@ -4,7 +4,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/ai_page_note.dart';
 import 'panel_header.dart';
 
-class SummaryPanel extends StatelessWidget {
+class SummaryPanel extends StatefulWidget {
   final double width;
   final int index;
   final VoidCallback onClose;
@@ -13,6 +13,7 @@ class SummaryPanel extends StatelessWidget {
   final String? errorMessage;
   final VoidCallback? onRetry;
   final Stream<Map<String, dynamic>>? segmentStream;
+  final ValueNotifier<int>? currentPageNotifier;
 
   const SummaryPanel({
     super.key,
@@ -24,12 +25,39 @@ class SummaryPanel extends StatelessWidget {
     this.errorMessage,
     this.onRetry,
     this.segmentStream,
+    this.currentPageNotifier,
   });
+
+  @override
+  State<SummaryPanel> createState() => _SummaryPanelState();
+}
+
+class _SummaryPanelState extends State<SummaryPanel> {
+  final ScrollController _scrollController = ScrollController();
+  final Map<int, GlobalKey> _cardKeys = {};
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _syncToCurrentPage() {
+    final currentPage = widget.currentPageNotifier?.value ?? 1;
+    final targetKey = _cardKeys[currentPage];
+    if (targetKey != null && targetKey.currentContext != null) {
+      Scrollable.ensureVisible(
+        targetKey.currentContext!,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: width,
+      width: widget.width,
       child: Container(
         margin: const EdgeInsets.only(top: 16, bottom: 16, right: 16),
         decoration: BoxDecoration(
@@ -49,8 +77,23 @@ class SummaryPanel extends StatelessWidget {
             PanelHeader(
               title: 'AI 筆記',
               icon: Icons.auto_awesome,
-              onClose: onClose,
-              index: index,
+              onClose: widget.onClose,
+              index: widget.index,
+              actions: [
+                if (widget.notes.isNotEmpty && widget.currentPageNotifier != null)
+                  InkWell(
+                    onTap: _syncToCurrentPage,
+                    borderRadius: BorderRadius.circular(12),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4.0),
+                      child: Icon(
+                        Icons.sync,
+                        size: 14,
+                        color: Color(0xFFA8A08E),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const Divider(height: 1, color: Color(0xFFEAE7DC)),
             Expanded(child: _buildContent()),
@@ -61,7 +104,7 @@ class SummaryPanel extends StatelessWidget {
   }
 
   Widget _buildContent() {
-    if (isGenerating && notes.isEmpty) {
+    if (widget.isGenerating && widget.notes.isEmpty) {
       return const _CenteredMessage(
         icon: Icons.auto_awesome,
         title: '正在生成 AI 筆記',
@@ -70,17 +113,17 @@ class SummaryPanel extends StatelessWidget {
       );
     }
 
-    if (notes.isEmpty && errorMessage != null) {
+    if (widget.notes.isEmpty && widget.errorMessage != null) {
       return _CenteredMessage(
         icon: Icons.error_outline,
         title: 'AI 筆記生成失敗',
-        subtitle: errorMessage!,
-        actionLabel: onRetry == null ? null : '重試',
-        onAction: onRetry,
+        subtitle: widget.errorMessage!,
+        actionLabel: widget.onRetry == null ? null : '重試',
+        onAction: widget.onRetry,
       );
     }
 
-    if (notes.isEmpty) {
+    if (widget.notes.isEmpty) {
       return const _CenteredMessage(
         icon: Icons.description_outlined,
         title: '還沒有 AI 筆記',
@@ -90,18 +133,28 @@ class SummaryPanel extends StatelessWidget {
 
     return Column(
       children: [
-        if (isGenerating)
+        if (widget.isGenerating)
           const _StatusBanner(text: '正在更新 AI 筆記...', showProgress: true),
-        if (!isGenerating && errorMessage != null)
-          _StatusBanner(text: errorMessage!, isError: true),
+        if (!widget.isGenerating && widget.errorMessage != null)
+          _StatusBanner(text: widget.errorMessage!, isError: true),
         Expanded(
-          child: ListView.separated(
+          child: SingleChildScrollView(
+            controller: _scrollController,
             padding: const EdgeInsets.all(20),
-            itemCount: notes.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 16),
-            itemBuilder: (context, idx) {
-              return _PageNoteCard(note: notes[idx]);
-            },
+            child: Column(
+              children: [
+                for (int i = 0; i < widget.notes.length; i++) ...[
+                  _PageNoteCard(
+                    key: _cardKeys.putIfAbsent(
+                      widget.notes[i].pageNumber,
+                      () => GlobalKey(),
+                    ),
+                    note: widget.notes[i],
+                  ),
+                  if (i < widget.notes.length - 1) const SizedBox(height: 16),
+                ],
+              ],
+            ),
           ),
         ),
       ],
@@ -237,7 +290,7 @@ class _StatusBanner extends StatelessWidget {
 class _PageNoteCard extends StatelessWidget {
   final AiPageNote note;
 
-  const _PageNoteCard({required this.note});
+  const _PageNoteCard({super.key, required this.note});
 
   @override
   Widget build(BuildContext context) {
