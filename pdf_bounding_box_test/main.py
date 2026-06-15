@@ -354,11 +354,26 @@ async def detect_pipeline(file: UploadFile = File(...)):
 
         try:
             # 2. Run Step 1: GPT Bounding Box Choice Recommendation
-            query_gpt.main()
+            gpt_targets = query_gpt.main()
             if not out_gpt_json.exists():
                 raise HTTPException(
                     status_code=500, detail="GPT recommendations file was not generated"
                 )
+
+            # Early exit if no targets were recommended to annotate.
+            # gpt_targets is returned as a parsed list/dict directly from memory to avoid file locks.
+            if isinstance(gpt_targets, dict):
+                if "elements" in gpt_targets:
+                    gpt_targets = gpt_targets["elements"]
+                else:
+                    for key, val in gpt_targets.items():
+                        if isinstance(val, list):
+                            gpt_targets = val
+                            break
+
+            if not isinstance(gpt_targets, list) or not gpt_targets:
+                logger.info("No bounding box targets identified by GPT. Exiting pipeline early.")
+                return []
 
             # 3. Run Step 2a: OpenCV Contour Segmentation
             opencv.extract_diagram_regions(str(input_image_path))
@@ -512,6 +527,11 @@ async def detect_agent_pipeline(
             out_gpt_json.parent.mkdir(parents=True, exist_ok=True)
             with open(out_gpt_json, "w", encoding="utf-8") as f:
                 json.dump(targets_data, f, indent=4)
+
+            # Early exit if no targets are requested to annotate
+            if not targets_data:
+                logger.info("No bounding box targets provided by agent. Exiting agent-pipeline early.")
+                return []
 
             # 3. Run Step 2a: OpenCV Contour Segmentation
             opencv.extract_diagram_regions(str(input_image_path))
