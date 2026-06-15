@@ -427,18 +427,51 @@ class _DashboardState extends State<Dashboard>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('重新命名'),
+        backgroundColor: const Color(0xFFFDFCF8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFEAE7DC)),
+        ),
+        title: const Text(
+          '重新命名',
+          style: TextStyle(
+            fontFamily: 'Serif',
+            color: Color(0xFF3D3D3D),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         content: TextField(
           controller: textController,
           autofocus: true,
-          decoration: const InputDecoration(hintText: '請輸入新名稱'),
+          style: const TextStyle(color: Color(0xFF3D3D3D)),
+          decoration: const InputDecoration(
+            hintText: '請輸入新名稱',
+            hintStyle: TextStyle(color: Color(0xFFA8A08E)),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFFEAE7DC)),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFF8E9775), width: 2),
+            ),
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFA8A08E),
+            ),
+            child: const Text('取消', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8E9775),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
             onPressed: () async {
               try {
                 await _viewModel.renameNode(node, textController.text);
@@ -449,7 +482,7 @@ class _DashboardState extends State<Dashboard>
                 _showErrorSnackBar(e.toString());
               }
             },
-            child: const Text('儲存'),
+            child: const Text('儲存', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -460,15 +493,40 @@ class _DashboardState extends State<Dashboard>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('刪除確認'),
-        content: Text('確定要刪除「${node.name}」嗎？這將會連同內部所有項目一併刪除。'),
+        backgroundColor: const Color(0xFFFDFCF8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFEAE7DC)),
+        ),
+        title: const Text(
+          '刪除確認',
+          style: TextStyle(
+            fontFamily: 'Serif',
+            color: Color(0xFF3D3D3D),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          '確定要刪除「${node.name}」嗎？這將會連同內部所有項目一併刪除。',
+          style: const TextStyle(color: Color(0xFF3D3D3D), fontSize: 14),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFA8A08E),
+            ),
+            child: const Text('取消', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
             onPressed: () async {
               try {
                 await _viewModel.deleteNode(node);
@@ -479,7 +537,7 @@ class _DashboardState extends State<Dashboard>
                 _showErrorSnackBar(e.toString());
               }
             },
-            child: const Text('刪除', style: TextStyle(color: Colors.white)),
+            child: const Text('刪除', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -562,7 +620,15 @@ class _DashboardState extends State<Dashboard>
             ),
             if (node.type != 'system_folder')
               PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, color: Color(0xFFEAE7DC)),
+                icon: const Icon(Icons.more_vert, color: Color(0xFFA8A08E)),
+                color: const Color(0xFFFDFCF8),
+                elevation: 3,
+                shadowColor: Colors.black.withValues(alpha: 0.08),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: Color(0xFFEAE7DC)),
+                ),
+                offset: const Offset(0, 40),
                 onSelected: (value) {
                   if (value == 'rename') {
                     _showRenameDialog(node);
@@ -570,11 +636,40 @@ class _DashboardState extends State<Dashboard>
                     _showDeleteDialog(node);
                   }
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem<String>(value: 'rename', child: Text('重新命名')),
+                itemBuilder: (context) => [
+                  PopupMenuItem<String>(
+                    value: 'rename',
+                    child: Row(
+                      children: const [
+                        Icon(Icons.edit_outlined, size: 18, color: Color(0xFF3D3D3D)),
+                        SizedBox(width: 10),
+                        Text(
+                          '重新命名',
+                          style: TextStyle(
+                            color: Color(0xFF3D3D3D),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   PopupMenuItem<String>(
                     value: 'delete',
-                    child: Text('刪除', style: TextStyle(color: Colors.red)),
+                    child: Row(
+                      children: const [
+                        Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
+                        SizedBox(width: 10),
+                        Text(
+                          '刪除',
+                          style: TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

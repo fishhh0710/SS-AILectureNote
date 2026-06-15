@@ -40,10 +40,8 @@ class SlidePage extends StatelessWidget {
                             return const SizedBox.shrink();
                           return ClipRect(
                             child: RepaintBoundary(
-                              child: CustomPaint(
-                                painter: PageAnnotationPainter(
-                                  annotations: annotations,
-                                ),
+                              child: InteractiveAnnotationOverlay(
+                                annotations: annotations,
                               ),
                             ),
                           );
@@ -94,20 +92,95 @@ class SlidePage extends StatelessWidget {
   }
 }
 
-class PageAnnotationPainter extends CustomPainter {
+class InteractiveAnnotationOverlay extends StatefulWidget {
   final List<Annotation> annotations;
 
-  PageAnnotationPainter({required this.annotations});
+  const InteractiveAnnotationOverlay({super.key, required this.annotations});
+
+  @override
+  State<InteractiveAnnotationOverlay> createState() =>
+      _InteractiveAnnotationOverlayState();
+}
+
+class _InteractiveAnnotationOverlayState
+    extends State<InteractiveAnnotationOverlay> {
+  final Set<String> _pressedIds = {};
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = Size(constraints.maxWidth, constraints.maxHeight);
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (details) {
+            final localPos = details.localPosition;
+            String? hitId;
+
+            // Search in reverse draw order so top-most item is checked first
+            for (final ann in widget.annotations.reversed) {
+              if (ann is RectAnnotation) {
+                final rect = Rect.fromLTWH(
+                  ann.x * size.width,
+                  ann.y * size.height,
+                  ann.width * size.width,
+                  ann.height * size.height,
+                );
+                if (rect.contains(localPos)) {
+                  hitId = ann.id;
+                  break;
+                }
+              }
+            }
+
+            if (hitId != null) {
+              setState(() {
+                _pressedIds.add(hitId!);
+              });
+            }
+          },
+          onTapUp: (details) {
+            setState(() {
+              _pressedIds.clear();
+            });
+          },
+          onTapCancel: () {
+            setState(() {
+              _pressedIds.clear();
+            });
+          },
+          child: CustomPaint(
+            painter: PageAnnotationPainter(
+              annotations: widget.annotations,
+              tappedIds: _pressedIds,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class PageAnnotationPainter extends CustomPainter {
+  final List<Annotation> annotations;
+  final Set<String> tappedIds;
+
+  PageAnnotationPainter({
+    required this.annotations,
+    required this.tappedIds,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     for (final annotation in annotations) {
-      annotation.draw(canvas, size);
+      final showLabel = tappedIds.contains(annotation.id);
+      annotation.draw(canvas, size, showLabel: showLabel);
     }
   }
 
   @override
   bool shouldRepaint(covariant PageAnnotationPainter oldDelegate) {
-    return oldDelegate.annotations != annotations;
+    return oldDelegate.annotations != annotations ||
+        oldDelegate.tappedIds != tappedIds;
   }
 }
