@@ -427,7 +427,7 @@ ViewModels ──► Repositories / App-level Managers ──► Services
         <code>StudentAttentionTracker</code> 只在 Flutter 端觀察學生頁面、進入時間、停留秒數、最近 20 次頁面紀錄與 App 前景／背景狀態。Realtime Agent 先獨立判斷老師頁面，完成後後端才把老師頁面與學生狀態交給 Attention Agent，因此老師頁面推論不會偷看學生目前所在頁面。
       </p>
       <p>
-        Attention 每次至少間隔 30 秒，且必須出現頁面不同、學生停留超過 30 秒、老師自上次檢查移動至少兩頁或 App 進入背景其中一項訊號才執行。輸出包含 <code>status</code>、<code>page_relevance</code>、<code>reasoning_summary</code>、<code>missed_content</code> 與 <code>confused_summary</code>。只有 <code>status=distracted</code>、App 在背景、有 FCM token 且距上次通知至少 120 秒時才推播；離開 App 本身不再直接觸發通知。
+        Attention gate 在 App 背景時每 10 秒、前景時每 25 秒允許檢查；學生停留 20 秒、老師移動一頁、頁面不同、落後兩頁或 App 在背景都可觸發 Agent。輸出包含 <code>status</code>、<code>page_relevance</code>、<code>reasoning_summary</code>、<code>missed_content</code> 與 <code>confused_summary</code>。只有 <code>status=distracted</code>、App 已在背景至少 15 秒、另有一項分心證據、有 FCM token 且距上次通知至少 60 秒時才推播；離開 App 本身仍不會直接觸發通知。
       </p>
     </section>
 
@@ -455,13 +455,13 @@ ViewModels ──► Repositories / App-level Managers ──► Services
                                        ▼
                             ┌─────────────────────┐
                             │ deterministic gate  │
-                            │ 30 秒 + trigger     │
+                            │ 背景 10 / 前景 25 秒│
                             └──────────┬──────────┘
                                        │ should_run
                                        ▼
                             ┌─────────────────────┐
                             │ Attention Agent     │
-                            │ Agent tools: 無     │
+                            │ 6 個 Attention tools│
                             └───────┬─────────────┘
                                     │ status / missed / confused
                        ┌────────────┼─────────────┐
@@ -494,12 +494,16 @@ ViewModels ──► Repositories / App-level Managers ──► Services
         <div class="agent-card">
           <h3>Attention Agent</h3>
           <p><strong>目的：</strong>判斷學生是 following、confused、behind、distracted 或 unclear。</p>
-          <p><strong>Agent tools：</strong>無。</p>
+          <p><strong>Agent tools：</strong></p>
           <ul>
-            <li>Agent 前：<code>attention_gate</code> 檢查 30 秒間隔與 trigger signals。</li>
-            <li>Agent 後：後端寫入 Firestore、呼叫 <code>MemoryService</code>，必要時透過 FCM 通知。</li>
+            <li><code>evaluate_attention_gate()</code>：讀取 deterministic gate 與 trigger signals。</li>
+            <li><code>get_attention_evidence()</code>：取得老師／學生頁面、摘要、最近 10 段逐字稿、頁面歷史與 lifecycle。</li>
+            <li><code>remember_learning_state(...)</code>：保存 missed content 與 confusion Memory。</li>
+            <li><code>send_distraction_notification(status)</code>：通過後端安全條件後發送 FCM。</li>
+            <li><code>save_attention_result(...)</code>：更新 lecture session。</li>
+            <li><code>save_attention_event()</code>：追加 attention event。</li>
           </ul>
-          <p class="caption">Gate、Memory 與 FCM 是後端協調邏輯，不是模型可自行呼叫的 tools。</p>
+          <p class="caption">外層仍先跑 gate 避免不必要的模型成本；tool side effects 具有後端驗證、冪等與漏呼叫保護。</p>
         </div>
 
         <div class="agent-card">
@@ -772,7 +776,7 @@ users/{uid}/memories/{memoryId}              canonical memory
           <tr><td><code>functions_python/function_common.py</code></td><td>JSON response、request payload、Firebase Auth、欄位驗證、storage ID 清理與 OpenAI client。</td></tr>
           <tr><td><code>functions_python/lecture_ai.py</code></td><td>PDF page notes prompt、Memory context、OpenAI 呼叫、Storage 和 Firestore job 狀態。</td></tr>
           <tr><td><code>functions_python/realtime_agent.py</code></td><td>Realtime Agent schema、context tool、頁面判斷、輸出正規化及 Attention 第二階段協調。</td></tr>
-          <tr><td><code>functions_python/attention_agent.py</code></td><td>30 秒 gate、學生理解／分心判斷、事件紀錄、learning Memory 與 FCM。</td></tr>
+          <tr><td><code>functions_python/attention_agent.py</code></td><td>背景 10 秒／前景 25 秒 gate、六個 Agent tools、學生理解／分心判斷、事件紀錄、learning Memory 與 FCM。</td></tr>
           <tr><td><code>functions_python/memory_service.py</code></td><td>evidence、canonical memory、scope、狀態、embedding、向量搜尋與去重。</td></tr>
           <tr><td><code>functions_python/chat_agent.py</code></td><td>Memory-aware Chat Agent、結構化輸出與五個 Memory tools。</td></tr>
           <tr><td><code>functions_python/speech.py</code></td><td>Azure Speech 短期 token handler。</td></tr>

@@ -64,13 +64,13 @@ class FunctionContractTests(unittest.TestCase):
         self.assertEqual(result["update_note_at"], "none")
         self.assertEqual(result["page_number"], 3)
 
-    def test_attention_gate_waits_thirty_seconds(self):
+    def test_attention_gate_waits_twenty_five_seconds_in_foreground(self):
         now = datetime(2026, 6, 15, tzinfo=timezone.utc)
         gate = attention_agent.attention_gate(
             student_state={
                 "currentPage": 1,
                 "currentPageDurationSeconds": 20,
-                "appLifecycle": "background",
+                "appLifecycle": "foreground",
                 "sessionStartedAt": (now - timedelta(seconds=20)).isoformat(),
             },
             teacher_page=3,
@@ -79,6 +79,27 @@ class FunctionContractTests(unittest.TestCase):
         )
         self.assertFalse(gate["should_run"])
         self.assertFalse(gate["interval_ready"])
+        self.assertEqual(gate["check_interval_seconds"], 25)
+
+    def test_attention_gate_runs_after_ten_seconds_in_background(self):
+        now = datetime(2026, 6, 15, tzinfo=timezone.utc)
+        gate = attention_agent.attention_gate(
+            student_state={
+                "currentPage": 1,
+                "currentPageDurationSeconds": 16,
+                "appLifecycle": "background",
+                "backgroundedAt": (now - timedelta(seconds=16)).isoformat(),
+                "sessionStartedAt": (now - timedelta(seconds=11)).isoformat(),
+            },
+            teacher_page=3,
+            session_state={},
+            now=now,
+        )
+        self.assertTrue(gate["should_run"])
+        self.assertEqual(gate["check_interval_seconds"], 10)
+        self.assertEqual(gate["background_duration_seconds"], 16)
+        self.assertTrue(gate["signals"]["strong_background_signal"])
+        self.assertTrue(gate["signals"]["behind_signal"])
 
     def test_attention_gate_runs_for_mismatch_after_interval(self):
         now = datetime(2026, 6, 15, tzinfo=timezone.utc)
@@ -106,7 +127,7 @@ class FunctionContractTests(unittest.TestCase):
                 "appLifecycle": "foreground",
                 "sessionStartedAt": (now - timedelta(minutes=2)).isoformat(),
             },
-            teacher_page=4,
+            teacher_page=3,
             session_state={
                 "lastAttentionCheckedAt": (now - timedelta(seconds=31)),
                 "teacherPageAtLastCheck": 2,
@@ -115,6 +136,79 @@ class FunctionContractTests(unittest.TestCase):
         )
         self.assertTrue(gate["should_run"])
         self.assertTrue(gate["signals"]["teacher_moved"])
+
+    def test_attention_agent_exposes_action_tools(self):
+        self.assertEqual(
+            [tool.name for tool in attention_agent.attention_agent.tools],
+            [
+                "evaluate_attention_gate",
+                "get_attention_evidence",
+                "remember_learning_state",
+                "send_distraction_notification",
+                "save_attention_result",
+                "save_attention_event",
+            ],
+        )
+
+    def test_notification_cooldown_is_sixty_seconds(self):
+        now = datetime(2026, 6, 15, tzinfo=timezone.utc)
+        self.assertFalse(
+            attention_agent._notification_ready(
+                {"lastNotificationAt": now - timedelta(seconds=59)}, now
+            )
+        )
+        self.assertTrue(
+            attention_agent._notification_ready(
+                {"lastNotificationAt": now - timedelta(seconds=60)}, now
+            )
+        )
+
+    def test_notification_requires_background_and_combined_evidence(self):
+        now = datetime(2026, 6, 15, tzinfo=timezone.utc)
+        student_state = {
+            "currentPage": 1,
+            "currentPageDurationSeconds": 16,
+            "appLifecycle": "background",
+            "backgroundedAt": (now - timedelta(seconds=16)).isoformat(),
+            "sessionStartedAt": (now - timedelta(seconds=20)).isoformat(),
+        }
+        gate = attention_agent.attention_gate(
+            student_state=student_state,
+            teacher_page=3,
+            session_state={},
+            now=now,
+        )
+        context = attention_agent.AttentionContext(
+            uid="user-1",
+            session_id="session-1",
+            course_id="course-1",
+            lecture_id="lecture-1",
+            notification_token="token",
+            teacher_page=3,
+            page_summaries={},
+            transcript_segments=[],
+            student_state=student_state,
+            now=now,
+            database=None,
+            session_state={},
+            gate=gate,
+        )
+        self.assertEqual(
+            attention_agent._notification_decision(context, "distracted"),
+            (False, "attention_evidence_required"),
+        )
+
+        context.evidence_loaded = True
+        self.assertEqual(
+            attention_agent._notification_decision(context, "distracted"),
+            (True, "ready"),
+        )
+
+        context.gate["signals"]["strong_background_signal"] = False
+        self.assertEqual(
+            attention_agent._notification_decision(context, "distracted"),
+            (False, "insufficient_combined_evidence"),
+        )
 
     def test_memory_preference_id_is_stable_across_content_changes(self):
         first = memory_service.MemoryWrite(

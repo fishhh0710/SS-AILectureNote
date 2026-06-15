@@ -159,16 +159,20 @@ Realtime 輸出：
 
 不是每個 10 秒 segment 都呼叫 Attention。後端先做 deterministic gate，避免成本與誤判。
 
-必要條件一：距離 session 開始或上次 Attention 檢查至少 30 秒。
+必要條件一：App 在背景時距離 session 開始或上次檢查至少 10 秒；前景時至少 25 秒。
 
 必要條件二：至少出現一項訊號。
 
 - 老師頁面與學生頁面不同。
-- 學生停留同一頁至少 30 秒。
-- 老師相較上次 Attention 檢查移動至少 2 頁。
+- 學生停留同一頁至少 20 秒。
+- 老師相較上次 Attention 檢查移動至少 1 頁。
 - App 在背景。
+- App 在背景且目前頁面停留至少 15 秒，標記為強背景訊號。
+- 學生落後老師至少 2 頁。
 
 這些訊號只決定是否值得判斷，不直接決定結果。例如 App 在背景是證據，但不是分心的充分條件；停留過久也可能是認真閱讀。
+
+Attention 現在是 Agents SDK tool workflow。Agent 依序使用 `evaluate_attention_gate`、`get_attention_evidence`，並視結果呼叫 `remember_learning_state`、`send_distraction_notification`、`save_attention_result` 與 `save_attention_event`。通知與資料寫入仍有後端驗證與冪等保護，不能只靠模型自行保證。
 
 ## 8. Attention Agent 輸出
 
@@ -189,7 +193,9 @@ Realtime 輸出：
       "page_mismatch": true,
       "student_stagnant": true,
       "teacher_moved": false,
-      "app_background": true
+      "app_background": true,
+      "strong_background_signal": true,
+      "behind_signal": true
     }
   },
   "notification_sent": false,
@@ -222,14 +228,16 @@ Realtime 輸出：
 2. `status == distracted`。
 3. `appLifecycle == background`。
 4. request 有有效 FCM token。
-5. 距離同一 session 上次通知至少 120 秒。
+5. App 已在背景至少 15 秒。
+6. 除強背景訊號外，另有頁面不同、停留過久、老師移動或落後至少 2 頁其中一項證據。
+7. 距離同一 session 上次通知至少 60 秒。
 
 因此下列情況不通知：
 
 - 使用者只是切到背景，但 AI 判定仍跟上或只是落後。
 - 學生停在同頁閱讀，但沒有足夠分心證據。
 - 狀態為 `confused` 或 `behind`。
-- 前一次通知後尚未滿 120 秒。
+- 前一次通知後尚未滿 60 秒。
 - 沒有可用的裝置 token。
 
 Android 已加入通知權限並可編譯。iOS 已宣告 `remote-notification` background mode，但正式推播仍要在 Apple Developer 與 Firebase Console 設定 APNs key，並在 Xcode 開啟 Push Notifications capability。
@@ -448,7 +456,7 @@ firebase functions:list --project ai-notes-555a6
 
 1. 開啟 Lecture 並開始 Demo 或麥克風逐字稿。
 2. 學生停在老師正在講的同一頁。
-3. 等待超過 30 秒。
+3. 前景等待超過 25 秒。
 4. 確認 Attention 可判為 following/unclear，沒有通知。
 
 ### 情境 B：落後但不應通知
@@ -464,7 +472,7 @@ firebase functions:list --project ai-notes-555a6
 2. 讓老師內容前進數頁。
 3. 學生停在無關頁面或把 App 放到背景，並維持足夠長的歷史證據。
 4. 確認 Attention 回傳 distracted。
-5. 確認背景收到 FCM，且 120 秒內不重複通知。
+5. 確認背景收到 FCM，且 60 秒內不重複通知。
 
 ### 情境 D：Memory 偏好
 
