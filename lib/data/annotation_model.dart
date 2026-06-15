@@ -27,7 +27,13 @@ abstract class Annotation {
     }
   }
 
-  void draw(Canvas canvas, Size size, {bool showLabel = false});
+  void draw(
+    Canvas canvas,
+    Size size, {
+    bool showLabel = false,
+    bool rectOnly = false,
+    bool labelOnly = false,
+  });
 }
 
 // 1. Rectangle Annotation (using relative coordinates 0.0 ~ 1.0)
@@ -80,28 +86,36 @@ class RectAnnotation extends Annotation {
   }
 
   @override
-  void draw(Canvas canvas, Size size, {bool showLabel = false}) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth;
+  void draw(
+    Canvas canvas,
+    Size size, {
+    bool showLabel = false,
+    bool rectOnly = false,
+    bool labelOnly = false,
+  }) {
+    if (!labelOnly) {
+      final paint = Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth;
 
-    final rect = Rect.fromLTWH(
-      x * size.width,
-      y * size.height,
-      width * size.width,
-      height * size.height,
-    );
-    canvas.drawRect(rect, paint);
+      final rect = Rect.fromLTWH(
+        x * size.width,
+        y * size.height,
+        width * size.width,
+        height * size.height,
+      );
+      canvas.drawRect(rect, paint);
+    }
 
-    if (showLabel && label != null && label!.isNotEmpty) {
-      final double scaledFontSize = 10.0 * (size.width / 850.0);
+    if (showLabel && !rectOnly && label != null && label!.isNotEmpty) {
+      final double scaledFontSize = 14.0 * (size.width / 850.0);
       final textPainter = TextPainter(
         text: TextSpan(
           text: label,
           style: TextStyle(
             color: Colors.white,
-            fontSize: scaledFontSize > 8.0 ? scaledFontSize : 8.0,
+            fontSize: scaledFontSize > 12.0 ? scaledFontSize : 12.0,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -183,7 +197,14 @@ class TextAnnotation extends Annotation {
   }
 
   @override
-  void draw(Canvas canvas, Size size, {bool showLabel = false}) {
+  void draw(
+    Canvas canvas,
+    Size size, {
+    bool showLabel = false,
+    bool rectOnly = false,
+    bool labelOnly = false,
+  }) {
+    if (rectOnly) return;
     // 💡 根據投影片當前寬度與基準寬度 (850.0) 進行比例縮放，避免縮放時文字尺寸錯位
     final double scaledFontSize = fontSize * (size.width / 850.0);
 

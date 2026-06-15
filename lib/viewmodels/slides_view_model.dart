@@ -47,8 +47,8 @@ class SlidesViewModel extends ChangeNotifier {
     try {
       // 1. Render the page to a high-resolution raw pixel buffer
       final pdfImage = await page.render(
-        width: (page.width * 1.5).toInt(),
-        height: (page.height * 1.5).toInt(),
+        fullWidth: page.width * 1.5,
+        fullHeight: page.height * 1.5,
       );
       if (pdfImage == null) return;
 
@@ -102,7 +102,9 @@ class SlidesViewModel extends ChangeNotifier {
       }
 
       // Sort candidates by area ascending
-      candidates.sort((a, b) => (a['area'] as double).compareTo(b['area'] as double));
+      candidates.sort(
+        (a, b) => (a['area'] as double).compareTo(b['area'] as double),
+      );
 
       final Set<int> removedIndices = {};
       for (int i = 0; i < candidates.length; i++) {
@@ -117,12 +119,14 @@ class SlidesViewModel extends ChangeNotifier {
           if (overlaps[0] > 0.30 && overlaps[1] > 0.30) {
             // j is the larger/equal box (since candidates is sorted ascending by area). Remove it.
             removedIndices.add(j);
-            debugPrint("Overlap filter: Removing larger box '${candidates[j]['label']}' because it overlaps >30% mutually with '${candidates[i]['label']}'.");
+            debugPrint(
+              "Overlap filter: Removing larger box '${candidates[j]['label']}' because it overlaps >30% mutually with '${candidates[i]['label']}'.",
+            );
           }
         }
       }
 
-      for (int k = 0; k < candidates.length; k++) {
+      for (int k = candidates.length - 1; k >= 0; k--) {
         if (removedIndices.contains(k)) continue;
 
         final candidate = candidates[k];
@@ -206,8 +210,8 @@ class SlidesViewModel extends ChangeNotifier {
 
       // 1. Render the page to a high-resolution raw pixel buffer
       final pdfImage = await page.render(
-        width: (page.width * 1.5).toInt(),
-        height: (page.height * 1.5).toInt(),
+        fullWidth: page.width * 1.5,
+        fullHeight: page.height * 1.5,
       );
       if (pdfImage == null) return;
 
@@ -264,7 +268,9 @@ class SlidesViewModel extends ChangeNotifier {
       }
 
       // Sort candidates by area ascending
-      candidates.sort((a, b) => (a['area'] as double).compareTo(b['area'] as double));
+      candidates.sort(
+        (a, b) => (a['area'] as double).compareTo(b['area'] as double),
+      );
 
       final Set<int> removedIndices = {};
       for (int i = 0; i < candidates.length; i++) {
@@ -279,12 +285,14 @@ class SlidesViewModel extends ChangeNotifier {
           if (overlaps[0] > 0.30 && overlaps[1] > 0.30) {
             // j is the larger/equal box. Remove it.
             removedIndices.add(j);
-            debugPrint("Overlap filter: Removing larger box '${candidates[j]['label']}' because it overlaps >30% mutually with '${candidates[i]['label']}'.");
+            debugPrint(
+              "Overlap filter: Removing larger box '${candidates[j]['label']}' because it overlaps >30% mutually with '${candidates[i]['label']}'.",
+            );
           }
         }
       }
 
-      for (int k = 0; k < candidates.length; k++) {
+      for (int k = candidates.length - 1; k >= 0; k--) {
         if (removedIndices.contains(k)) continue;
 
         final candidate = candidates[k];

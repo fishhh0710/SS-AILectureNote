@@ -172,9 +172,15 @@ class PageAnnotationPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Pass 1: Draw all bounding box outlines
     for (final annotation in annotations) {
       final showLabel = tappedIds.contains(annotation.id);
-      annotation.draw(canvas, size, showLabel: showLabel);
+      annotation.draw(canvas, size, showLabel: showLabel, rectOnly: true);
+    }
+    // Pass 2: Draw all labels and text annotations on top of outlines
+    for (final annotation in annotations) {
+      final showLabel = tappedIds.contains(annotation.id);
+      annotation.draw(canvas, size, showLabel: showLabel, labelOnly: true);
     }
   }
 
