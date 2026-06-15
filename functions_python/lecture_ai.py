@@ -4,11 +4,14 @@ import json
 import logging
 import os
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from firebase_admin import firestore, storage
 from firebase_functions import https_fn
+from pypdf import PdfReader, PdfWriter
 
 from function_common import (
     authenticated_user_id,
@@ -50,13 +53,37 @@ PAGE_NOTES_SCHEMA = {
 }
 
 
-def _pdf_notes_prompt(memory_context: list[dict[str, Any]] | None = None) -> str:
+@dataclass(frozen=True)
+class PdfBatch:
+    index: int
+    start_page: int
+    end_page: int
+    path: str
+
+    @property
+    def page_count(self) -> int:
+        return self.end_page - self.start_page + 1
+
+
+def _pdf_notes_prompt(
+    memory_context: list[dict[str, Any]] | None = None,
+    *,
+    start_page: int | None = None,
+    end_page: int | None = None,
+) -> str:
     memory_section = json.dumps(memory_context or [], ensure_ascii=False)
+    page_range = (
+        f"This PDF batch represents original pages {start_page} through {end_page}. "
+        "Return one note for each page in the same order and use the original page numbers."
+        if start_page is not None and end_page is not None
+        else "Return one note for every page in the PDF."
+    )
     return f"""
 You are an academic PDF note-taking assistant.
 
 Task:
 Read the entire PDF and generate concise Markdown notes for each page.
+{page_range}
 
 You must use:
 - The page text
@@ -123,9 +150,39 @@ def _extract_output_text(response: Any) -> str:
     return "".join(parts)
 
 
+def _normalize_batch_pages(
+    result: dict[str, Any], *, start_page: int, expected_page_count: int
+) -> list[dict[str, Any]]:
+    pages = result.get("pages")
+    if not isinstance(pages, list) or len(pages) != expected_page_count:
+        raise ValueError(
+            f"Expected {expected_page_count} page notes, received "
+            f"{len(pages) if isinstance(pages, list) else 0}."
+        )
+
+    normalized: list[dict[str, Any]] = []
+    for offset, page in enumerate(pages):
+        if not isinstance(page, dict):
+            raise ValueError("Model output contains an invalid page note.")
+        markdown = page.get("markdown")
+        if not isinstance(markdown, str) or not markdown.strip():
+            raise ValueError("Model output contains an empty page note.")
+        normalized.append(
+            {
+                "page_number": start_page + offset,
+                "markdown": markdown.strip(),
+            }
+        )
+    return normalized
+
+
 def _generate_page_notes(
-    pdf_path: str, memory_context: list[dict[str, Any]] | None = None
-) -> dict[str, Any]:
+    pdf_path: str,
+    memory_context: list[dict[str, Any]] | None = None,
+    *,
+    start_page: int = 1,
+    expected_page_count: int,
+) -> list[dict[str, Any]]:
     client = openai_client()
     with open(pdf_path, "rb") as pdf_file:
         uploaded_file = client.files.create(file=pdf_file, purpose="user_data")
@@ -142,7 +199,11 @@ def _generate_page_notes(
                         {"type": "input_file", "file_id": uploaded_file.id},
                         {
                             "type": "input_text",
-                            "text": _pdf_notes_prompt(memory_context),
+                            "text": _pdf_notes_prompt(
+                                memory_context,
+                                start_page=start_page,
+                                end_page=start_page + expected_page_count - 1,
+                            ),
                         },
                     ],
                 }
@@ -155,12 +216,14 @@ def _generate_page_notes(
                     "schema": PAGE_NOTES_SCHEMA,
                 }
             },
-            max_output_tokens=20000,
+            max_output_tokens=max(2000, expected_page_count * 800),
         )
         result = json.loads(_extract_output_text(response))
-        if not isinstance(result.get("pages"), list):
-            raise ValueError("Model output is missing pages.")
-        return result
+        return _normalize_batch_pages(
+            result,
+            start_page=start_page,
+            expected_page_count=expected_page_count,
+        )
     finally:
         try:
             client.files.delete(uploaded_file.id)
@@ -168,12 +231,56 @@ def _generate_page_notes(
             logging.exception("Failed to delete uploaded OpenAI file")
 
 
-def _job_document(job_path: str, safe_id: str):
-    segments = [segment for segment in job_path.split("/") if segment]
-    database = firestore.client()
-    if len(segments) % 2 == 0:
-        return database.document(job_path)
-    return database.collection("ai_note_jobs").document(safe_id)
+def _split_pdf_batches(
+    pdf_path: str, output_dir: str, *, batch_size: int = 5
+) -> tuple[list[PdfBatch], int]:
+    reader = PdfReader(pdf_path)
+    total_pages = len(reader.pages)
+    if total_pages == 0:
+        raise ValueError("PDF does not contain any pages.")
+
+    batches: list[PdfBatch] = []
+    for index, start_index in enumerate(range(0, total_pages, batch_size)):
+        writer = PdfWriter()
+        end_index = min(start_index + batch_size, total_pages)
+        for page_index in range(start_index, end_index):
+            writer.add_page(reader.pages[page_index])
+        batch_path = str(Path(output_dir) / f"batch_{index:04d}.pdf")
+        with open(batch_path, "wb") as batch_file:
+            writer.write(batch_file)
+        batches.append(
+            PdfBatch(
+                index=index,
+                start_page=start_index + 1,
+                end_page=end_index,
+                path=batch_path,
+            )
+        )
+    return batches, total_pages
+
+
+def _run_batches_concurrently(
+    batches: list[PdfBatch],
+    worker: Callable[[PdfBatch], list[dict[str, Any]]],
+    *,
+    max_workers: int = 3,
+) -> list[dict[str, Any]]:
+    pages: list[dict[str, Any]] = []
+    errors: list[str] = []
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(batches))) as executor:
+        futures = {executor.submit(worker, batch): batch for batch in batches}
+        for future in as_completed(futures):
+            batch = futures[future]
+            try:
+                pages.extend(future.result())
+            except Exception as error:
+                errors.append(
+                    f"pages {batch.start_page}-{batch.end_page}: {error}"
+                )
+    if errors:
+        raise RuntimeError("PDF batch generation failed: " + "; ".join(errors))
+    pages.sort(key=lambda page: page["page_number"])
+    return pages
 
 
 def _summary_memories(
@@ -197,11 +304,108 @@ def _summary_memories(
     return [item.to_dict() for item in [*preferences, *learning]]
 
 
+def _batch_document(job_ref: Any, batch: PdfBatch):
+    return job_ref.collection("batches").document(f"{batch.index:04d}")
+
+
+def _initialize_batch_documents(
+    *, job_ref: Any, batches: list[PdfBatch], total_pages: int
+) -> None:
+    for batch in batches:
+        _batch_document(job_ref, batch).set(
+            {
+                "batchIndex": batch.index,
+                "startPage": batch.start_page,
+                "endPage": batch.end_page,
+                "totalPages": total_pages,
+                "status": "pending",
+                "attempt": 0,
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            }
+        )
+
+
+def _generate_and_persist_batch(
+    *,
+    batch: PdfBatch,
+    memory_context: list[dict[str, Any]],
+    job_ref: Any,
+    database: Any,
+) -> list[dict[str, Any]]:
+    batch_ref = _batch_document(job_ref, batch)
+    last_error: Exception | None = None
+    for attempt in range(1, 3):
+        batch_ref.set(
+            {
+                "status": "running",
+                "attempt": attempt,
+                "error": firestore.DELETE_FIELD,
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
+        )
+        try:
+            pages = _generate_page_notes(
+                batch.path,
+                memory_context,
+                start_page=batch.start_page,
+                expected_page_count=batch.page_count,
+            )
+            write = database.batch()
+            write.set(
+                batch_ref,
+                {
+                    "status": "completed",
+                    "pages": pages,
+                    "attempt": attempt,
+                    "updatedAt": firestore.SERVER_TIMESTAMP,
+                },
+                merge=True,
+            )
+            write.set(
+                job_ref,
+                {
+                    "completedBatches": firestore.Increment(1),
+                    "completedPages": firestore.Increment(batch.page_count),
+                    "updatedAt": firestore.SERVER_TIMESTAMP,
+                },
+                merge=True,
+            )
+            write.commit()
+            return pages
+        except Exception as error:
+            last_error = error
+            logging.exception(
+                "PDF batch %s failed on attempt %s", batch.index, attempt
+            )
+
+    error_message = str(last_error or "Unknown batch error")
+    write = database.batch()
+    write.set(
+        batch_ref,
+        {
+            "status": "failed",
+            "error": error_message,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        },
+        merge=True,
+    )
+    write.set(
+        job_ref,
+        {
+            "failedBatches": firestore.Increment(1),
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        },
+        merge=True,
+    )
+    write.commit()
+    raise RuntimeError(error_message)
+
+
 def notes_handler(req: https_fn.Request) -> https_fn.Response:
     if req.method != "POST":
         return json_response({"message": "Only POST is supported."}, 405)
 
-    temp_pdf_path: str | None = None
     job_ref = None
     try:
         payload = request_payload(req)
@@ -212,29 +416,59 @@ def notes_handler(req: https_fn.Request) -> https_fn.Response:
         storage_bucket = optional_string(payload.get("storageBucket"))
         pdf_storage_path = required_string(payload, "pdfStoragePath")
         safe_id = safe_storage_id(storage_id)
-        job_path = optional_string(payload.get("jobPath")) or f"ai_note_jobs/{safe_id}"
+        job_id = safe_storage_id(optional_string(payload.get("jobId")) or safe_id)
         bucket = storage.bucket(storage_bucket or None)
-        job_ref = _job_document(job_path, safe_id)
-        job_ref.set(
-            {
-                "status": "running",
-                "storageBucket": bucket.name,
-                "pdfStoragePath": pdf_storage_path,
-                "updatedAt": firestore.SERVER_TIMESTAMP,
-            },
-            merge=True,
+        database = firestore.client()
+        job_ref = (
+            database.collection("users")
+            .document(uid)
+            .collection("ai_note_jobs")
+            .document(job_id)
         )
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-            temp_pdf_path = temp_file.name
-        bucket.blob(pdf_storage_path).download_to_filename(temp_pdf_path)
-
-        memory_context = _summary_memories(
-            uid=uid,
-            course_id=course_id,
-            lecture_id=lecture_id,
-        )
-        notes = _generate_page_notes(temp_pdf_path, memory_context)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_pdf_path = str(Path(temp_dir) / "source.pdf")
+            bucket.blob(pdf_storage_path).download_to_filename(temp_pdf_path)
+            batches, total_pages = _split_pdf_batches(temp_pdf_path, temp_dir)
+            memory_context = _summary_memories(
+                uid=uid,
+                course_id=course_id,
+                lecture_id=lecture_id,
+            )
+            job_ref.set(
+                {
+                    "storageId": storage_id,
+                    "courseId": course_id,
+                    "lectureId": lecture_id,
+                    "status": "running",
+                    "storageBucket": bucket.name,
+                    "pdfStoragePath": pdf_storage_path,
+                    "totalPages": total_pages,
+                    "batchSize": 5,
+                    "totalBatches": len(batches),
+                    "completedBatches": 0,
+                    "completedPages": 0,
+                    "failedBatches": 0,
+                    "memoryCount": len(memory_context),
+                    "createdAt": firestore.SERVER_TIMESTAMP,
+                    "updatedAt": firestore.SERVER_TIMESTAMP,
+                }
+            )
+            _initialize_batch_documents(
+                job_ref=job_ref,
+                batches=batches,
+                total_pages=total_pages,
+            )
+            notes_pages = _run_batches_concurrently(
+                batches,
+                lambda batch: _generate_and_persist_batch(
+                    batch=batch,
+                    memory_context=memory_context,
+                    job_ref=job_ref,
+                    database=database,
+                ),
+            )
+        notes = {"pages": notes_pages}
         notes_storage_path = f"ai_note_jobs/{safe_id}/notes/notes.json"
         notes_blob = bucket.blob(notes_storage_path)
         notes_blob.metadata = {"storageId": storage_id}
@@ -247,7 +481,7 @@ def notes_handler(req: https_fn.Request) -> https_fn.Response:
             {
                 "status": "completed",
                 "notesStoragePath": notes_storage_path,
-                "pageCount": len(notes["pages"]),
+                "pageCount": len(notes_pages),
                 "memoryCount": len(memory_context),
                 "updatedAt": firestore.SERVER_TIMESTAMP,
             },
@@ -258,6 +492,7 @@ def notes_handler(req: https_fn.Request) -> https_fn.Response:
                 **notes,
                 "status": "completed",
                 "storageBucket": bucket.name,
+                "jobId": job_id,
                 "jobPath": job_ref.path,
                 "notesStoragePath": notes_storage_path,
                 "memoryCount": len(memory_context),
@@ -280,6 +515,3 @@ def notes_handler(req: https_fn.Request) -> https_fn.Response:
             except Exception:
                 logging.exception("Failed to write failed job status")
         return json_response({"message": str(error)}, 500)
-    finally:
-        if temp_pdf_path:
-            Path(temp_pdf_path).unlink(missing_ok=True)

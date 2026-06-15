@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/ai_page_note.dart';
 import 'firebase_function_client.dart';
@@ -20,6 +23,10 @@ class NoteGenerationState {
     this.notes = const [],
     this.errorMessage,
     this.lastPdfPath,
+    this.totalPages = 0,
+    this.completedPages = 0,
+    this.totalBatches = 0,
+    this.completedBatches = 0,
   });
 
   final String storageId;
@@ -27,6 +34,10 @@ class NoteGenerationState {
   final List<AiPageNote> notes;
   final String? errorMessage;
   final String? lastPdfPath;
+  final int totalPages;
+  final int completedPages;
+  final int totalBatches;
+  final int completedBatches;
 
   bool get isGenerating => status == NoteGenerationStatus.generating;
 
@@ -36,6 +47,11 @@ class NoteGenerationState {
     String? errorMessage,
     bool clearError = false,
     String? lastPdfPath,
+    int? totalPages,
+    int? completedPages,
+    int? totalBatches,
+    int? completedBatches,
+    bool clearProgress = false,
   }) {
     return NoteGenerationState(
       storageId: storageId,
@@ -43,6 +59,12 @@ class NoteGenerationState {
       notes: notes ?? this.notes,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
       lastPdfPath: lastPdfPath ?? this.lastPdfPath,
+      totalPages: clearProgress ? 0 : totalPages ?? this.totalPages,
+      completedPages: clearProgress ? 0 : completedPages ?? this.completedPages,
+      totalBatches: clearProgress ? 0 : totalBatches ?? this.totalBatches,
+      completedBatches: clearProgress
+          ? 0
+          : completedBatches ?? this.completedBatches,
     );
   }
 }
@@ -59,6 +81,8 @@ typedef SaveNotes =
 class NoteGenerationManager {
   NoteGenerationManager._production()
     : _storage = FirebaseStorage.instance,
+      _firestore = FirebaseFirestore.instance,
+      _auth = FirebaseAuth.instance,
       _functionClient = FirebaseFunctionClient(),
       _loadSavedNotesOverride = null,
       _generateAndSaveNotesOverride = null,
@@ -69,6 +93,8 @@ class NoteGenerationManager {
     required GenerateAndSaveNotes generateAndSaveNotes,
     SaveNotes? saveNotes,
   }) : _storage = null,
+       _firestore = null,
+       _auth = null,
        _functionClient = null,
        _loadSavedNotesOverride = loadSavedNotes,
        _generateAndSaveNotesOverride = generateAndSaveNotes,
@@ -99,6 +125,8 @@ class NoteGenerationManager {
   );
 
   final FirebaseStorage? _storage;
+  final FirebaseFirestore? _firestore;
+  final FirebaseAuth? _auth;
   final FirebaseFunctionClient? _functionClient;
   final LoadSavedNotes? _loadSavedNotesOverride;
   final GenerateAndSaveNotes? _generateAndSaveNotesOverride;
@@ -106,6 +134,11 @@ class NoteGenerationManager {
   final Map<String, NoteGenerationState> _states = {};
   final Map<String, Future<void>> _loadOperations = {};
   final Map<String, Future<void>> _generationOperations = {};
+  final Map<String, Future<void>> _noteMutationOperations = {};
+  final Map<String, StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>
+  _batchSubscriptions = {};
+  final Map<String, String> _activeJobIds = {};
+  final Map<String, Set<String>> _appliedBatchIds = {};
   final Map<String, String> _courseIds = {};
   final Map<String, String> _lectureIds = {};
   final Set<String> _loadedStorageIds = {};
@@ -158,6 +191,7 @@ class NoteGenerationManager {
       current.copyWith(
         status: NoteGenerationStatus.generating,
         clearError: true,
+        clearProgress: true,
         lastPdfPath: pdfPath,
       ),
     );
@@ -185,25 +219,9 @@ class NoteGenerationManager {
     required List<AiPageNote> notes,
   }) async {
     await load(storageId);
-
-    final sortedNotes = [...notes]
-      ..sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
-    if (_saveNotesOverride != null) {
-      await _saveNotesOverride(storageId, sortedNotes);
-    } else {
-      await _saveNotes(storageId, sortedNotes);
-    }
-
-    final current = stateFor(storageId);
-    _emit(
-      current.copyWith(
-        status: current.isGenerating
-            ? NoteGenerationStatus.generating
-            : NoteGenerationStatus.completed,
-        notes: List.unmodifiable(sortedNotes),
-        clearError: true,
-      ),
-    );
+    await _enqueueNoteMutation(storageId, () async {
+      await _saveAndEmitNotes(storageId, notes);
+    });
   }
 
   Future<bool> appendRealtimeUpdate({
@@ -213,36 +231,37 @@ class NoteGenerationManager {
     required List<String> questions,
   }) async {
     await load(storageId);
+    return _enqueueNoteMutation(storageId, () async {
+      final current = stateFor(storageId);
+      final noteIndex = current.notes.indexWhere(
+        (note) => note.pageNumber == pageNumber,
+      );
+      if (noteIndex < 0) return false;
 
-    final current = stateFor(storageId);
-    final noteIndex = current.notes.indexWhere(
-      (note) => note.pageNumber == pageNumber,
-    );
-    if (noteIndex < 0) return false;
+      final note = current.notes[noteIndex];
+      var markdown = note.markdown.trim();
+      final additions = _newMarkdownItems(markdown, newPoints);
+      markdown = _appendSection(
+        markdown,
+        heading: '### Professor Additions',
+        items: additions,
+      );
+      final newQuestions = _newMarkdownItems(markdown, questions);
+      markdown = _appendSection(
+        markdown,
+        heading: '### Professor Questions',
+        items: newQuestions,
+      );
+      if (additions.isEmpty && newQuestions.isEmpty) return false;
 
-    final note = current.notes[noteIndex];
-    var markdown = note.markdown.trim();
-    final additions = _newMarkdownItems(markdown, newPoints);
-    markdown = _appendSection(
-      markdown,
-      heading: '### Professor Additions',
-      items: additions,
-    );
-    final newQuestions = _newMarkdownItems(markdown, questions);
-    markdown = _appendSection(
-      markdown,
-      heading: '### Professor Questions',
-      items: newQuestions,
-    );
-    if (additions.isEmpty && newQuestions.isEmpty) return false;
-
-    final updatedNotes = [...current.notes];
-    updatedNotes[noteIndex] = AiPageNote(
-      pageNumber: pageNumber,
-      markdown: markdown,
-    );
-    await updateNotes(storageId: storageId, notes: updatedNotes);
-    return true;
+      final updatedNotes = [...current.notes];
+      updatedNotes[noteIndex] = AiPageNote(
+        pageNumber: pageNumber,
+        markdown: markdown,
+      );
+      await _saveAndEmitNotes(storageId, updatedNotes);
+      return true;
+    });
   }
 
   Future<void> _load(String storageId) async {
@@ -287,24 +306,26 @@ class NoteGenerationManager {
                 pdfPath: pdfPath,
               ) ??
               _generateAndSaveNotes(storageId: storageId, pdfPath: pdfPath));
-      final mergedNotes = _mergeRealtimeUpdates(
-        generatedNotes: notes,
-        currentNotes: stateFor(storageId).notes,
-      );
-      if (!_sameNotes(notes, mergedNotes)) {
-        if (_saveNotesOverride != null) {
-          await _saveNotesOverride(storageId, mergedNotes);
-        } else {
-          await _saveNotes(storageId, mergedNotes);
-        }
-      }
-      _emit(
-        stateFor(storageId).copyWith(
-          status: NoteGenerationStatus.completed,
-          notes: List.unmodifiable(mergedNotes),
-          clearError: true,
-        ),
-      );
+      await _stopBatchListener(storageId);
+      await _enqueueNoteMutation(storageId, () async {
+        final mergedNotes = _mergeGeneratedPages(
+          generatedNotes: notes,
+          currentNotes: stateFor(storageId).notes,
+        );
+        await _saveNotesForStorage(storageId, mergedNotes);
+        final current = stateFor(storageId);
+        _emit(
+          current.copyWith(
+            status: NoteGenerationStatus.completed,
+            notes: List.unmodifiable(mergedNotes),
+            completedPages: current.totalPages > 0
+                ? current.totalPages
+                : mergedNotes.length,
+            completedBatches: current.totalBatches,
+            clearError: true,
+          ),
+        );
+      });
     } catch (error) {
       _emit(
         stateFor(storageId).copyWith(
@@ -312,10 +333,12 @@ class NoteGenerationManager {
           errorMessage: error.toString(),
         ),
       );
+    } finally {
+      await _stopBatchListener(storageId);
     }
   }
 
-  List<AiPageNote> _mergeRealtimeUpdates({
+  List<AiPageNote> _mergeGeneratedPages({
     required List<AiPageNote> generatedNotes,
     required List<AiPageNote> currentNotes,
   }) {
@@ -324,32 +347,210 @@ class NoteGenerationManager {
       '### Professor Additions',
       '### Professor Questions',
     ];
-    final liveByPage = <int, String>{};
+    final currentByPage = {
+      for (final note in currentNotes) note.pageNumber: note,
+    };
+    final mergedByPage = {...currentByPage};
     for (final note in currentNotes) {
       final indices = headings
           .map(note.markdown.indexOf)
           .where((index) => index >= 0)
           .toList();
-      if (indices.isNotEmpty) {
-        indices.sort();
-        liveByPage[note.pageNumber] = note.markdown.substring(indices.first);
+      if (indices.isEmpty) continue;
+      indices.sort();
+      final liveSection = note.markdown.substring(indices.first);
+      final generated = generatedNotes.where(
+        (item) => item.pageNumber == note.pageNumber,
+      );
+      if (generated.isNotEmpty) {
+        final replacement = generated.first;
+        mergedByPage[note.pageNumber] = AiPageNote(
+          pageNumber: note.pageNumber,
+          markdown: '${replacement.markdown.trim()}\n\n$liveSection',
+        );
       }
     }
 
-    final merged = generatedNotes.map((note) {
-      final liveSection = liveByPage.remove(note.pageNumber);
-      if (liveSection == null) return note;
-      return AiPageNote(
-        pageNumber: note.pageNumber,
-        markdown: '${note.markdown.trim()}\n\n$liveSection',
-      );
-    }).toList();
-
-    for (final entry in liveByPage.entries) {
-      merged.add(AiPageNote(pageNumber: entry.key, markdown: entry.value));
+    for (final note in generatedNotes) {
+      mergedByPage.putIfAbsent(note.pageNumber, () => note);
+      if (!currentByPage.containsKey(note.pageNumber) ||
+          !headings.any(currentByPage[note.pageNumber]!.markdown.contains)) {
+        mergedByPage[note.pageNumber] = note;
+      }
     }
+
+    final merged = mergedByPage.values.toList();
     merged.sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
     return merged;
+  }
+
+  Future<T> _enqueueNoteMutation<T>(
+    String storageId,
+    Future<T> Function() action,
+  ) {
+    final previous = _noteMutationOperations[storageId] ?? Future<void>.value();
+    final completer = Completer<T>();
+    late final Future<void> queued;
+    queued = () async {
+      try {
+        await previous;
+      } catch (_) {
+        // A failed write must not block later note updates.
+      }
+      try {
+        completer.complete(await action());
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    }();
+    _noteMutationOperations[storageId] = queued;
+    unawaited(
+      queued.whenComplete(() {
+        if (identical(_noteMutationOperations[storageId], queued)) {
+          _noteMutationOperations.remove(storageId);
+        }
+      }),
+    );
+    return completer.future;
+  }
+
+  Future<void> _saveNotesForStorage(
+    String storageId,
+    List<AiPageNote> notes,
+  ) async {
+    if (_saveNotesOverride != null) {
+      await _saveNotesOverride(storageId, notes);
+    } else if (_storage != null) {
+      await _saveNotes(storageId, notes);
+    }
+  }
+
+  Future<void> _saveAndEmitNotes(
+    String storageId,
+    List<AiPageNote> notes,
+  ) async {
+    final sortedNotes = [...notes]
+      ..sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
+    await _saveNotesForStorage(storageId, sortedNotes);
+    final current = stateFor(storageId);
+    _emit(
+      current.copyWith(
+        status: current.isGenerating
+            ? NoteGenerationStatus.generating
+            : NoteGenerationStatus.completed,
+        notes: List.unmodifiable(sortedNotes),
+        clearError: true,
+      ),
+    );
+  }
+
+  Future<void> _startBatchListener({
+    required String storageId,
+    required String uid,
+    required String jobId,
+  }) async {
+    final firestore = _firestore;
+    if (firestore == null) return;
+    await _stopBatchListener(storageId);
+    _activeJobIds[storageId] = jobId;
+    _appliedBatchIds[storageId] = <String>{};
+    final batches = firestore
+        .collection('users')
+        .doc(uid)
+        .collection('ai_note_jobs')
+        .doc(jobId)
+        .collection('batches');
+    _batchSubscriptions[storageId] = batches.snapshots().listen(
+      (snapshot) {
+        if (_activeJobIds[storageId] != jobId) return;
+        final documents = snapshot.docs;
+        final totalPages = documents.fold<int>(0, (maximum, document) {
+          final value = document.data()['totalPages'];
+          return value is int && value > maximum ? value : maximum;
+        });
+        final completedDocuments = documents.where(
+          (document) => document.data()['status'] == 'completed',
+        );
+        final completedPages = completedDocuments.fold<int>(0, (
+          total,
+          document,
+        ) {
+          final data = document.data();
+          final start = data['startPage'];
+          final end = data['endPage'];
+          return start is int && end is int ? total + end - start + 1 : total;
+        });
+        final current = stateFor(storageId);
+        _emit(
+          current.copyWith(
+            status: NoteGenerationStatus.generating,
+            totalPages: totalPages,
+            completedPages: completedPages,
+            totalBatches: documents.length,
+            completedBatches: completedDocuments.length,
+          ),
+        );
+
+        final applied = _appliedBatchIds[storageId]!;
+        for (final document in completedDocuments) {
+          if (!applied.add(document.id)) continue;
+          try {
+            final rawPages = document.data()['pages'];
+            if (rawPages is! List) continue;
+            final batchNotes = rawPages
+                .whereType<Map>()
+                .map(
+                  (page) =>
+                      AiPageNote.fromJson(Map<String, dynamic>.from(page)),
+                )
+                .toList();
+            unawaited(_applyPartialBatch(storageId, batchNotes));
+          } catch (error) {
+            _emit(
+              stateFor(storageId).copyWith(
+                errorMessage: 'Failed to apply generated pages: $error',
+              ),
+            );
+          }
+        }
+      },
+      onError: (Object error) {
+        if (_activeJobIds[storageId] != jobId) return;
+        _emit(
+          stateFor(
+            storageId,
+          ).copyWith(errorMessage: 'Failed to receive generated pages: $error'),
+        );
+      },
+    );
+  }
+
+  Future<void> _applyPartialBatch(
+    String storageId,
+    List<AiPageNote> batchNotes,
+  ) async {
+    if (batchNotes.isEmpty) return;
+    await _enqueueNoteMutation(storageId, () async {
+      final merged = _mergeGeneratedPages(
+        generatedNotes: batchNotes,
+        currentNotes: stateFor(storageId).notes,
+      );
+      await _saveAndEmitNotes(storageId, merged);
+    });
+  }
+
+  @visibleForTesting
+  Future<void> applyPartialBatchForTesting(
+    String storageId,
+    List<AiPageNote> batchNotes,
+  ) {
+    return _applyPartialBatch(storageId, batchNotes);
+  }
+
+  Future<void> _stopBatchListener(String storageId) async {
+    _activeJobIds.remove(storageId);
+    _appliedBatchIds.remove(storageId);
+    await _batchSubscriptions.remove(storageId)?.cancel();
   }
 
   List<String> _newMarkdownItems(String markdown, List<String> items) {
@@ -398,17 +599,6 @@ class NoteGenerationManager {
         : '$before\n${items.join('\n')}\n\n$after';
   }
 
-  bool _sameNotes(List<AiPageNote> first, List<AiPageNote> second) {
-    if (first.length != second.length) return false;
-    for (var index = 0; index < first.length; index++) {
-      if (first[index].pageNumber != second[index].pageNumber ||
-          first[index].markdown != second[index].markdown) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   Future<List<AiPageNote>> _generateAndSaveNotes({
     required String storageId,
     required String pdfPath,
@@ -420,7 +610,11 @@ class NoteGenerationManager {
 
     final safeStorageId = _safeStorageId(storageId);
     final pdfStoragePath = _buildPdfStoragePath(safeStorageId, pdfPath);
-    final jobPath = 'ai_note_jobs/$safeStorageId';
+    final user = _auth?.currentUser;
+    if (user == null) {
+      throw StateError('Firebase authentication is required for AI notes.');
+    }
+    final jobId = const Uuid().v4();
 
     await _storage!
         .ref()
@@ -436,6 +630,11 @@ class NoteGenerationManager {
           ),
         );
 
+    await _startBatchListener(
+      storageId: storageId,
+      uid: user.uid,
+      jobId: jobId,
+    );
     final response = await _functionClient!.postJson(
       functionName: _functionName,
       overrideUrl: _functionUrl,
@@ -446,14 +645,12 @@ class NoteGenerationManager {
         'lectureId': _lectureIds[storageId] ?? storageId,
         'storageBucket': _storage.bucket,
         'pdfStoragePath': pdfStoragePath,
-        'jobPath': jobPath,
+        'jobId': jobId,
         'requestedAt': DateTime.now().toUtc().toIso8601String(),
       },
     );
 
-    final notes = await _parseFunctionResponse(response);
-    await _saveNotes(storageId, notes);
-    return notes;
+    return _parseFunctionResponse(response);
   }
 
   Future<List<AiPageNote>> _parseFunctionResponse(

@@ -579,7 +579,7 @@ users/{uid}/memories/{memoryId}              canonical memory
       <h2>6. Firebase 架構</h2>
       <p>
         Firebase 在 <code>main.dart</code> 由 <code>DefaultFirebaseOptions.currentPlatform</code> 初始化。Flutter client 使用
-        <code>firebase_core</code>、<code>firebase_auth</code>、<code>firebase_messaging</code> 與 <code>firebase_storage</code>；Firestore 仍只由 Cloud Functions 的 Admin SDK 操作，Flutter 端沒有 <code>cloud_firestore</code> dependency。
+        <code>firebase_core</code>、<code>firebase_auth</code>、<code>firebase_messaging</code>、<code>firebase_storage</code> 與 <code>cloud_firestore</code>。Flutter 只監聽自己 UID 下的 AI note batch；其他 Firestore 資料仍由 Cloud Functions Admin SDK 操作。
       </p>
       <p>目前所有 Flutter 平台與 Firebase CLI 的預設 project 都是 <code>ai-notes-555a6</code>，Storage bucket 為 <code>ai-notes-555a6.firebasestorage.app</code>。</p>
 
@@ -618,11 +618,12 @@ users/{uid}/memories/{memoryId}              canonical memory
       </p>
 
       <h3>Cloud Firestore</h3>
-      <p>Firestore 保存後端工作狀態、Attention session 與每個使用者的長期 Memory。Flutter 不直接監聽這些文件；目前由 Functions 使用 Admin SDK 讀寫。</p>
+      <p>Firestore 保存後端工作狀態、Attention session 與每個使用者的長期 Memory。Flutter 只監聽自己的 AI note job/batches 以取得部分結果，其餘文件由 Functions 使用 Admin SDK 讀寫。</p>
       <table>
         <thead><tr><th>路徑</th><th>內容</th><th>主要寫入者</th></tr></thead>
         <tbody>
-          <tr><td><code>ai_note_jobs/{safeStorageId}</code></td><td>PDF 工作的 <code>running/completed/failed</code>、輸入／輸出 Storage path、page count、memory count 與錯誤。</td><td><code>generateNotesFromPdf</code></td></tr>
+          <tr><td><code>users/{uid}/ai_note_jobs/{jobId}</code></td><td>PDF 工作狀態、總頁數、批次數、已完成頁數／批次、Storage path、memory count 與錯誤。</td><td><code>generateNotesFromPdf</code></td></tr>
+          <tr><td><code>users/{uid}/ai_note_jobs/{jobId}/batches/{batchIndex}</code></td><td>每 5 頁一批的頁碼範圍、pending/running/completed/failed、attempt 與完成頁面；Flutter listener 讀取此處。</td><td><code>generateNotesFromPdf</code></td></tr>
           <tr><td><code>users/{uid}/lecture_sessions/{sessionId}</code></td><td>上次 Attention 檢查時間、當時老師頁面、最近狀態與通知 cooldown。</td><td>Attention Agent</td></tr>
           <tr><td><code>users/{uid}/attention_events/{eventId}</code></td><td>每次實際判斷的輸入訊號、老師／學生頁面與結構化輸出，供稽核與後續分析。</td><td>Attention Agent</td></tr>
           <tr><td><code>users/{uid}/devices/{tokenHash}</code></td><td>FCM token、平台與最後更新時間。</td><td>Attention Agent</td></tr>
@@ -643,7 +644,7 @@ users/{uid}/memories/{memoryId}              canonical memory
             <td>120 秒、512 MB</td>
             <td>使用 Agents SDK。先依問題搜尋相關 Memory，再由工具建立偏好／學習狀況、解決已掌握項目或依明確要求刪除 Memory，最後回傳 <code>{ answer }</code>。</td>
           </tr>
-          <tr><td><code>generateNotesFromPdf</code></td><td>540 秒、1 GB</td><td>驗證使用者後下載 Storage PDF，搜尋摘要偏好與相關學習 Memory，呼叫 OpenAI、保存 notes JSON 與 Firestore 狀態，完成後在同一個 response 回傳 pages。</td></tr>
+          <tr><td><code>generateNotesFromPdf</code></td><td>540 秒、1 GB</td><td>驗證使用者後下載 PDF，讀取 Memory，使用 <code>pypdf</code> 每 5 頁拆成一批並以最多 3 個 worker 呼叫 OpenAI。每批完成即寫 Firestore，全部完成後保存 notes JSON 並回傳完整 pages。</td></tr>
           <tr><td><code>realtimeAgent</code></td><td>120 秒、512 MB</td><td>第一階段用 Agents SDK 根據最近 10 段逐字稿、page summaries 與上次老師頁面判斷老師頁面，互斥選擇 Summary、Slides 或 none；第二階段再執行 Attention Agent、Memory 寫入與必要的 FCM 通知。</td></tr>
           <tr>
             <td><code>azureSpeechToken</code></td>
@@ -679,10 +680,12 @@ users/{uid}/memories/{memoryId}              canonical memory
           <ol>
             <li>SlidesPanel 將 PDF 複製到 <code>lecture_slides/</code> 並保存 <code>filePath</code>。</li>
             <li>LectureNotesViewModel 呼叫 App-level singleton <code>NoteGenerationManager</code>。</li>
-            <li>Manager 上傳 PDF，並把 Firebase ID token、<code>courseId</code>、<code>lectureId</code>、實際 <code>storageBucket</code> 與 object path 傳給長時間 <code>generateNotesFromPdf</code> request。</li>
+            <li>Manager 建立唯一 <code>jobId</code>、監聽自己的 Firestore batches，再上傳 PDF 並呼叫 <code>generateNotesFromPdf</code>。</li>
             <li>LectureView 關閉時只移除 ViewModel 的 stream subscription；Manager 與 HTTP client 不會 dispose，因此 App process 存活期間 request 會繼續。</li>
-            <li>Function 依 UID 搜尋摘要偏好與相關學習 Memory，再生成 PDF notes。</li>
-            <li>Function 完成後 Manager 保存本機 <code>notes.json</code> 與逐頁 Markdown，再廣播 completed 狀態。</li>
+            <li>Function 依 UID 讀取 Memory，使用 <code>pypdf</code> 每 5 頁拆批，最多同時處理 3 批；單批失敗重試一次。</li>
+            <li>每批完成即寫入 Firestore。Manager listener 合併該批頁面、保存本機 notes，並顯示頁數與批次進度。</li>
+            <li>Partial merge 只替換已完成頁面，保留其他舊頁及 Professor Additions／Questions，並與 Realtime 更新共用同一條 mutation queue。</li>
+            <li>全部批次完成後 Function 保存完整 <code>notes.json</code>；Manager 最終合併並廣播 completed 狀態。</li>
             <li>重進 Lecture 時會讀取 Manager 現有狀態；新結果成功前保留舊摘要。</li>
           </ol>
         </div>

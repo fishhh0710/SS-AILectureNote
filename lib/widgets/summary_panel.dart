@@ -13,6 +13,10 @@ class SummaryPanel extends StatelessWidget {
   final String? errorMessage;
   final VoidCallback? onRetry;
   final Stream<Map<String, dynamic>>? segmentStream;
+  final int totalPages;
+  final int completedPages;
+  final int totalBatches;
+  final int completedBatches;
 
   const SummaryPanel({
     super.key,
@@ -24,6 +28,10 @@ class SummaryPanel extends StatelessWidget {
     this.errorMessage,
     this.onRetry,
     this.segmentStream,
+    this.totalPages = 0,
+    this.completedPages = 0,
+    this.totalBatches = 0,
+    this.completedBatches = 0,
   });
 
   @override
@@ -61,11 +69,14 @@ class SummaryPanel extends StatelessWidget {
   }
 
   Widget _buildContent() {
+    final progressText = totalPages > 0
+        ? '已完成 $completedPages / $totalPages 頁'
+        : '每頁簡報會各自產生一份 Markdown note';
     if (isGenerating && notes.isEmpty) {
-      return const _CenteredMessage(
+      return _CenteredMessage(
         icon: Icons.auto_awesome,
         title: '正在生成 AI 筆記',
-        subtitle: '每頁簡報會各自產生一份 Markdown note',
+        subtitle: progressText,
         showProgress: true,
       );
     }
@@ -91,7 +102,13 @@ class SummaryPanel extends StatelessWidget {
     return Column(
       children: [
         if (isGenerating)
-          const _StatusBanner(text: '正在更新 AI 筆記...', showProgress: true),
+          _StatusBanner(
+            text: totalBatches > 0
+                ? '正在更新 AI 筆記：$completedPages / $totalPages 頁，'
+                      '$completedBatches / $totalBatches 批'
+                : '正在更新 AI 筆記...',
+            showProgress: true,
+          ),
         if (!isGenerating && errorMessage != null)
           _StatusBanner(text: errorMessage!, isError: true),
         Expanded(

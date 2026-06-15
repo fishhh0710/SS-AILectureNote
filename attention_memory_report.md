@@ -48,8 +48,8 @@ Firebase HTTP Functions (Python 3.13, 2nd Gen)
   └─ azureSpeechToken
 
 Firestore
-  ├─ ai_note_jobs
   └─ users/{uid}
+       ├─ ai_note_jobs/{jobId}/batches
        ├─ lecture_sessions
        ├─ attention_events
        ├─ devices
@@ -360,7 +360,7 @@ Response contract 維持簡單：
 
 ## 15. Summary 如何使用 Memory
 
-`NoteGenerationManager` 在 request 中傳送 `courseId` 與 `lectureId`。`generateNotesFromPdf` 驗證 UID 後，搜尋：
+`NoteGenerationManager` 在 request 中傳送 `courseId`、`lectureId` 與唯一 `jobId`。`generateNotesFromPdf` 驗證 UID 後，搜尋：
 
 - active preference memories。
 - 與目前課程／講次相關的 active learning memories。
@@ -372,7 +372,7 @@ Response contract 維持簡單：
 - 把其他課程內容混入目前講義。
 - 取代 PDF 本身作為主要內容來源。
 
-Function response 與 Firestore job 會保存 `memoryCount`，便於確認本次生成實際使用幾筆 Memory。
+PDF 會每 5 頁拆成一批，最多 3 批並行；每批完成即寫入 `users/{uid}/ai_note_jobs/{jobId}/batches`，讓 Summary Panel 先顯示部分頁面。Function response 與 Firestore job 會保存 `memoryCount`，便於確認本次生成實際使用幾筆 Memory。
 
 ## 16. 未來可直接擴充的 Memory 使用點
 
@@ -489,7 +489,7 @@ firebase functions:list --project ai-notes-555a6
 - 目前沒有 Memory 管理 UI；Chat Agent 已有 forget/resolve tools，但使用者無法從列表管理。
 - 目前沒有排程式離線 Memory curator；每次寫入會即時做 evidence、canonical upsert 與語意去重。
 - Dashboard Firebase 備份仍使用固定 userId，尚未與匿名 Auth UID 統一。
-- App Check、CORS 限制、正式 Storage/Firestore rules 與 per-user rate limit 尚未完成。
+- Firestore 已限制使用者只能讀取自己的 AI note jobs；App Check、CORS 限制、Storage rules 稽核與 per-user rate limit 尚未完成。
 - Attention 準確率仍需真實課堂資料評估；目前 prompt 已避免由單一背景或停留訊號直接判為分心。
 
 ## 21. Commit 列表

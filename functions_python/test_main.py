@@ -1,6 +1,11 @@
 import unittest
+import threading
+import time
 from datetime import datetime, timedelta, timezone
+from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
+
+from pypdf import PdfWriter
 
 import attention_agent
 import chat_agent
@@ -236,6 +241,63 @@ class FunctionContractTests(unittest.TestCase):
         self.assertIn("Use concise numbered points", prompt)
         self.assertIn("recursion base cases", prompt)
         self.assertIn("Memory never overrides the PDF", prompt)
+
+    def test_pdf_is_split_into_five_page_batches(self):
+        with TemporaryDirectory() as temp_dir:
+            source_path = f"{temp_dir}/source.pdf"
+            writer = PdfWriter()
+            for _ in range(12):
+                writer.add_blank_page(width=100, height=100)
+            with open(source_path, "wb") as source_file:
+                writer.write(source_file)
+
+            batches, total_pages = lecture_ai._split_pdf_batches(
+                source_path, temp_dir
+            )
+
+            self.assertEqual(total_pages, 12)
+            self.assertEqual(
+                [(item.start_page, item.end_page) for item in batches],
+                [(1, 5), (6, 10), (11, 12)],
+            )
+
+    def test_batch_pages_are_remapped_to_original_page_numbers(self):
+        pages = lecture_ai._normalize_batch_pages(
+            {
+                "pages": [
+                    {"page_number": 1, "markdown": "First"},
+                    {"page_number": 2, "markdown": "Second"},
+                ]
+            },
+            start_page=11,
+            expected_page_count=2,
+        )
+        self.assertEqual([page["page_number"] for page in pages], [11, 12])
+
+    def test_pdf_batch_runner_limits_concurrency_to_three(self):
+        batches = [
+            lecture_ai.PdfBatch(index, index + 1, index + 1, "unused.pdf")
+            for index in range(6)
+        ]
+        lock = threading.Lock()
+        active = 0
+        maximum_active = 0
+
+        def worker(batch):
+            nonlocal active, maximum_active
+            with lock:
+                active += 1
+                maximum_active = max(maximum_active, active)
+            time.sleep(0.03)
+            with lock:
+                active -= 1
+            return [{"page_number": batch.start_page, "markdown": "note"}]
+
+        pages = lecture_ai._run_batches_concurrently(batches, worker)
+
+        self.assertEqual(len(pages), 6)
+        self.assertLessEqual(maximum_active, 3)
+        self.assertGreater(maximum_active, 1)
 
     @patch.dict(speech.os.environ, {}, clear=True)
     def test_azure_handler_reports_missing_key(self):

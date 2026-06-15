@@ -99,6 +99,7 @@ void main() {
 
       generation.complete(newNotes);
       await Future.wait([first, second]);
+      expect(manager.stateFor('lecture-1').errorMessage, isNull);
       expect(manager.stateFor('lecture-1').notes, newNotes);
     },
   );
@@ -254,6 +255,40 @@ void main() {
     expect(note.markdown, contains('### Professor Additions'));
     expect(note.markdown, contains('- Teacher explanation'));
   });
+
+  test(
+    'partial PDF batch replaces only completed pages and keeps live updates',
+    () async {
+      List<AiPageNote>? savedNotes;
+      final manager = NoteGenerationManager.testing(
+        loadSavedNotes: (_) async => const [
+          AiPageNote(
+            pageNumber: 1,
+            markdown: 'Old page 1\n\n### Professor Additions\n- Live detail',
+          ),
+          AiPageNote(pageNumber: 2, markdown: 'Old page 2'),
+          AiPageNote(pageNumber: 3, markdown: 'Old page 3'),
+        ],
+        generateAndSaveNotes: ({required storageId, required pdfPath}) async =>
+            const [],
+        saveNotes: (storageId, notes) async {
+          savedNotes = notes;
+        },
+      );
+
+      await manager.load('lecture-1');
+      await manager.applyPartialBatchForTesting('lecture-1', const [
+        AiPageNote(pageNumber: 1, markdown: 'New page 1'),
+        AiPageNote(pageNumber: 2, markdown: 'New page 2'),
+      ]);
+
+      expect(savedNotes, hasLength(3));
+      expect(savedNotes![0].markdown, startsWith('New page 1'));
+      expect(savedNotes![0].markdown, contains('- Live detail'));
+      expect(savedNotes![1].markdown, 'New page 2');
+      expect(savedNotes![2].markdown, 'Old page 3');
+    },
+  );
 }
 
 Future<void> _waitFor(bool Function() condition) async {
