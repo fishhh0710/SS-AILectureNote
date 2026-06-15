@@ -242,6 +242,17 @@ class FunctionContractTests(unittest.TestCase):
         self.assertIn("recursion base cases", prompt)
         self.assertIn("Memory never overrides the PDF", prompt)
 
+    def test_pdf_batch_prompt_preserves_original_page_numbers_in_heading(self):
+        prompt = lecture_ai._pdf_notes_prompt(start_page=6, end_page=10)
+
+        self.assertIn("The first page in this batch is Page 6, not Page 1", prompt)
+        self.assertIn('page_number 6 and its Markdown must begin with "# Page 6:"', prompt)
+        self.assertIn("Never restart page numbering at 1", prompt)
+        self.assertIn(
+            "The page number in the Markdown H1 must exactly match",
+            prompt,
+        )
+
     def test_pdf_is_split_into_five_page_batches(self):
         with TemporaryDirectory() as temp_dir:
             source_path = f"{temp_dir}/source.pdf"

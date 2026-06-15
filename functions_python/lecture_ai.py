@@ -72,12 +72,22 @@ def _pdf_notes_prompt(
     end_page: int | None = None,
 ) -> str:
     memory_section = json.dumps(memory_context or [], ensure_ascii=False)
-    page_range = (
-        f"This PDF batch represents original pages {start_page} through {end_page}. "
-        "Return one note for each page in the same order and use the original page numbers."
-        if start_page is not None and end_page is not None
-        else "Return one note for every page in the PDF."
-    )
+    if start_page is not None and end_page is not None:
+        page_range = f"""
+This PDF batch represents original pages {start_page} through {end_page}.
+Page numbering is absolute to the original PDF, not local to this batch.
+The first page in this batch is Page {start_page}, not Page 1.
+Return one note for each page in the same order. For every item, both the JSON page_number and
+the Markdown H1 must use the same original PDF page number. For example, the first item must have
+page_number {start_page} and its Markdown must begin with "# Page {start_page}:".
+Never restart page numbering at 1 for a later batch.
+""".strip()
+        page_number_description = (
+            f"the original PDF page number, from {start_page} through {end_page}"
+        )
+    else:
+        page_range = "Return one note for every page in the PDF."
+        page_number_description = "the original PDF page number, starting from 1"
     return f"""
 You are an academic PDF note-taking assistant.
 
@@ -93,13 +103,13 @@ You must use:
 Output:
 Return a JSON object with a "pages" array.
 Each item must contain:
-- page_number: the page number, starting from 1
+- page_number: {page_number_description}
 - markdown: the Markdown note for that page
 
 Default Markdown format for each page, used only when memory does not request a different
 presentation structure:
 
-# Page <page_number>: <short inferred title>
+# Page <the same original page_number as the JSON field>: <short inferred title>
 
 ## Main Idea
 <Explain the main idea of this page in 2-4 concise sentences.>
@@ -111,6 +121,7 @@ presentation structure:
 Rules:
 - Generate one item for every page in the PDF.
 - Do not skip pages.
+- The page number in the Markdown H1 must exactly match that item's JSON page_number.
 - Focus on each page individually.
 - Keep each page note concise.
 - Explain only important technical terms, academic terms, formulas, methods, concepts, or abbreviations.
