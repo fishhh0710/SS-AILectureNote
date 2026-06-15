@@ -175,8 +175,29 @@
     .diagram pre { min-width: 720px; margin: 0; color: var(--ink); background: transparent; }
     .caption { color: var(--muted); font-size: 13px; }
 
+    .agent-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 15px 0;
+    }
+
+    .agent-card {
+      padding: 15px;
+      background: #fbfaf7;
+      border: 1px solid var(--line);
+      border-top: 4px solid var(--blue);
+      border-radius: 8px;
+    }
+
+    .agent-card:nth-child(2) { border-top-color: var(--orange); }
+    .agent-card:nth-child(3) { border-top-color: var(--green); }
+    .agent-card h3 { margin-top: 0; }
+    .agent-card ul { padding-left: 20px; }
+    .agent-card li { margin-bottom: 5px; }
+
     @media (max-width: 820px) {
-      .grid-2, .grid-3, .flow { grid-template-columns: 1fr; }
+      .grid-2, .grid-3, .flow, .agent-grid { grid-template-columns: 1fr; }
       section { padding: 19px; }
       table { display: block; overflow-x: auto; }
     }
@@ -186,7 +207,7 @@
   <header>
     <div>
       <h1>AI Lecture Note 架構導覽</h1>
-      <p class="subtitle">依 2026-06-15 的 <code>lib/</code>、<code>functions_python/</code>、Firebase 部署與實際 endpoint 測試整理。預估閱讀時間約 10 分鐘。</p>
+      <p class="subtitle">依 2026-06-15 的 <code>lib/</code>、<code>functions_python/</code>、Firebase 部署與實際 endpoint 測試整理。預估閱讀時間約 12 分鐘。</p>
     </div>
   </header>
 
@@ -202,10 +223,11 @@
         <a href="#client">2. Flutter 與 MVVM</a>
         <a href="#local-data">3. 本機資料</a>
         <a href="#transcript">4. 逐字稿流程</a>
-        <a href="#firebase">5. Firebase 架構</a>
-        <a href="#flows">6. 端到端資料流</a>
-        <a href="#files">7. 主要檔案索引</a>
-        <a href="#boundaries">8. 現況與邊界</a>
+        <a href="#agents-memory">5. AI Agent 與 Memory</a>
+        <a href="#firebase">6. Firebase 架構</a>
+        <a href="#flows">7. 端到端資料流</a>
+        <a href="#files">8. 主要檔案索引</a>
+        <a href="#boundaries">9. 現況與邊界</a>
       </div>
     </section>
 
@@ -409,8 +431,152 @@ ViewModels ──► Repositories / App-level Managers ──► Services
       </p>
     </section>
 
+    <section id="agents-memory">
+      <h2>5. AI Agent 與 Memory 架構</h2>
+      <p>
+        系統目前有三個 OpenAI Agents SDK Agent：Realtime Lecture Agent、Attention Agent 與 Chat Agent。PDF Summary 會讀取 Memory 進行個人化，但目前不是 Agent；<code>MemoryService</code> 是共用資料服務，也不是 Agent。
+      </p>
+
+      <div class="diagram" aria-label="AI Agent 與 Memory 系統架構圖">
+<pre><code>每 10 秒 Transcript + Page Summaries + 上次老師頁面
+                         │
+                         ▼
+              ┌──────────────────────────┐
+              │ Realtime Lecture Agent   │
+              │ Tool:                    │
+              │ inspect_lecture_context  │
+              └─────────────┬────────────┘
+                            │ page_number + summary/slides/none
+                 ┌──────────┴──────────┐
+                 │                     │
+                 ▼                     ▼
+       Summary / bbox 更新      老師頁面 + 學生頁面狀態
+                                       │
+                                       ▼
+                            ┌─────────────────────┐
+                            │ deterministic gate  │
+                            │ 30 秒 + trigger     │
+                            └──────────┬──────────┘
+                                       │ should_run
+                                       ▼
+                            ┌─────────────────────┐
+                            │ Attention Agent     │
+                            │ Agent tools: 無     │
+                            └───────┬─────────────┘
+                                    │ status / missed / confused
+                       ┌────────────┼─────────────┐
+                       ▼            ▼             ▼
+                attention_events   FCM      MemoryService.remember
+                                                 │
+                                                 ▼
+使用者問題 + Notes + Transcript       memory_evidence ──► canonical memories
+               │                                      ▲          │
+               ▼                                      │          │ search
+    ┌─────────────────────────┐                       │          ▼
+    │ Memory-aware Chat Agent │◄──────────────────────┘    PDF Summary
+    │ 5 個 Memory tools       │                            個人化生成
+    └────────────┬────────────┘
+                 ▼
+             { answer }</code></pre>
+      </div>
+
+      <div class="agent-grid">
+        <div class="agent-card">
+          <h3>Realtime Lecture Agent</h3>
+          <p><strong>目的：</strong>判斷老師頁面，並互斥選擇 Summary、Slides 或 none。</p>
+          <p><strong>Agent tool：</strong></p>
+          <ul>
+            <li><code>inspect_lecture_context(query)</code>：搜尋最相關的最多 5 頁摘要，並回傳最近 10 份逐字稿與上次老師頁面。</li>
+          </ul>
+          <p class="caption">此 tool 每次 run 最多呼叫一次；Agent 看不到學生目前頁面。</p>
+        </div>
+
+        <div class="agent-card">
+          <h3>Attention Agent</h3>
+          <p><strong>目的：</strong>判斷學生是 following、confused、behind、distracted 或 unclear。</p>
+          <p><strong>Agent tools：</strong>無。</p>
+          <ul>
+            <li>Agent 前：<code>attention_gate</code> 檢查 30 秒間隔與 trigger signals。</li>
+            <li>Agent 後：後端寫入 Firestore、呼叫 <code>MemoryService</code>，必要時透過 FCM 通知。</li>
+          </ul>
+          <p class="caption">Gate、Memory 與 FCM 是後端協調邏輯，不是模型可自行呼叫的 tools。</p>
+        </div>
+
+        <div class="agent-card">
+          <h3>Memory-aware Chat Agent</h3>
+          <p><strong>目的：</strong>回答課程問題，並管理持久偏好與學習狀況。</p>
+          <p><strong>Agent tools：</strong></p>
+          <ul>
+            <li><code>search_memories(query, domain)</code></li>
+            <li><code>remember_preference(key, content, scope)</code></li>
+            <li><code>remember_learning_state(kind, content)</code></li>
+            <li><code>resolve_learning_state(memory_id, reason)</code></li>
+            <li><code>forget_memory(memory_id, reason)</code></li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>Agent I/O</h3>
+      <table>
+        <thead><tr><th>Agent</th><th>主要輸入</th><th>結構化輸出</th><th>輸出後處理</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Realtime Lecture Agent</td>
+            <td><code>latestSegment</code>、前 9 段 <code>recentSegments</code>、<code>pageSummaries</code>、<code>lastTeacherPage</code></td>
+            <td><code>page_number</code>、<code>new_points[]</code>、<code>questions[]</code>、<code>targets[]</code>、<code>update_note_at</code></td>
+            <td><code>summary</code> 寫入既有 note；<code>slides</code> 呼叫 bbox Cloud Run；<code>none</code> 不修改。</td>
+          </tr>
+          <tr>
+            <td>Attention Agent</td>
+            <td>老師／學生頁面與頁面內容、最近 10 段逐字稿、學生頁面歷史、停留時間、App lifecycle、前次狀態與 trigger signals</td>
+            <td><code>status</code>、<code>page_relevance</code>、<code>reasoning_summary</code>、<code>missed_content[]</code>、<code>confused_summary</code></td>
+            <td>保存 session/event；missed/confused 寫入 learning Memory；只有 distracted 且符合條件時送 FCM。</td>
+          </tr>
+          <tr>
+            <td>Memory-aware Chat Agent</td>
+            <td><code>question</code>、AI notes、transcript、chat history、<code>courseId</code>、<code>lectureId</code>、預先搜尋的相關 Memory</td>
+            <td><code>{ answer }</code>；執行過程可產生 tool calls</td>
+            <td>回答存入本機 SQLite；tool calls 可新增、更新、解決或刪除 Firestore Memory。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Memory I/O 與生命週期</h3>
+      <div class="diagram" aria-label="Memory evidence 與 canonical memory 流程圖">
+<pre><code>Memory producers
+  ├─ Attention Agent: missed_content / confused_summary
+  └─ Chat Agent tools: preference / confusion / weak_topic / mastery_progress
+                 │
+                 ▼
+MemoryWrite { domain, kind, content, scope, courseId, lectureId,
+              preferenceKey, importance, explicit, metadata }
+                 │
+                 ▼
+users/{uid}/memory_evidence/{evidenceId}     每次來源都保留
+                 │
+                 ▼
+MemoryService: stable key / normalized text / 768-d embedding / cosine dedupe
+                 │
+                 ▼
+users/{uid}/memories/{memoryId}              canonical memory
+  ├─ domain: learning | preference
+  ├─ scope: global | course | lecture
+  ├─ status: active | resolved | superseded | deleted
+  └─ evidenceCount: 第一份 preference evidence 即 active
+                 │
+         ┌───────┴────────┐
+         ▼                ▼
+  Chat Agent search   generateNotesFromPdf
+                      讀取 active preferences + learning memories</code></pre>
+      </div>
+
+      <div class="note info">
+        <strong>重要邊界：</strong><code>generateNotesFromPdf</code> 不是 Agent，也沒有 tools。它使用 <code>MemoryService.search/list_active</code> 讀取 Memory，再把結果加入摘要 prompt。Memory 不直接修改 Summary Panel；Panel 只顯示生成後由 <code>NoteGenerationManager</code> 保存的 notes。
+      </div>
+    </section>
+
     <section id="firebase">
-      <h2>5. Firebase 架構</h2>
+      <h2>6. Firebase 架構</h2>
       <p>
         Firebase 在 <code>main.dart</code> 由 <code>DefaultFirebaseOptions.currentPlatform</code> 初始化。Flutter client 使用
         <code>firebase_core</code>、<code>firebase_auth</code>、<code>firebase_messaging</code> 與 <code>firebase_storage</code>；Firestore 仍只由 Cloud Functions 的 Admin SDK 操作，Flutter 端沒有 <code>cloud_firestore</code> dependency。
@@ -506,7 +672,7 @@ ViewModels ──► Repositories / App-level Managers ──► Services
     </section>
 
     <section id="flows">
-      <h2>6. 端到端資料流</h2>
+      <h2>7. 端到端資料流</h2>
       <div class="grid-2">
         <div class="card">
           <h3>PDF → AI notes</h3>
@@ -575,7 +741,7 @@ ViewModels ──► Repositories / App-level Managers ──► Services
     </section>
 
     <section id="files">
-      <h2>7. 主要檔案索引</h2>
+      <h2>8. 主要檔案索引</h2>
       <table>
         <thead><tr><th>路徑</th><th>角色</th></tr></thead>
         <tbody>
@@ -617,7 +783,7 @@ ViewModels ──► Repositories / App-level Managers ──► Services
     </section>
 
     <section id="boundaries">
-      <h2>8. 現況與設計邊界</h2>
+      <h2>9. 現況與設計邊界</h2>
       <ul>
         <li><span class="tag">Local-first</span> 課程樹、聊天與主要索引以 SQLite 為準；Firebase 不是完整同步資料庫。</li>
         <li><span class="tag">Attention push</span> FCM 與前景 local notification 已接上，只在 Agent 判為 <code>distracted</code> 時送出；實機 token 與 iOS APNs 仍需在目標裝置驗證。</li>
