@@ -405,7 +405,7 @@ ViewModels ──► Repositories / App-level Managers ──► Services
         <code>StudentAttentionTracker</code> 只在 Flutter 端觀察學生頁面、進入時間、停留秒數、最近 20 次頁面紀錄與 App 前景／背景狀態。Realtime Agent 先獨立判斷老師頁面，完成後後端才把老師頁面與學生狀態交給 Attention Agent，因此老師頁面推論不會偷看學生目前所在頁面。
       </p>
       <p>
-        Attention 每次至少間隔 30 秒，且必須出現頁面不同、學生停留超過 30 秒、老師自上次檢查移動至少兩頁或 App 進入背景其中一項訊號才執行。輸出包含 <code>status</code>、<code>page_relevance</code>、<code>confidence</code>、<code>reasoning_summary</code>、<code>missed_content</code> 與 <code>confused_summary</code>。只有 <code>status=distracted</code>、App 在背景、有 FCM token 且距上次通知至少 120 秒時才推播；離開 App 本身不再直接觸發通知。
+        Attention 每次至少間隔 30 秒，且必須出現頁面不同、學生停留超過 30 秒、老師自上次檢查移動至少兩頁或 App 進入背景其中一項訊號才執行。輸出包含 <code>status</code>、<code>page_relevance</code>、<code>reasoning_summary</code>、<code>missed_content</code> 與 <code>confused_summary</code>。只有 <code>status=distracted</code>、App 在背景、有 FCM token 且距上次通知至少 120 秒時才推播；離開 App 本身不再直接觸發通知。
       </p>
     </section>
 
@@ -461,11 +461,11 @@ ViewModels ──► Repositories / App-level Managers ──► Services
           <tr><td><code>users/{uid}/attention_events/{eventId}</code></td><td>每次實際判斷的輸入訊號、老師／學生頁面與結構化輸出，供稽核與後續分析。</td><td>Attention Agent</td></tr>
           <tr><td><code>users/{uid}/devices/{tokenHash}</code></td><td>FCM token、平台與最後更新時間。</td><td>Attention Agent</td></tr>
           <tr><td><code>users/{uid}/memory_evidence/{evidenceId}</code></td><td>Memory 的來源證據，例如 chatbot 明確要求或 Attention 的 missed/confused output。</td><td><code>MemoryService</code></td></tr>
-          <tr><td><code>users/{uid}/memories/{memoryId}</code></td><td>整理後的學習狀況與偏好；包含 scope、confidence、importance、evidence count、status、provenance 與 768 維 embedding。</td><td><code>MemoryService</code></td></tr>
+          <tr><td><code>users/{uid}/memories/{memoryId}</code></td><td>整理後的學習狀況與偏好；包含 scope、importance、evidence count、status、provenance 與 768 維 embedding。</td><td><code>MemoryService</code></td></tr>
         </tbody>
       </table>
       <p>
-        Memory 分為 <code>learning</code> 與 <code>preference</code> domain，scope 可為 global、course 或 lecture，狀態可為 candidate、active、resolved、superseded、deleted。明確偏好立即生效；推論偏好需要累積至少兩份 evidence。學習狀況以正規化內容與 Firestore cosine vector search 去重，向量索引使用 <code>text-embedding-3-small</code> 的 768 維輸出。
+        Memory 分為 <code>learning</code> 與 <code>preference</code> domain，scope 可為 global、course 或 lecture，狀態可為 active、resolved、superseded、deleted。偏好收到第一份 evidence 就立即生效；evidence count 只保留來源次數，不再作為啟用門檻。學習狀況以正規化內容與 Firestore cosine vector search 去重，向量索引使用 <code>text-embedding-3-small</code> 的 768 維輸出。
       </p>
 
       <h3>Cloud Functions</h3>
@@ -556,7 +556,7 @@ ViewModels ──► Repositories / App-level Managers ──► Services
             <li>Chat 或 Attention 產生一筆帶 provenance 的 evidence。</li>
             <li><code>MemoryService</code> 依 UID、domain、scope 與內容尋找既有 canonical memory。</li>
             <li>偏好以穩定 key 更新；學習狀況以正規化文字及向量相似度合併。</li>
-            <li>Memory 保存 confidence、importance、evidence count 與狀態，不把每句聊天都當永久事實。</li>
+            <li>Memory 保存 importance、evidence count 與狀態；第一份偏好 evidence 即生效，但 Agent 仍只保存明確且可重用的偏好。</li>
             <li>Chat Agent 可搜尋、解決或刪除；Summary 只讀 active 且 scope 相符的項目。</li>
           </ol>
         </div>

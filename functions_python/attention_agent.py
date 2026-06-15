@@ -19,7 +19,6 @@ class AttentionAgentOutput(BaseModel):
     page_relevance: Literal[
         "same_topic", "related_previous_content", "unrelated", "unknown"
     ]
-    confidence: float = Field(ge=0, le=1)
     reasoning_summary: str
     missed_content: list[str] = Field(default_factory=list)
     confused_summary: str | None = None
@@ -75,7 +74,6 @@ def attention_memory_writes(
                 scope="lecture",
                 course_id=course_id,
                 lecture_id=lecture_id,
-                confidence=output.confidence,
                 importance=0.75,
                 metadata={"attentionStatus": output.status},
             )
@@ -90,7 +88,6 @@ def attention_memory_writes(
                 scope="lecture",
                 course_id=course_id,
                 lecture_id=lecture_id,
-                confidence=output.confidence,
                 importance=0.85,
                 metadata={"attentionStatus": output.status},
             )

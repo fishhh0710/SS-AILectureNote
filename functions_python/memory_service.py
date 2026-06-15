@@ -9,7 +9,6 @@ from datetime import datetime
 from typing import Any, Literal
 
 from firebase_admin import firestore
-from google.cloud.firestore_v1.base_query import FieldFilter
 from google.cloud.firestore_v1.base_vector_query import DistanceMeasure
 from google.cloud.firestore_v1.vector import Vector
 from pydantic import BaseModel, Field, model_validator
@@ -19,7 +18,7 @@ from function_common import openai_client
 
 MemoryDomain = Literal["learning", "preference"]
 MemoryScope = Literal["global", "course", "lecture"]
-MemoryStatus = Literal["candidate", "active", "resolved", "superseded", "deleted"]
+MemoryStatus = Literal["active", "resolved", "superseded", "deleted"]
 
 
 class MemoryWrite(BaseModel):
@@ -30,7 +29,6 @@ class MemoryWrite(BaseModel):
     course_id: str | None = None
     lecture_id: str | None = None
     preference_key: str | None = None
-    confidence: float = Field(default=0.7, ge=0, le=1)
     importance: float = Field(default=0.5, ge=0, le=1)
     explicit: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -87,7 +85,7 @@ def _without_embedding(data: dict[str, Any]) -> dict[str, Any]:
     return {
         key: _json_safe(value)
         for key, value in data.items()
-        if key != "embedding"
+        if key not in {"embedding", "confidence"}
     }
 
 
@@ -145,7 +143,7 @@ class MemoryService:
                 uid=uid,
                 query=memory.content,
                 domains={"learning"},
-                statuses={"active", "candidate"},
+                statuses={"active"},
                 course_id=memory.course_id,
                 lecture_id=memory.lecture_id,
                 limit=3,
@@ -169,11 +167,7 @@ class MemoryService:
         snapshot = memory_ref.get()
         existing = snapshot.to_dict() if snapshot.exists else {}
         evidence_count = int(existing.get("evidenceCount", 0)) + 1
-        status: MemoryStatus
-        if memory.domain == "preference" and not memory.explicit and evidence_count < 2:
-            status = "candidate"
-        else:
-            status = "active"
+        status: MemoryStatus = "active"
 
         data = {
             "domain": memory.domain,
@@ -184,7 +178,7 @@ class MemoryService:
             "courseId": memory.course_id,
             "lectureId": memory.lecture_id,
             "preferenceKey": memory.preference_key,
-            "confidence": max(float(existing.get("confidence", 0)), memory.confidence),
+            "confidence": firestore.DELETE_FIELD,
             "importance": max(float(existing.get("importance", 0)), memory.importance),
             "explicit": bool(existing.get("explicit", False)) or memory.explicit,
             "evidenceCount": evidence_count,
@@ -210,7 +204,6 @@ class MemoryService:
                 "content": memory.content.strip(),
                 "source": source,
                 "sourceRef": source_ref,
-                "confidence": memory.confidence,
                 "importance": memory.importance,
                 "explicit": memory.explicit,
                 "metadata": memory.metadata,
@@ -287,12 +280,9 @@ class MemoryService:
         lecture_id: str | None = None,
         limit: int = 20,
     ) -> list[MemorySearchResult]:
-        query = self._collection(uid).where(
-            filter=FieldFilter("status", "==", "active")
-        )
         results = [
             MemorySearchResult(document.id, document.to_dict())
-            for document in query.limit(100).stream()
+            for document in self._collection(uid).limit(100).stream()
             if self._matches(
                 document.to_dict(),
                 domains=domains,
@@ -333,7 +323,10 @@ class MemoryService:
         course_id: str | None,
         lecture_id: str | None,
     ) -> bool:
-        if data.get("status") not in statuses:
+        status = data.get("status")
+        if status == "candidate" and data.get("domain") == "preference":
+            status = "active"
+        if status not in statuses:
             return False
         if domains and data.get("domain") not in domains:
             return False
@@ -346,6 +339,15 @@ class MemoryService:
 
     def _touch(self, uid: str, memories: list[MemorySearchResult]) -> None:
         for memory in memories:
+            update: dict[str, Any] = {
+                "lastUsedAt": firestore.SERVER_TIMESTAMP,
+                "confidence": firestore.DELETE_FIELD,
+            }
+            if (
+                memory.data.get("status") == "candidate"
+                and memory.data.get("domain") == "preference"
+            ):
+                update["status"] = "active"
             self._collection(uid).document(memory.memory_id).set(
-                {"lastUsedAt": firestore.SERVER_TIMESTAMP}, merge=True
+                update, merge=True
             )

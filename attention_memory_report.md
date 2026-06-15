@@ -177,7 +177,6 @@ Realtime 輸出：
   "checked": true,
   "status": "behind",
   "page_relevance": "related_previous_content",
-  "confidence": 0.84,
   "reasoning_summary": "學生仍在相關前置內容，但老師已進入下一頁。",
   "missed_content": [
     "老師補充的 cache hit rate 與平均存取時間關係"
@@ -277,10 +276,9 @@ canonical memory 主要欄位：
   "courseId": "course-id",
   "lectureId": "lecture-id",
   "preferenceKey": null,
-  "confidence": 0.86,
   "importance": 0.85,
   "explicit": false,
-  "evidenceCount": 2,
+  "evidenceCount": 1,
   "status": "active",
   "provenance": [],
   "metadata": {},
@@ -303,7 +301,6 @@ canonical memory 主要欄位：
 
 ### Status
 
-- `candidate`：尚未累積足夠證據的推論偏好。
 - `active`：可供 Agent 與 Summary 使用。
 - `resolved`：原本的學習問題已解決，保留歷史但不再注入 prompt。
 - `superseded`：被更新版本取代。
@@ -317,7 +314,7 @@ canonical memory 主要欄位：
 
 學習狀況先用正規化文字形成穩定 ID。若文字不同，系統再以 `text-embedding-3-small` 建立 768 維 embedding，透過 Firestore cosine KNN 搜尋相似項目；距離小於等於 0.15 時合併成既有 memory。
 
-明確偏好 `explicit=true` 可立即成為 `active`。由模型推論的偏好先為 `candidate`，累積至少兩份 evidence 才變成 `active`，避免一次對話造成過度個人化。
+偏好收到第一份 evidence 就成為 `active`。`evidenceCount` 仍會累積，用於追蹤來源次數與後續稽核，但不再作為偏好啟用門檻。為避免一次對話造成不必要的個人化，Chat Agent 的 policy 仍限制只保存明確、持久且可重用的偏好。
 
 ## 13. Attention 如何寫入 Memory
 
@@ -326,7 +323,7 @@ Attention 不把所有輸出都保存成長期 Memory，只保存具未來價值
 - `missed_content`：合併成 lecture-scoped、kind=`missed_content` 的 learning memory，importance 0.75。
 - `confused_summary`：寫成 lecture-scoped、kind=`confusion` 的 learning memory，importance 0.85。
 
-兩者的 confidence 使用 Attention output 的 confidence，metadata 保存當時的 attention status，source 為 `attention_agent`，source reference 為 session ID。
+兩者的 metadata 保存當時的 attention status，source 為 `attention_agent`，source reference 為 session ID。系統不再保存或使用 Memory 信心程度。
 
 ## 14. Chatbot Agent 與 Tools
 
@@ -395,7 +392,7 @@ Function response 與 Firestore job 會保存 `memoryCount`，便於確認本次
 已完成：
 
 ```text
-Python Functions: 17 tests passed
+Python Functions: 19 tests passed
 Flutter:          10 tests passed
 Dart analyze:     0 errors, 24 existing info lints
 Android build:    app-debug.apk built successfully

@@ -77,7 +77,6 @@ def remember_preference(
         course_id=ctx.context.course_id if scope != "global" else None,
         lecture_id=ctx.context.lecture_id if scope == "lecture" else None,
         preference_key=preference_key,
-        confidence=1,
         importance=0.8,
         explicit=True,
     )
@@ -97,7 +96,6 @@ def remember_learning_state(
     ctx: RunContextWrapper[ChatAgentContext],
     kind: Literal["confusion", "weak_topic", "mastery_progress"],
     content: str,
-    confidence: float = 0.75,
 ) -> str:
     """Store an important learning state revealed by the conversation."""
     memory = MemoryWrite(
@@ -106,7 +104,6 @@ def remember_learning_state(
         content=content,
         scope="course",
         course_id=ctx.context.course_id,
-        confidence=max(0, min(confidence, 1)),
         importance=0.75,
         metadata={"lectureId": ctx.context.lecture_id},
     )

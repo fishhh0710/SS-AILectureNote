@@ -330,14 +330,14 @@ firebase deploy --only functions:python
 
 - 新增 `MemoryService`，區分 `learning` 與 `preference` domain。
 - scope 支援 global、course、lecture。
-- canonical memory 保存 confidence、importance、explicit、evidenceCount、status、provenance 與 metadata。
+- canonical memory 保存 importance、explicit、evidenceCount、status、provenance 與 metadata。
 - 每次來源先寫入 `memory_evidence`，再合併到 `memories`。
-- 明確偏好立即 active；推論偏好至少需要兩份 evidence。
+- 所有偏好收到第一份 evidence 後立即 active；Agent policy 仍限制只保存持久且可重用的偏好。
 - 偏好使用穩定 preference key 更新，不會每次建立重複文件。
 - 學習狀況先做正規化內容比對，再使用 Firestore vector search 合併語意重複項目。
 - embedding 使用 `text-embedding-3-small`，固定為 768 維。
 - 建立 collection group `memories` 的 cosine vector index。
-- status 支援 candidate、active、resolved、superseded、deleted。
+- status 支援 active、resolved、superseded、deleted；舊版 candidate preference 讀取時會自動升級。
 - 支援搜尋、解決與忘記 Memory，方便未來加入管理 UI 或正式帳號同步。
 
 ## 30. Memory 整合點
@@ -353,7 +353,7 @@ firebase deploy --only functions:python
 
 ## 31. 驗證與部署
 
-- Python：17 tests passed。
+- Python：19 tests passed。
 - Flutter：10 tests passed。
 - `dart analyze lib test` 沒有 error，保留 24 個既有 info lint。
 - `flutter build apk --debug` 成功。
@@ -363,3 +363,12 @@ firebase deploy --only functions:python
 - 正式環境 PDF smoke test 以同一使用者 Memory 生成 38 頁 notes，回傳 `memoryCount: 1`，輸出採用偏好的編號清單格式。
 - 無驗證 token 的 Chat 與 PDF Summary request 均實測回傳 401。
 - 尚未以真實 Android/iOS FCM token 驗證推播到實機；後端只有在 `distracted` 狀態才會嘗試送信。
+
+## 32. Memory activation 與信心欄位簡化
+
+- 使用者偏好收到第一份 evidence 後立即成為 `active`，不再等待第二份 evidence。
+- `evidenceCount` 仍保留，用於追蹤來源次數與後續稽核，但不影響偏好是否生效。
+- 移除 Attention Agent output 的 `confidence`。
+- 移除 `MemoryWrite`、canonical memory、memory evidence 與 Chat Agent tool 的 `confidence`。
+- 讀取舊版 `candidate` preference 時會視為 `active` 並回寫狀態，同時移除 canonical memory 的舊 confidence 欄位。
+- 語音辨識服務本身的 confidence 屬於 Azure／speech recognition 結果，不是 Memory 信心程度，因此維持不變。

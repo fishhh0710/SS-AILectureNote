@@ -156,11 +156,30 @@ class FunctionContractTests(unittest.TestCase):
                 scope="course",
             )
 
+    def test_memory_schema_has_no_confidence_field(self):
+        self.assertNotIn("confidence", memory_service.MemoryWrite.model_fields)
+        self.assertNotIn("confidence", attention_agent.AttentionAgentOutput.model_fields)
+
+    def test_legacy_candidate_preference_is_effectively_active(self):
+        service = memory_service.MemoryService.__new__(memory_service.MemoryService)
+        self.assertTrue(
+            service._matches(
+                {
+                    "status": "candidate",
+                    "domain": "preference",
+                    "scope": "global",
+                },
+                domains={"preference"},
+                statuses={"active"},
+                course_id="course-1",
+                lecture_id="lecture-1",
+            )
+        )
+
     def test_attention_output_creates_learning_memory_evidence(self):
         output = attention_agent.AttentionAgentOutput(
             status="confused",
             page_relevance="same_topic",
-            confidence=0.9,
             reasoning_summary="Student stayed on a relevant concept.",
             missed_content=["The base case stops recursion."],
             confused_summary="The student may not understand the recursion base case.",
