@@ -1,49 +1,77 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../services/annotation_manager.dart';
 import '../services/firebase_function_client.dart';
-import '../viewmodels/slides_view_model.dart';
+import '../services/notification_service.dart';
 import '../viewmodels/lecture_notes_view_model.dart';
+import '../viewmodels/slides_view_model.dart';
+
+class _QueuedTranscriptChunk {
+  const _QueuedTranscriptChunk({
+    required this.latestSegment,
+    required this.recentSegments,
+  });
+
+  final String latestSegment;
+  final List<String> recentSegments;
+}
 
 class RealtimeAgentCoordinator {
-  final String storageId;
-  final SlidesViewModel slidesViewModel;
-  final LectureNotesViewModel notesViewModel;
-  final ValueNotifier<int> currentPageNotifier;
-  final Stream<Map<String, dynamic>> segmentStream;
-  final PageAnnotationManager? Function() getAnnotationManager;
-  final PdfDocument? Function() getPdfDocument;
-  final FirebaseFunctionClient _functionClient;
-
-  StreamSubscription<Map<String, dynamic>>? _subscription;
-  final List<String> _pendingChunks = [];
-  bool _isProcessing = false;
-  bool _isDisposed = false;
-
   RealtimeAgentCoordinator({
     required this.storageId,
+    required this.courseId,
     required this.slidesViewModel,
     required this.notesViewModel,
-    required this.currentPageNotifier,
     required this.segmentStream,
     required this.getAnnotationManager,
     required this.getPdfDocument,
+    required this.sessionId,
+    required this.getStudentState,
+    this.notificationToken,
     FirebaseFunctionClient? functionClient,
   }) : _functionClient = functionClient ?? FirebaseFunctionClient() {
     _subscribe();
   }
 
+  final String storageId;
+  final String courseId;
+  final SlidesViewModel slidesViewModel;
+  final LectureNotesViewModel notesViewModel;
+  final Stream<Map<String, dynamic>> segmentStream;
+  final PageAnnotationManager? Function() getAnnotationManager;
+  final PdfDocument? Function() getPdfDocument;
+  final String sessionId;
+  final Map<String, dynamic> Function() getStudentState;
+  final String? notificationToken;
+  final FirebaseFunctionClient _functionClient;
+
+  StreamSubscription<Map<String, dynamic>>? _subscription;
+  final List<_QueuedTranscriptChunk> _pendingChunks = [];
+  final List<String> _recentSegments = [];
+  int? _lastTeacherPage;
+  bool _isProcessing = false;
+  bool _isDisposed = false;
+
   void _subscribe() {
     _subscription = segmentStream.listen((event) {
       final text = event['text'] as String? ?? '';
       final isEmpty = event['is_empty'] as bool? ?? true;
-      if (!isEmpty && text.trim().isNotEmpty) {
-        _pendingChunks.add(text.trim());
-        unawaited(_drainQueue());
+      final latestSegment = text.trim();
+      if (isEmpty || latestSegment.isEmpty) return;
+
+      _pendingChunks.add(
+        _QueuedTranscriptChunk(
+          latestSegment: latestSegment,
+          recentSegments: List.unmodifiable(_recentSegments.takeLast(9)),
+        ),
+      );
+      _recentSegments.add(latestSegment);
+      if (_recentSegments.length > 10) {
+        _recentSegments.removeRange(0, _recentSegments.length - 10);
       }
+      unawaited(_drainQueue());
     });
   }
 
@@ -61,80 +89,121 @@ class RealtimeAgentCoordinator {
     }
   }
 
-  Future<void> _processTranscriptChunk(String chunk) async {
+  Future<void> _processTranscriptChunk(_QueuedTranscriptChunk chunk) async {
     try {
-      final pageIndex = currentPageNotifier.value;
       final doc = getPdfDocument();
       final annotationManager = getAnnotationManager();
-
       if (doc == null || annotationManager == null) {
         // ignore: avoid_print
-        print(
-          'DEBUG [Agent]: PDF Document or Annotation Manager is not ready.',
-        );
+        print('DEBUG [Agent]: PDF or annotation manager is not ready.');
         return;
       }
 
-      if (pageIndex < 1 || pageIndex > doc.pages.length) {
-        // ignore: avoid_print
-        print('DEBUG [Agent]: Current page index $pageIndex is out of bounds.');
-        return;
-      }
-
-      // Find current summary for this page
-      final noteIndex = notesViewModel.notes.indexWhere(
-        (note) => note.pageNumber == pageIndex,
+      final decoded = FirebaseFunctionClient.unwrapPayload(
+        await _functionClient.postJson(
+          functionName: 'realtimeAgent',
+          body: {
+            'lastTeacherPage': _lastTeacherPage,
+            'pageSummaries': notesViewModel.notes
+                .map((note) => note.toJson())
+                .toList(),
+            'recentSegments': chunk.recentSegments,
+            'latestSegment': chunk.latestSegment,
+            'sessionId': sessionId,
+            'courseId': courseId,
+            'lectureId': storageId,
+            'studentState': getStudentState(),
+            'notificationToken': notificationToken,
+          },
+        ),
       );
-      final currentSummary = noteIndex != -1
-          ? notesViewModel.notes[noteIndex].markdown
-          : '';
 
-      final decoded = await _functionClient.postJson(
-        functionName: 'realtimeAgent',
-        body: {'currentSummary': currentSummary, 'chunk': chunk},
-      );
+      final pageNumber = _positiveInt(decoded['page_number']);
+      if (pageNumber == null || pageNumber > doc.pages.length) return;
+      _lastTeacherPage = pageNumber;
+      await _handleAttention(decoded['attention'], pageNumber);
 
-      // Handle summary additions
-      final additionalSummary = decoded['additional_summary'] as String?;
-      if (additionalSummary != null && additionalSummary.trim().isNotEmpty) {
-        // ignore: avoid_print
-        print('DEBUG [Agent]: Appending live note update to page $pageIndex');
-        await notesViewModel.appendNoteToPage(
+      final action = decoded['update_note_at'] as String? ?? 'none';
+      if (action == 'summary') {
+        final updated = await notesViewModel.appendRealtimeUpdate(
           storageId: storageId,
-          pageNumber: pageIndex,
-          additionalMarkdown: additionalSummary.trim(),
+          pageNumber: pageNumber,
+          newPoints: _stringList(decoded['new_points']),
+          questions: _stringList(decoded['questions']),
         );
+        if (!updated) {
+          // ignore: avoid_print
+          print(
+            'DEBUG [Agent]: Summary page $pageNumber does not exist or has no new content.',
+          );
+        }
+        return;
       }
 
-      // Handle bounding box updates
-      final targets = decoded['targets'] as List<dynamic>?;
-      if (targets != null && targets.isNotEmpty) {
-        // ignore: avoid_print
-        print(
-          'DEBUG [Agent]: Resolving dynamic bounding boxes for targets: $targets',
-        );
-        final targetsList = targets
-            .map((t) => Map<String, dynamic>.from(t as Map))
-            .toList();
-        final page = doc.pages[pageIndex - 1];
-
+      if (action == 'slides') {
+        final targets = _mapList(decoded['targets']);
+        if (targets.isEmpty) return;
         await slidesViewModel.processPageWithTargets(
-          page: page,
-          pageIndex: pageIndex,
-          targets: targetsList,
+          page: doc.pages[pageNumber - 1],
+          pageIndex: pageNumber,
+          targets: targets,
           annotationManager: annotationManager,
         );
       }
-    } catch (e) {
+    } catch (error) {
       // ignore: avoid_print
-      print('DEBUG [Agent] Error in real-time agent processing: $e');
+      print('DEBUG [Agent]: Realtime processing failed: $error');
     }
+  }
+
+  Future<void> _handleAttention(Object? value, int teacherPage) async {
+    if (value is! Map) return;
+    final attention = Map<String, dynamic>.from(value);
+    if (attention['checked'] != true || attention['status'] != 'distracted') {
+      return;
+    }
+    if (attention['notification_sent'] == true) return;
+    await NotificationService.instance.showDistractionNotification(
+      teacherPage: teacherPage,
+    );
+  }
+
+  int? _positiveInt(Object? value) {
+    if (value is int && value > 0) return value;
+    if (value is num && value > 0) return value.toInt();
+    return null;
+  }
+
+  List<String> _stringList(Object? value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<String>()
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+  }
+
+  List<Map<String, dynamic>> _mapList(Object? value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
   }
 
   void dispose() {
     _isDisposed = true;
     _pendingChunks.clear();
+    _recentSegments.clear();
     unawaited(_subscription?.cancel());
     _functionClient.dispose();
+  }
+}
+
+extension<T> on Iterable<T> {
+  Iterable<T> takeLast(int count) {
+    final values = toList();
+    if (values.length <= count) return values;
+    return values.skip(values.length - count);
   }
 }

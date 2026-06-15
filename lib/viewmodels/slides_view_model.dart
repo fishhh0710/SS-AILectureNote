@@ -80,6 +80,7 @@ class SlidesViewModel extends ChangeNotifier {
       // Clear any pre-existing annotations for this page before adding fresh ones
       annotationManager.clearPage(pageIndex);
 
+      final List<Map<String, dynamic>> candidates = [];
       for (final item in response) {
         final label = item['label'] as String;
         final colorName = item['color'] as String? ?? 'red';
@@ -91,58 +92,100 @@ class SlidesViewModel extends ChangeNotifier {
           final double x2 = (coordsList[2] as num).toDouble();
           final double y2 = (coordsList[3] as num).toDouble();
 
-          // Normalize absolute pixel coordinates to relative (0.0 to 1.0)
-          final rx = x1 / imgWidth;
-          final ry = y1 / imgHeight;
-          final rw = (x2 - x1) / imgWidth;
-          final rh = (y2 - y1) / imgHeight;
-
-          // Parse color string to ui.Color
-          ui.Color colorVal;
-          switch (colorName.toLowerCase()) {
-            case 'green':
-              colorVal = const ui.Color(0xFF00FF00);
-              break;
-            case 'blue':
-              colorVal = const ui.Color(0xFF0000FF);
-              break;
-            case 'yellow':
-              colorVal = const ui.Color(0xFFFFFF00);
-              break;
-            case 'cyan':
-              colorVal = const ui.Color(0xFF00FFFF);
-              break;
-            case 'magenta':
-              colorVal = const ui.Color(0xFFFF00FF);
-              break;
-            case 'orange':
-              colorVal = const ui.Color(0xFFFFA500);
-              break;
-            case 'purple':
-              colorVal = const ui.Color(0xFF800080);
-              break;
-            case 'white':
-              colorVal = const ui.Color(0xFFFFFFFF);
-              break;
-            case 'black':
-              colorVal = const ui.Color(0xFF000000);
-              break;
-            default:
-              colorVal = const ui.Color(0xFFFF0000); // Default to Red
-          }
-
-          final annotation = RectAnnotation(
-            id: 'rect_${DateTime.now().microsecondsSinceEpoch}',
-            pageIndex: pageIndex,
-            color: colorVal,
-            x: rx,
-            y: ry,
-            width: rw,
-            height: rh,
-            label: label,
-          );
-          annotationManager.addAnnotation(pageIndex, annotation);
+          candidates.add({
+            'label': label,
+            'colorName': colorName,
+            'box': [x1, y1, x2, y2],
+            'area': (x2 - x1) * (y2 - y1),
+          });
         }
+      }
+
+      // Sort candidates by area ascending
+      candidates.sort((a, b) => (a['area'] as double).compareTo(b['area'] as double));
+
+      final Set<int> removedIndices = {};
+      for (int i = 0; i < candidates.length; i++) {
+        if (removedIndices.contains(i)) continue;
+        for (int j = i + 1; j < candidates.length; j++) {
+          if (removedIndices.contains(j)) continue;
+
+          final overlaps = _calculateOverlapFraction(
+            candidates[i]['box'] as List<double>,
+            candidates[j]['box'] as List<double>,
+          );
+          if (overlaps[0] > 0.30 && overlaps[1] > 0.30) {
+            // j is the larger/equal box (since candidates is sorted ascending by area). Remove it.
+            removedIndices.add(j);
+            debugPrint("Overlap filter: Removing larger box '${candidates[j]['label']}' because it overlaps >30% mutually with '${candidates[i]['label']}'.");
+          }
+        }
+      }
+
+      for (int k = 0; k < candidates.length; k++) {
+        if (removedIndices.contains(k)) continue;
+
+        final candidate = candidates[k];
+        final label = candidate['label'] as String;
+        final colorName = candidate['colorName'] as String;
+        final box = candidate['box'] as List<double>;
+
+        final x1 = box[0];
+        final y1 = box[1];
+        final x2 = box[2];
+        final y2 = box[3];
+
+        // Normalize absolute pixel coordinates to relative (0.0 to 1.0)
+        final rx = x1 / imgWidth;
+        final ry = y1 / imgHeight;
+        final rw = (x2 - x1) / imgWidth;
+        final rh = (y2 - y1) / imgHeight;
+
+        // Parse color string to ui.Color
+        ui.Color colorVal;
+        switch (colorName.toLowerCase()) {
+          case 'green':
+            colorVal = const ui.Color(0xFF00FF00);
+            break;
+          case 'blue':
+            colorVal = const ui.Color(0xFF0000FF);
+            break;
+          case 'yellow':
+            colorVal = const ui.Color(0xFFFFFF00);
+            break;
+          case 'cyan':
+            colorVal = const ui.Color(0xFF00FFFF);
+            break;
+          case 'magenta':
+            colorVal = const ui.Color(0xFFFF00FF);
+            break;
+          case 'orange':
+            colorVal = const ui.Color(0xFFFFA500);
+            break;
+          case 'purple':
+            colorVal = const ui.Color(0xFF800080);
+            break;
+          case 'white':
+            colorVal = const ui.Color(0xFFFFFFFF);
+            break;
+          case 'black':
+            colorVal = const ui.Color(0xFF000000);
+            break;
+          default:
+            colorVal = const ui.Color(0xFFFF0000); // Default to Red
+        }
+
+        final annotation = RectAnnotation(
+          id: 'rect_${DateTime.now().microsecondsSinceEpoch}_$k',
+          pageIndex: pageIndex,
+          color: colorVal,
+          x: rx,
+          y: ry,
+          width: rw,
+          height: rh,
+          label: label,
+        );
+        annotationManager.addAnnotation(pageIndex, annotation);
       }
     } catch (e) {
       debugPrint('Failed to process page $pageIndex: $e');
@@ -199,6 +242,7 @@ class SlidesViewModel extends ChangeNotifier {
       );
 
       // 4. Map the bounding boxes back to relative coordinates and add them
+      final List<Map<String, dynamic>> candidates = [];
       for (final item in response) {
         final label = item['label'] as String;
         final colorName = item['color'] as String? ?? 'red';
@@ -210,68 +254,110 @@ class SlidesViewModel extends ChangeNotifier {
           final double x2 = (coordsList[2] as num).toDouble();
           final double y2 = (coordsList[3] as num).toDouble();
 
-          // Normalize absolute pixel coordinates to relative (0.0 to 1.0)
-          final rx = x1 / imgWidth;
-          final ry = y1 / imgHeight;
-          final rw = (x2 - x1) / imgWidth;
-          final rh = (y2 - y1) / imgHeight;
-
-          // Parse color string to ui.Color
-          ui.Color colorVal;
-          switch (colorName.toLowerCase()) {
-            case 'green':
-              colorVal = const ui.Color(0xFF00FF00);
-              break;
-            case 'blue':
-              colorVal = const ui.Color(0xFF0000FF);
-              break;
-            case 'yellow':
-              colorVal = const ui.Color(0xFFFFFF00);
-              break;
-            case 'cyan':
-              colorVal = const ui.Color(0xFF00FFFF);
-              break;
-            case 'magenta':
-              colorVal = const ui.Color(0xFFFF00FF);
-              break;
-            case 'orange':
-              colorVal = const ui.Color(0xFFFFA500);
-              break;
-            case 'purple':
-              colorVal = const ui.Color(0xFF800080);
-              break;
-            case 'white':
-              colorVal = const ui.Color(0xFFFFFFFF);
-              break;
-            case 'black':
-              colorVal = const ui.Color(0xFF000000);
-              break;
-            default:
-              colorVal = const ui.Color(0xFFFF0000); // Default to Red
-          }
-
-          // Check if an annotation with the exact same label already exists on this page.
-          // If it does, delete it so we can update it dynamically with new coordinates.
-          final existingNotifier = annotationManager.getPageNotifier(pageIndex);
-          final existingList = List<Annotation>.from(existingNotifier.value);
-          for (final ann in existingList) {
-            if (ann is RectAnnotation && ann.label == label) {
-              annotationManager.deleteAnnotation(pageIndex, ann.id);
-            }
-          }
-
-          final annotation = RectAnnotation(
-            id: 'rect_${DateTime.now().microsecondsSinceEpoch}',
-            pageIndex: pageIndex,
-            color: colorVal,
-            x: rx,
-            y: ry,
-            width: rw,
-            height: rh,
-            label: label,
-          );
-          annotationManager.addAnnotation(pageIndex, annotation);
+          candidates.add({
+            'label': label,
+            'colorName': colorName,
+            'box': [x1, y1, x2, y2],
+            'area': (x2 - x1) * (y2 - y1),
+          });
         }
+      }
+
+      // Sort candidates by area ascending
+      candidates.sort((a, b) => (a['area'] as double).compareTo(b['area'] as double));
+
+      final Set<int> removedIndices = {};
+      for (int i = 0; i < candidates.length; i++) {
+        if (removedIndices.contains(i)) continue;
+        for (int j = i + 1; j < candidates.length; j++) {
+          if (removedIndices.contains(j)) continue;
+
+          final overlaps = _calculateOverlapFraction(
+            candidates[i]['box'] as List<double>,
+            candidates[j]['box'] as List<double>,
+          );
+          if (overlaps[0] > 0.30 && overlaps[1] > 0.30) {
+            // j is the larger/equal box. Remove it.
+            removedIndices.add(j);
+            debugPrint("Overlap filter: Removing larger box '${candidates[j]['label']}' because it overlaps >30% mutually with '${candidates[i]['label']}'.");
+          }
+        }
+      }
+
+      for (int k = 0; k < candidates.length; k++) {
+        if (removedIndices.contains(k)) continue;
+
+        final candidate = candidates[k];
+        final label = candidate['label'] as String;
+        final colorName = candidate['colorName'] as String;
+        final box = candidate['box'] as List<double>;
+
+        final x1 = box[0];
+        final y1 = box[1];
+        final x2 = box[2];
+        final y2 = box[3];
+
+        // Normalize absolute pixel coordinates to relative (0.0 to 1.0)
+        final rx = x1 / imgWidth;
+        final ry = y1 / imgHeight;
+        final rw = (x2 - x1) / imgWidth;
+        final rh = (y2 - y1) / imgHeight;
+
+        // Parse color string to ui.Color
+        ui.Color colorVal;
+        switch (colorName.toLowerCase()) {
+          case 'green':
+            colorVal = const ui.Color(0xFF00FF00);
+            break;
+          case 'blue':
+            colorVal = const ui.Color(0xFF0000FF);
+            break;
+          case 'yellow':
+            colorVal = const ui.Color(0xFFFFFF00);
+            break;
+          case 'cyan':
+            colorVal = const ui.Color(0xFF00FFFF);
+            break;
+          case 'magenta':
+            colorVal = const ui.Color(0xFFFF00FF);
+            break;
+          case 'orange':
+            colorVal = const ui.Color(0xFFFFA500);
+            break;
+          case 'purple':
+            colorVal = const ui.Color(0xFF800080);
+            break;
+          case 'white':
+            colorVal = const ui.Color(0xFFFFFFFF);
+            break;
+          case 'black':
+            colorVal = const ui.Color(0xFF000000);
+            break;
+          default:
+            colorVal = const ui.Color(0xFFFF0000); // Default to Red
+        }
+
+        // Check if an annotation with the exact same label already exists on this page.
+        // If it does, delete it so we can update it dynamically with new coordinates.
+        final existingNotifier = annotationManager.getPageNotifier(pageIndex);
+        final existingList = List<Annotation>.from(existingNotifier.value);
+        for (final ann in existingList) {
+          if (ann is RectAnnotation && ann.label == label) {
+            annotationManager.deleteAnnotation(pageIndex, ann.id);
+          }
+        }
+
+        final annotation = RectAnnotation(
+          id: 'rect_${DateTime.now().microsecondsSinceEpoch}_$k',
+          pageIndex: pageIndex,
+          color: colorVal,
+          x: rx,
+          y: ry,
+          width: rw,
+          height: rh,
+          label: label,
+        );
+        annotationManager.addAnnotation(pageIndex, annotation);
       }
     } catch (e) {
       debugPrint('Failed to process page with targets $pageIndex: $e');
@@ -314,6 +400,42 @@ class SlidesViewModel extends ChangeNotifier {
     }
 
     await Future.wait(tasks);
+  }
+
+  List<double> _calculateOverlapFraction(List<double> boxA, List<double> boxB) {
+    // box format: [x1, y1, x2, y2]
+    final x1A = boxA[0];
+    final y1A = boxA[1];
+    final x2A = boxA[2];
+    final y2A = boxA[3];
+
+    final x1B = boxB[0];
+    final y1B = boxB[1];
+    final x2B = boxB[2];
+    final y2B = boxB[3];
+
+    final areaA = (x2A - x1A) * (y2A - y1A);
+    final areaB = (x2B - x1B) * (y2B - y1B);
+
+    if (areaA <= 0 || areaB <= 0) {
+      return [0.0, 0.0];
+    }
+
+    // Calculate intersection coordinates
+    final x1I = x1A > x1B ? x1A : x1B;
+    final y1I = y1A > y1B ? y1A : y1B;
+    final x2I = x2A < x2B ? x2A : x2B;
+    final y2I = y2A < y2B ? y2A : y2B;
+
+    double areaI = 0.0;
+    if (x2I > x1I && y2I > y1I) {
+      areaI = (x2I - x1I) * (y2I - y1I);
+    }
+
+    final overlapA = areaI / areaA;
+    final overlapB = areaI / areaB;
+
+    return [overlapA, overlapB];
   }
 
   @override

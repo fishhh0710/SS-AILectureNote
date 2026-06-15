@@ -27,7 +27,7 @@ abstract class Annotation {
     }
   }
 
-  void draw(Canvas canvas, Size size);
+  void draw(Canvas canvas, Size size, {bool showLabel = false});
 }
 
 // 1. Rectangle Annotation (using relative coordinates 0.0 ~ 1.0)
@@ -80,7 +80,7 @@ class RectAnnotation extends Annotation {
   }
 
   @override
-  void draw(Canvas canvas, Size size) {
+  void draw(Canvas canvas, Size size, {bool showLabel = false}) {
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
@@ -94,7 +94,7 @@ class RectAnnotation extends Annotation {
     );
     canvas.drawRect(rect, paint);
 
-    if (label != null && label!.isNotEmpty) {
+    if (showLabel && label != null && label!.isNotEmpty) {
       final double scaledFontSize = 10.0 * (size.width / 850.0);
       final textPainter = TextPainter(
         text: TextSpan(
@@ -183,7 +183,7 @@ class TextAnnotation extends Annotation {
   }
 
   @override
-  void draw(Canvas canvas, Size size) {
+  void draw(Canvas canvas, Size size, {bool showLabel = false}) {
     // 💡 根據投影片當前寬度與基準寬度 (850.0) 進行比例縮放，避免縮放時文字尺寸錯位
     final double scaledFontSize = fontSize * (size.width / 850.0);
 

@@ -10,6 +10,9 @@ import '../services/auth_service.dart';
 import '../services/transcript_export_service.dart';
 import '../viewmodels/lecture_notes_view_model.dart';
 import '../services/realtime_agent_coordinator.dart';
+import '../services/student_attention_tracker.dart';
+import '../services/user_identity_service.dart';
+import '../services/notification_service.dart';
 import '../data/transcript_data.dart';
 
 class LectureView extends StatefulWidget {
@@ -33,6 +36,8 @@ class _LectureViewState extends State<LectureView> {
   final GlobalKey<SlidesPanelState> _slidesPanelKey =
       GlobalKey<SlidesPanelState>();
   RealtimeAgentCoordinator? _realtimeAgentCoordinator;
+  late final StudentAttentionTracker _studentAttentionTracker;
+  final UserIdentityService _userIdentityService = UserIdentityService();
 
   late AzureSpeechService _speechService;
   late AzureAuthService _authService;
@@ -62,6 +67,9 @@ class _LectureViewState extends State<LectureView> {
     super.initState();
     _notesViewModel = LectureNotesViewModel()
       ..addListener(_handleNotesStateChanged);
+    _studentAttentionTracker = StudentAttentionTracker(
+      currentPageNotifier: _currentPageNotifier,
+    );
 
     _speechService = AzureSpeechService();
     _authService = AzureAuthService();
@@ -91,6 +99,7 @@ class _LectureViewState extends State<LectureView> {
     _demoTimer?.cancel();
     _segmentStreamController.close();
     _realtimeAgentCoordinator?.dispose();
+    unawaited(_studentAttentionTracker.stop());
     _currentPageNotifier.dispose();
     _notesViewModel
       ..removeListener(_handleNotesStateChanged)
@@ -223,6 +232,7 @@ class _LectureViewState extends State<LectureView> {
 
       _realtimeAgentCoordinator?.dispose();
       _realtimeAgentCoordinator = null;
+      await _studentAttentionTracker.stop();
 
       _exportTimer?.cancel();
       _exportTimer = null;
@@ -273,22 +283,29 @@ class _LectureViewState extends State<LectureView> {
     _exportService = exportService;
 
     try {
+      await _userIdentityService.ensureSignedIn();
+      await _studentAttentionTracker.start(sessionName);
+      final notificationToken = await NotificationService.instance.getToken();
       await exportService.start();
 
       final state = _slidesPanelKey.currentState;
       if (state != null) {
         _realtimeAgentCoordinator = RealtimeAgentCoordinator(
           storageId: widget.fileId,
+          courseId: widget.courseId,
           slidesViewModel: state.viewModel,
           notesViewModel: _notesViewModel,
-          currentPageNotifier: _currentPageNotifier,
           segmentStream: _segmentStreamController.stream,
           getAnnotationManager: () =>
               _slidesPanelKey.currentState?.annotationManager,
           getPdfDocument: () => _slidesPanelKey.currentState?.document,
+          sessionId: sessionName,
+          getStudentState: _studentAttentionTracker.snapshot,
+          notificationToken: notificationToken,
         );
       }
     } catch (e) {
+      await _studentAttentionTracker.stop();
       _exportService = null;
       if (!mounted) return;
       setState(() {
@@ -322,6 +339,9 @@ class _LectureViewState extends State<LectureView> {
       } catch (e) {
         _exportTimer?.cancel();
         _exportTimer = null;
+        _realtimeAgentCoordinator?.dispose();
+        _realtimeAgentCoordinator = null;
+        await _studentAttentionTracker.stop();
         _exportService = null;
         if (!mounted) return;
         setState(() {
@@ -426,9 +446,20 @@ class _LectureViewState extends State<LectureView> {
       _layoutOrder.add('summary');
     });
 
+    try {
+      await _userIdentityService.ensureSignedIn();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to initialize user memory: $error')),
+      );
+      return;
+    }
     await _notesViewModel.generateFromPdf(
       storageId: widget.fileId,
       pdfPath: pdfPath,
+      courseId: widget.courseId,
+      lectureId: widget.fileId,
     );
   }
 
@@ -502,6 +533,8 @@ class _LectureViewState extends State<LectureView> {
           index: index,
           onClose: () => setState(() => _showChatbot = false),
           notebookId: int.tryParse(widget.fileId) ?? 0,
+          courseId: widget.courseId,
+          lectureId: widget.fileId,
           aiNotes: notesString, // 目前畫面上最新最真實的筆記內容
           transcript: _liveTranscript, // 目前最新錄製的即時逐字稿
           segmentStream: _segmentStreamController.stream,

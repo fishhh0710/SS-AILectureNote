@@ -42,6 +42,9 @@ class AzureSpeechService {
   final _record = AudioRecorder();
   WebSocketChannel? _channel;
   StreamSubscription? _audioSubscription;
+  Future<void>? _stopFuture;
+  bool _recorderStarted = false;
+  bool _disposed = false;
   final String region = "eastasia"; // Adjust to your region
 
   // Output streams for the UI
@@ -77,7 +80,7 @@ class AzureSpeechService {
   ];
 
   Future<void> startListening(String token) async {
-    if (isListening) return;
+    if (isListening || _disposed) return;
 
     debugPrint("[AzureSTT] startListening called");
 
@@ -149,6 +152,12 @@ class AzureSpeechService {
           ),
         );
 
+        _recorderStarted = true;
+        if (_disposed) {
+          await _record.stop();
+          _recorderStarted = false;
+          return;
+        }
         isListening = true;
         _statusController.add(isListening);
         _currentChunkStartTime = DateTime.now();
@@ -380,21 +389,42 @@ class AzureSpeechService {
 
   void _handleError(Object error) {
     debugPrint("[AzureSTT] Error: $error");
-    stopListening();
+    unawaited(stopListening());
   }
 
   void _handleReconnect() {
     debugPrint("[AzureSTT] Connection closed.");
-    stopListening();
+    unawaited(stopListening());
   }
 
-  Future<void> stopListening() async {
+  Future<void> stopListening() {
+    return _stopFuture ??= _stopListeningInternal().whenComplete(() {
+      _stopFuture = null;
+    });
+  }
+
+  Future<void> _stopListeningInternal() async {
     isListening = false;
-    _statusController.add(isListening);
-    await _audioSubscription?.cancel();
-    await _record.stop();
-    _channel?.sink.close();
+    if (!_statusController.isClosed) {
+      _statusController.add(isListening);
+    }
+
+    final audioSubscription = _audioSubscription;
+    _audioSubscription = null;
+    await audioSubscription?.cancel();
+
+    if (_recorderStarted) {
+      _recorderStarted = false;
+      try {
+        await _record.stop();
+      } catch (error) {
+        debugPrint('[AzureSTT] Recorder stop ignored: $error');
+      }
+    }
+
+    final channel = _channel;
     _channel = null;
+    await channel?.sink.close();
 
     if (_currentPartial.isNotEmpty) {
       chunks.add(
@@ -422,10 +452,16 @@ class AzureSpeechService {
   }
 
   void dispose() {
-    stopListening();
-    _transcriptController.close();
-    _statusController.close();
-    _record.dispose();
+    if (_disposed) return;
+    _disposed = true;
+    unawaited(_disposeAsync());
+  }
+
+  Future<void> _disposeAsync() async {
+    await stopListening();
+    await _transcriptController.close();
+    await _statusController.close();
+    await _record.dispose();
   }
 
   Future<String?> loadSavedTranscript(String storageId) async {

@@ -377,7 +377,7 @@ async def detect_pipeline(file: UploadFile = File(...)):
                 )
 
             # 5. Run Step 3: GPT Matching
-            gpt_bbox.main()
+            gpt_bbox.main(sources=["OPENCV", "OPENCV_MORPH"])
             if not out_gemini_json.exists():
                 raise HTTPException(
                     status_code=500,
@@ -530,7 +530,7 @@ async def detect_agent_pipeline(
                 )
 
             # 5. Run Step 3: GPT Matching
-            gpt_bbox.main()
+            gpt_bbox.main(sources=["OPENCV", "OPENCV_MORPH"])
             if not out_gemini_json.exists():
                 raise HTTPException(
                     status_code=500,

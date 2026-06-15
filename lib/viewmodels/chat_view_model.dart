@@ -6,16 +6,22 @@ import '../repositories/chat_repository.dart';
 class ChatViewModel extends ChangeNotifier {
   ChatViewModel({
     required int notebookId,
+    required String courseId,
+    required String lectureId,
     required String aiNotes,
     required String transcript,
     ChatRepository? repository,
   }) : _notebookId = notebookId,
+       _courseId = courseId,
+       _lectureId = lectureId,
        _aiNotes = aiNotes,
        _transcript = transcript,
        _repository = repository ?? ChatRepository();
 
   final ChatRepository _repository;
   int _notebookId;
+  String _courseId;
+  String _lectureId;
   String _aiNotes;
   String _transcript;
   int? _conversationId;
@@ -44,10 +50,14 @@ class ChatViewModel extends ChangeNotifier {
 
   void updateLectureContext({
     required int notebookId,
+    required String courseId,
+    required String lectureId,
     required String aiNotes,
     required String transcript,
   }) {
     _notebookId = notebookId;
+    _courseId = courseId;
+    _lectureId = lectureId;
     _aiNotes = aiNotes;
     _transcript = transcript;
   }
@@ -69,6 +79,8 @@ class ChatViewModel extends ChangeNotifier {
 
       final assistantMessage = await _repository.requestAssistantReply(
         conversationId: conversationId,
+        courseId: _courseId,
+        lectureId: _lectureId,
         aiNotes: _aiNotes,
         transcript: _transcript,
         question: trimmed,

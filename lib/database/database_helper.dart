@@ -23,7 +23,7 @@ class DatabaseHelper {
     final path = join(dbPath, filePath);
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
       onConfigure: _onConfigure,
@@ -63,6 +63,9 @@ class DatabaseHelper {
           FOREIGN KEY (conversationId) REFERENCES conversations(id) ON DELETE CASCADE
         )
       ''');
+    }
+    if (oldVersion < 4) {
+      await _createStudentPageEventsTable(db);
     }
   }
 
@@ -123,6 +126,24 @@ class DatabaseHelper {
         ON DELETE CASCADE
       )
       ''');
+    await _createStudentPageEventsTable(db);
+  }
+
+  Future<void> _createStudentPageEventsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS student_page_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sessionId TEXT NOT NULL,
+        pageNumber INTEGER NOT NULL,
+        enteredAt TEXT NOT NULL,
+        leftAt TEXT NOT NULL,
+        durationSeconds INTEGER NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_student_page_events_session
+      ON student_page_events(sessionId, enteredAt)
+    ''');
   }
 
   // ================= 1. Standard CRUD =================
@@ -307,6 +328,22 @@ class DatabaseHelper {
       return result.first['id'] as int;
     }
     return null; // 回傳 null 代表這堂課從來沒聊過天
+  }
+
+  Future<int> insertStudentPageEvent({
+    required String sessionId,
+    required int pageNumber,
+    required DateTime enteredAt,
+    required DateTime leftAt,
+  }) async {
+    final db = await instance.database;
+    return db.insert('student_page_events', {
+      'sessionId': sessionId,
+      'pageNumber': pageNumber,
+      'enteredAt': enteredAt.toUtc().toIso8601String(),
+      'leftAt': leftAt.toUtc().toIso8601String(),
+      'durationSeconds': leftAt.difference(enteredAt).inSeconds,
+    });
   }
 
   // ================= 4. Auto-Aggregation for Chatbot =================

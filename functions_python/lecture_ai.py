@@ -1,0 +1,285 @@
+from __future__ import annotations
+
+import json
+import logging
+import os
+import tempfile
+from pathlib import Path
+from typing import Any
+
+from firebase_admin import firestore, storage
+from firebase_functions import https_fn
+
+from function_common import (
+    authenticated_user_id,
+    json_response,
+    openai_client,
+    optional_string,
+    request_payload,
+    required_string,
+    safe_storage_id,
+)
+from memory_service import MemoryService
+
+
+PAGE_NOTES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "pages": {
+            "type": "array",
+            "description": "One Markdown note for each PDF page.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "page_number": {
+                        "type": "integer",
+                        "description": "The 1-based page number in the PDF.",
+                    },
+                    "markdown": {
+                        "type": "string",
+                        "description": "Concise Markdown notes for this page.",
+                    },
+                },
+                "required": ["page_number", "markdown"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["pages"],
+    "additionalProperties": False,
+}
+
+
+def _pdf_notes_prompt(memory_context: list[dict[str, Any]] | None = None) -> str:
+    memory_section = json.dumps(memory_context or [], ensure_ascii=False)
+    return f"""
+You are an academic PDF note-taking assistant.
+
+Task:
+Read the entire PDF and generate concise Markdown notes for each page.
+
+You must use:
+- The page text
+- Images, diagrams, charts, tables, formulas, arrows, and visual layout
+- The spatial structure of each page
+
+Output:
+Return a JSON object with a "pages" array.
+Each item must contain:
+- page_number: the page number, starting from 1
+- markdown: the Markdown note for that page
+
+Default Markdown format for each page, used only when memory does not request a different
+presentation structure:
+
+# Page <page_number>: <short inferred title>
+
+## Main Idea
+<Explain the main idea of this page in 2-4 concise sentences.>
+
+## Key Terms
+- **<term>**: <brief explanation based on this page>
+- **<term>**: <brief explanation based on this page>
+
+Rules:
+- Generate one item for every page in the PDF.
+- Do not skip pages.
+- Focus on each page individually.
+- Keep each page note concise.
+- Explain only important technical terms, academic terms, formulas, methods, concepts, or abbreviations.
+- Do not include obvious everyday words as key terms.
+- If a page has no important technical terms, omit the "## Key Terms" section for that page.
+- If a page is blank or contains almost no useful content, still create a short note saying that the page has limited content.
+- Do not invent information that is not supported by the PDF.
+- The markdown field should contain Markdown only.
+- Do not wrap Markdown in markdown fences.
+
+User memory context:
+{memory_section}
+
+Memory rules:
+- Active preference memories must change language, formatting, detail level, examples, and
+  explanation style when requested. They may override the default Main Idea / Key Terms layout.
+- Preferences never override the requirement to return one accurate Markdown note per PDF page.
+- Learning memories may suggest concepts that deserve clearer explanation when those concepts are
+  actually present on a PDF page.
+- Memory never overrides the PDF and must never introduce unsupported facts.
+- Ignore memories unrelated to the PDF page being summarized.
+""".strip()
+
+
+def _extract_output_text(response: Any) -> str:
+    output_text = getattr(response, "output_text", None)
+    if isinstance(output_text, str):
+        return output_text
+
+    parts: list[str] = []
+    for item in getattr(response, "output", []) or []:
+        for content in getattr(item, "content", []) or []:
+            if getattr(content, "type", None) == "output_text":
+                text = getattr(content, "text", None)
+                if isinstance(text, str):
+                    parts.append(text)
+    return "".join(parts)
+
+
+def _generate_page_notes(
+    pdf_path: str, memory_context: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    client = openai_client()
+    with open(pdf_path, "rb") as pdf_file:
+        uploaded_file = client.files.create(file=pdf_file, purpose="user_data")
+
+    try:
+        response = client.responses.create(
+            model=os.getenv("OPENAI_NOTE_MODEL")
+            or os.getenv("OPENAI_MODEL")
+            or "gpt-4o-mini",
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_file", "file_id": uploaded_file.id},
+                        {
+                            "type": "input_text",
+                            "text": _pdf_notes_prompt(memory_context),
+                        },
+                    ],
+                }
+            ],
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "pdf_page_notes",
+                    "strict": True,
+                    "schema": PAGE_NOTES_SCHEMA,
+                }
+            },
+            max_output_tokens=20000,
+        )
+        result = json.loads(_extract_output_text(response))
+        if not isinstance(result.get("pages"), list):
+            raise ValueError("Model output is missing pages.")
+        return result
+    finally:
+        try:
+            client.files.delete(uploaded_file.id)
+        except Exception:
+            logging.exception("Failed to delete uploaded OpenAI file")
+
+
+def _job_document(job_path: str, safe_id: str):
+    segments = [segment for segment in job_path.split("/") if segment]
+    database = firestore.client()
+    if len(segments) % 2 == 0:
+        return database.document(job_path)
+    return database.collection("ai_note_jobs").document(safe_id)
+
+
+def _summary_memories(
+    *, uid: str, course_id: str, lecture_id: str
+) -> list[dict[str, Any]]:
+    service = MemoryService()
+    preferences = service.list_active(
+        uid=uid,
+        domains={"preference"},
+        course_id=course_id,
+        lecture_id=lecture_id,
+        limit=12,
+    )
+    learning = service.list_active(
+        uid=uid,
+        domains={"learning"},
+        course_id=course_id,
+        lecture_id=lecture_id,
+        limit=12,
+    )
+    return [item.to_dict() for item in [*preferences, *learning]]
+
+
+def notes_handler(req: https_fn.Request) -> https_fn.Response:
+    if req.method != "POST":
+        return json_response({"message": "Only POST is supported."}, 405)
+
+    temp_pdf_path: str | None = None
+    job_ref = None
+    try:
+        payload = request_payload(req)
+        uid = authenticated_user_id(req)
+        storage_id = required_string(payload, "storageId")
+        course_id = required_string(payload, "courseId")
+        lecture_id = required_string(payload, "lectureId")
+        storage_bucket = optional_string(payload.get("storageBucket"))
+        pdf_storage_path = required_string(payload, "pdfStoragePath")
+        safe_id = safe_storage_id(storage_id)
+        job_path = optional_string(payload.get("jobPath")) or f"ai_note_jobs/{safe_id}"
+        bucket = storage.bucket(storage_bucket or None)
+        job_ref = _job_document(job_path, safe_id)
+        job_ref.set(
+            {
+                "status": "running",
+                "storageBucket": bucket.name,
+                "pdfStoragePath": pdf_storage_path,
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
+        )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            temp_pdf_path = temp_file.name
+        bucket.blob(pdf_storage_path).download_to_filename(temp_pdf_path)
+
+        memory_context = _summary_memories(
+            uid=uid,
+            course_id=course_id,
+            lecture_id=lecture_id,
+        )
+        notes = _generate_page_notes(temp_pdf_path, memory_context)
+        notes_storage_path = f"ai_note_jobs/{safe_id}/notes/notes.json"
+        notes_blob = bucket.blob(notes_storage_path)
+        notes_blob.metadata = {"storageId": storage_id}
+        notes_blob.upload_from_string(
+            json.dumps(notes, ensure_ascii=False, indent=2),
+            content_type="application/json",
+        )
+
+        job_ref.set(
+            {
+                "status": "completed",
+                "notesStoragePath": notes_storage_path,
+                "pageCount": len(notes["pages"]),
+                "memoryCount": len(memory_context),
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
+        )
+        return json_response(
+            {
+                **notes,
+                "status": "completed",
+                "storageBucket": bucket.name,
+                "jobPath": job_ref.path,
+                "notesStoragePath": notes_storage_path,
+                "memoryCount": len(memory_context),
+            }
+        )
+    except PermissionError as error:
+        return json_response({"message": str(error)}, 401)
+    except Exception as error:
+        logging.exception("PDF note generation failed")
+        if job_ref is not None:
+            try:
+                job_ref.set(
+                    {
+                        "status": "failed",
+                        "error": str(error),
+                        "updatedAt": firestore.SERVER_TIMESTAMP,
+                    },
+                    merge=True,
+                )
+            except Exception:
+                logging.exception("Failed to write failed job status")
+        return json_response({"message": str(error)}, 500)
+    finally:
+        if temp_pdf_path:
+            Path(temp_pdf_path).unlink(missing_ok=True)

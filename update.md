@@ -204,7 +204,7 @@ dart format
 flutter analyze
 flutter test
 python -m unittest discover -s functions_python
-python -m py_compile functions_python/main.py
+python -m compileall functions_python
 git diff --check
 ```
 `flutter test`：5 tests passed。
@@ -226,6 +226,10 @@ Function 名稱與 HTTP contract 維持不變，因此 Flutter 不需要切換 U
 Python source 位於：
 ```text
 functions_python/main.py
+functions_python/function_common.py
+functions_python/lecture_ai.py
+functions_python/realtime_agent.py
+functions_python/speech.py
 ```
 部署命令：
 ```bash
@@ -249,9 +253,9 @@ firebase deploy --only functions:python
 
 - `RealtimeAgentCoordinator` 訂閱每 10 秒的非空 segment。
 - segment 改以 queue 依序處理，不會因前一個 HTTP request 尚未完成而直接遺失。
-- 新增 Python `realtimeAgent` Function，回傳 `targets` 與 `additional_summary`。
+- 新增 Python `realtimeAgent` Function；其初版回傳 `targets` 與 `additional_summary`，後續已由第 24 節的結構化 Agent contract 取代。
 - realtime summary 由 `NoteGenerationManager.updateNotes()` 寫入本機 JSON／Markdown，再廣播給 Summary panel。
-- 若該頁尚無 PDF summary，先建立只有 `Live Lecture Updates` 的頁面筆記。
+- 初版會在缺少 PDF summary 時建立 live note；第 24 節已改為直接捨棄，避免產生沒有基礎摘要的頁面筆記。
 - 若 PDF summary 較晚完成，合併並保留已收到的 realtime updates，不讓完整摘要覆蓋課堂補充。
 - `SlidesViewModel` 可呼叫 bbox Cloud Run API 進行全頁 detection，或只尋找 agent 指定 targets。
 - bbox 座標由 image pixel 正規化後存成原有 annotation model。
@@ -265,3 +269,117 @@ firebase deploy --only functions:python
 - 跨 App 重啟的工作恢復。
 - 後端工作取消。
 - Auth 或 App Check。
+
+## 24. Realtime Agent workflow
+
+- 將 `realtimeAgent` 從直接 Chat Completions 改為 OpenAI Agents SDK。
+- 使用單一 `Agent`、`Runner`、結構化 `output_type` 與一次性的 context `function_tool`。
+- Agent 不接收學生目前頁面，只接收上次老師頁面作為弱參考。
+- Coordinator 保存最近 10 份非空 transcript segments；最新一份是本次判斷內容，前 9 份只作上下文。
+- Agent 自行搜尋 page summaries 並判斷老師頁面。
+- 新輸出為 `page_number`、`new_points`、`questions`、`targets`、`update_note_at`。
+- `update_note_at` 只允許 `summary`、`slides`、`none`。
+- 後端強制 Summary 與 bbox 互斥，並過濾空字串與字串 `null`。
+- `NoteGenerationManager` 統一處理 realtime Summary 持久化與去重。
+- 新增內容分別寫入 `Professor Additions` 與 `Professor Questions`。
+- Agent 選到沒有既有 AI note 的頁面時直接捨棄，不建立新 note。
+- PDF Summary 較晚完成時，仍保留已寫入的 Professor 區段。
+
+## 25. Python Functions 模組整理
+
+- 保留 `main.py` 作為 Firebase Functions 唯一入口。
+- `main.py` 只處理 Function 註冊及 region、timeout、memory、CORS 設定。
+- 共用 request、response、驗證與 OpenAI client 移到 `function_common.py`。
+- Chat 與 PDF notes 都屬於一般課程 AI 功能，集中到 `lecture_ai.py`。
+- Realtime Agent 的 schema、tool、prompt、正規化與 handler 移到 `realtime_agent.py`。
+- Azure Speech token 邏輯移到小型 `speech.py`。
+- 四個已部署 Function 名稱、URL、HTTP contract 與資源設定維持不變。
+- 測試改為直接測試各模組的公開 helper 與 handler。
+
+## 26. Attention Agent 與學生頁面追蹤
+
+- 新增 `StudentAttentionTracker`，追蹤學生目前頁面、進入時間、停留秒數、最近 20 次頁面歷史與 App lifecycle。
+- SQLite schema 升級為 version 4，新增 `student_page_events` 保存頁面進出與停留時間。
+- Realtime Agent 判斷老師頁面時仍看不到學生頁面；老師頁面決定後才進入 Attention 第二階段。
+- Attention 至少間隔 30 秒，並要求頁面不同、停留過久、老師移動多頁或 App 背景其中一項訊號。
+- Attention 輸出 `following`、`confused`、`behind`、`distracted` 或 `unclear`。
+- 同時輸出 `missed_content` 與 `confused_summary`，即使 UI 現在不直接顯示也保留給 Memory。
+- 每次實際判斷寫入 `users/{uid}/attention_events`。
+- session 狀態寫入 `users/{uid}/lecture_sessions`，保存上次檢查、老師頁面與通知 cooldown。
+
+## 27. 分心通知
+
+- 移除「App 一進背景就通知」的舊 lifecycle notification。
+- 新增 Firebase Messaging 與 local notifications。
+- 只有 Attention status 為 `distracted`、App 在背景且有有效 FCM token 時才送出通知。
+- 同一 session 的通知至少間隔 120 秒。
+- FCM token 以 token hash 作為 Firestore device document ID。
+- Android 已加入通知權限。
+- iOS 已加入 `remote-notification` background mode；APNs key 與 Signing capability 仍需在 Apple/Firebase 設定。
+
+## 28. Firebase 身分驗證
+
+- 啟用 Firebase Anonymous Auth。
+- 新增 `UserIdentityService` 建立或重用匿名使用者。
+- `FirebaseFunctionClient` 自動附上 Firebase ID token。
+- `chat` 與 `generateNotesFromPdf` 無 token 時回傳 401。
+- Attention 的 Firestore、Memory 與通知資料使用驗證後 UID 隔離。
+- 匿名帳號之後可連結正式登入 provider，保留同一 UID 下的資料。
+
+## 29. Memory 系統
+
+- 新增 `MemoryService`，區分 `learning` 與 `preference` domain。
+- scope 支援 global、course、lecture。
+- canonical memory 保存 importance、explicit、evidenceCount、status、provenance 與 metadata。
+- 每次來源先寫入 `memory_evidence`，再合併到 `memories`。
+- 所有偏好收到第一份 evidence 後立即 active；Agent policy 仍限制只保存持久且可重用的偏好。
+- 偏好使用穩定 preference key 更新，不會每次建立重複文件。
+- 學習狀況先做正規化內容比對，再使用 Firestore vector search 合併語意重複項目。
+- embedding 使用 `text-embedding-3-small`，固定為 768 維。
+- 建立 collection group `memories` 的 cosine vector index。
+- status 支援 active、resolved、superseded、deleted；舊版 candidate preference 讀取時會自動升級。
+- 支援搜尋、解決與忘記 Memory，方便未來加入管理 UI 或正式帳號同步。
+
+## 30. Memory 整合點
+
+- Attention 的 `missed_content` 寫入 lecture-scoped `missed_content` learning memory。
+- Attention 的 `confused_summary` 寫入 lecture-scoped `confusion` learning memory。
+- Chatbot 改為 OpenAI Agents SDK Agent。
+- Chat Agent tools 包含搜尋、記住偏好、記住學習狀況、解決學習狀況與刪除 Memory。
+- Chat 只保存明確且可重用的偏好或重要學習狀態，不保存一般問候與一次性問題。
+- PDF Summary 生成前搜尋 active 的偏好與相關學習 Memory。
+- 使用者偏好的摘要格式可以覆蓋預設 Main Idea／Key Terms 版型，但不能改寫 PDF 事實或略過頁面。
+- Flutter 的 Chat 與 Summary request 現在都會傳送 courseId 與 lectureId。
+
+## 31. 驗證與部署
+
+- Python：19 tests passed。
+- Flutter：10 tests passed。
+- `dart analyze lib test` 沒有 error，保留 24 個既有 info lint。
+- `flutter build apk --debug` 成功。
+- 四個 Python 3.13 Functions 已完整部署到 `ai-notes-555a6`。
+- 正式環境 Realtime smoke test 成功判斷老師頁面並執行 Attention、寫入 learning Memory。
+- 正式環境 Chat smoke test 成功保存摘要格式偏好，下一次對話能取回。
+- 正式環境 PDF smoke test 以同一使用者 Memory 生成 38 頁 notes，回傳 `memoryCount: 1`，輸出採用偏好的編號清單格式。
+- 無驗證 token 的 Chat 與 PDF Summary request 均實測回傳 401。
+- 尚未以真實 Android/iOS FCM token 驗證推播到實機；後端只有在 `distracted` 狀態才會嘗試送信。
+
+## 32. Memory activation 與信心欄位簡化
+
+- 使用者偏好收到第一份 evidence 後立即成為 `active`，不再等待第二份 evidence。
+- `evidenceCount` 仍保留，用於追蹤來源次數與後續稽核，但不影響偏好是否生效。
+- 移除 Attention Agent output 的 `confidence`。
+- 移除 `MemoryWrite`、canonical memory、memory evidence 與 Chat Agent tool 的 `confidence`。
+- 讀取舊版 `candidate` preference 時會視為 `active` 並回寫狀態，同時移除 canonical memory 的舊 confidence 欄位。
+- 語音辨識服務本身的 confidence 屬於 Azure／speech recognition 結果，不是 Memory 信心程度，因此維持不變。
+
+## 33. Android 實機 PDFium 與錄音關閉修正
+
+- Android 實機啟動時，`pdfrx 2.3.x` 可能拋出 `Failed to load PDFium module: Native assets file not found`。
+- 此問題與 pdfrx 官方 issue #645 的 Android 錯誤相同，因此將 `pdfrx` 精確固定為已知可用的 `2.2.24`。
+- 執行 `flutter clean` 後重新取得 dependencies，避免 2.3.x Native Assets build cache 殘留。
+- 新 APK 已確認包含 arm64-v8a、armeabi-v7a 與 x86_64 的 `libpdfium.so`。
+- `AzureSpeechService.stopListening()` 改為可重入，同時間的 error、WebSocket close、按鈕停止與頁面 dispose 會共用同一個 stop future。
+- 只有錄音實際啟動後才呼叫 `AudioRecorder.stop()`，避免 recorder 尚未建立時產生 PlatformException。
+- `dispose()` 會等待 stop 完成後再關閉 streams 與 recorder，避免 stop/dispose race。
+- Flutter 10 tests passed，Android debug APK build passed。

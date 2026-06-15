@@ -1,4 +1,6 @@
 firebase-functions>=0.4.3,<1
 firebase-admin>=6.5.0,<8
 openai>=1.68.0,<3
+openai-agents>=0.7.0,<1
+pydantic>=2.10.0,<3
 requests>=2.32.0,<3
