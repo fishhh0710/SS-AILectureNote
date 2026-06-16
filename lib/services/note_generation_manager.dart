@@ -123,6 +123,8 @@ class NoteGenerationManager {
   static const _functionUrl = String.fromEnvironment(
     'FIREBASE_NOTES_FUNCTION_URL',
   );
+  static const _authTokenTimeout = Duration(seconds: 30);
+  static const _pdfUploadTimeout = Duration(minutes: 2);
 
   final FirebaseStorage? _storage;
   final FirebaseFirestore? _firestore;
@@ -616,7 +618,28 @@ class NoteGenerationManager {
     }
     final jobId = const Uuid().v4();
 
-    await _storage!
+    try {
+      final token = await user.getIdToken(true).timeout(_authTokenTimeout);
+      if (token == null || token.isEmpty) {
+        throw FirebaseAuthException(
+          code: 'missing-id-token',
+          message: 'Firebase did not return an ID token.',
+        );
+      }
+    } on TimeoutException {
+      throw TimeoutException(
+        'Firebase authentication timed out before uploading the PDF. '
+        'Check the network connection and try again.',
+        _authTokenTimeout,
+      );
+    } on FirebaseAuthException catch (error) {
+      throw Exception(
+        'Firebase authentication failed before uploading the PDF: '
+        '${error.message ?? error.code}',
+      );
+    }
+
+    final uploadTask = _storage!
         .ref()
         .child(pdfStoragePath)
         .putFile(
@@ -629,6 +652,16 @@ class NoteGenerationManager {
             },
           ),
         );
+    try {
+      await uploadTask.timeout(_pdfUploadTimeout);
+    } on TimeoutException {
+      await uploadTask.cancel();
+      throw TimeoutException(
+        'Uploading the PDF to Firebase Storage timed out. '
+        'Check the network connection and try again.',
+        _pdfUploadTimeout,
+      );
+    }
 
     await _startBatchListener(
       storageId: storageId,

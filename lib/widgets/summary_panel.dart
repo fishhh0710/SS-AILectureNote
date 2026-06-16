@@ -71,7 +71,7 @@ class SummaryPanel extends StatelessWidget {
   Widget _buildContent() {
     final progressText = totalPages > 0
         ? '已完成 $completedPages / $totalPages 頁'
-        : '每頁簡報會各自產生一份 Markdown note';
+        : '正在驗證登入並上傳 PDF，完成後會顯示逐頁進度';
     if (isGenerating && notes.isEmpty) {
       return _CenteredMessage(
         icon: Icons.auto_awesome,

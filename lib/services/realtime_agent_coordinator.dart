@@ -18,6 +18,16 @@ class _QueuedTranscriptChunk {
   final List<String> recentSegments;
 }
 
+class _QueuedRealtimeAction {
+  const _QueuedRealtimeAction({
+    required this.decoded,
+    required this.pageNumber,
+  });
+
+  final Map<String, dynamic> decoded;
+  final int pageNumber;
+}
+
 class RealtimeAgentCoordinator {
   RealtimeAgentCoordinator({
     required this.storageId,
@@ -49,9 +59,11 @@ class RealtimeAgentCoordinator {
 
   StreamSubscription<Map<String, dynamic>>? _subscription;
   final List<_QueuedTranscriptChunk> _pendingChunks = [];
+  final List<_QueuedRealtimeAction> _pendingActions = [];
   final List<String> _recentSegments = [];
   int? _lastTeacherPage;
   bool _isProcessing = false;
+  bool _isApplyingAction = false;
   bool _isDisposed = false;
 
   void _subscribe() {
@@ -122,6 +134,43 @@ class RealtimeAgentCoordinator {
       if (pageNumber == null || pageNumber > doc.pages.length) return;
       _lastTeacherPage = pageNumber;
       await _handleAttention(decoded['attention'], pageNumber);
+      _pendingActions.add(
+        _QueuedRealtimeAction(decoded: decoded, pageNumber: pageNumber),
+      );
+      unawaited(_drainActions());
+    } catch (error) {
+      // ignore: avoid_print
+      print('DEBUG [Agent]: Realtime processing failed: $error');
+    }
+  }
+
+  Future<void> _drainActions() async {
+    if (_isApplyingAction) return;
+    _isApplyingAction = true;
+
+    try {
+      while (!_isDisposed && _pendingActions.isNotEmpty) {
+        final action = _pendingActions.removeAt(0);
+        await _applyRealtimeAction(action.decoded, action.pageNumber);
+      }
+    } finally {
+      _isApplyingAction = false;
+    }
+  }
+
+  Future<void> _applyRealtimeAction(
+    Map<String, dynamic> decoded,
+    int pageNumber,
+  ) async {
+    try {
+      final doc = getPdfDocument();
+      final annotationManager = getAnnotationManager();
+      if (doc == null || annotationManager == null) {
+        // ignore: avoid_print
+        print('DEBUG [Agent]: PDF or annotation manager is not ready.');
+        return;
+      }
+      if (pageNumber > doc.pages.length) return;
 
       final action = decoded['update_note_at'] as String? ?? 'none';
       if (action == 'summary') {
@@ -152,7 +201,7 @@ class RealtimeAgentCoordinator {
       }
     } catch (error) {
       // ignore: avoid_print
-      print('DEBUG [Agent]: Realtime processing failed: $error');
+      print('DEBUG [Agent]: Realtime action failed: $error');
     }
   }
 
@@ -194,6 +243,7 @@ class RealtimeAgentCoordinator {
   void dispose() {
     _isDisposed = true;
     _pendingChunks.clear();
+    _pendingActions.clear();
     _recentSegments.clear();
     unawaited(_subscription?.cancel());
     _functionClient.dispose();

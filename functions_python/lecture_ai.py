@@ -71,7 +71,7 @@ def _pdf_notes_prompt(
     start_page: int | None = None,
     end_page: int | None = None,
 ) -> str:
-    memory_section = json.dumps(memory_context or [], ensure_ascii=False)
+    memory_section = _format_memory_context(memory_context or [])
     if start_page is not None and end_page is not None:
         page_range = f"""
 This PDF batch represents original pages {start_page} through {end_page}.
@@ -96,54 +96,105 @@ Read the entire PDF and generate concise Markdown notes for each page.
 {page_range}
 
 You must use:
-- The page text
-- Images, diagrams, charts, tables, formulas, arrows, and visual layout
-- The spatial structure of each page
+
+* The page text
+* Images, diagrams, charts, tables, formulas, arrows, and visual layout
+* The spatial structure of each page
 
 Output:
 Return a JSON object with a "pages" array.
 Each item must contain:
-- page_number: {page_number_description}
-- markdown: the Markdown note for that page
 
-Default Markdown format for each page, used only when memory does not request a different
-presentation structure:
+* page_number: {page_number_description}
+* markdown: the Markdown note for that page
+
+Default Markdown format for each page, used only when memory does not request a different presentation structure:
 
 # Page <the same original page_number as the JSON field>: <short inferred title>
 
 ## Main Idea
-<Explain the main idea of this page in 2-4 concise sentences.>
 
-## Key Terms
-- **<term>**: <brief explanation based on this page>
-- **<term>**: <brief explanation based on this page>
+<Explain the concrete main idea of this page in 2-4 concise sentences. Do not only say what topic the page introduces. Explain what the topic means, how it works, what components are involved, or what relationship the page is showing.>
+
+## Key Concepts
+
+* **<concept>**: <brief but concrete explanation based on this page>
+* **<concept>**: <brief but concrete explanation based on this page>
+
+Special title rules:
+
+* If the page is mainly a title page, section divider, agenda page, or topic list, the Markdown must be exactly:
+
+  # Page <the same original page_number as the JSON field>: Topics
+
+* If the page is mainly an outline, table of contents, roadmap, lecture structure, or list of upcoming sections, the Markdown H1 title must be exactly:
+
+  # Page <the same original page_number as the JSON field>: Outline
+
+**Do not write a Main Idea or Key Concepts for these pages**
+
+Concreteness rules:
+
+* Avoid vague summaries such as:
+  "This page introduces ALU and control signals."
+* Instead, write concrete explanations such as:
+  "The ALU is the processor component that performs operations such as AND, OR, addition, and subtraction. Control signals specify which operation the ALU should execute for a given instruction."
+* For formulas, explain what each important variable represents and what the formula is used for.
+* For diagrams, explain the roles of the main blocks and arrows, including what information or control flows between them.
+* For tables, summarize the important mapping, comparison, or relationship shown by the table.
+* For charts, explain the axes, trend, and main conclusion if they are visible.
+* For algorithms or procedures, explain the input, output, and main steps.
+* Do not invent details that are not supported by the PDF.
 
 Rules:
-- Generate one item for every page in the PDF.
-- Do not skip pages.
-- The page number in the Markdown H1 must exactly match that item's JSON page_number.
-- Focus on each page individually.
-- Keep each page note concise.
-- Explain only important technical terms, academic terms, formulas, methods, concepts, or abbreviations.
-- Do not include obvious everyday words as key terms.
-- If a page has no important technical terms, omit the "## Key Terms" section for that page.
-- If a page is blank or contains almost no useful content, still create a short note saying that the page has limited content.
-- Do not invent information that is not supported by the PDF.
-- The markdown field should contain Markdown only.
-- Do not wrap Markdown in markdown fences.
+
+* Generate one item for every page in the PDF.
+* Do not skip pages.
+* The page number in the Markdown H1 must exactly match that item's JSON page_number.
+* Focus on each page individually.
+* Keep each page note concise.
+* Explain only important technical terms, academic terms, formulas, methods, concepts, or abbreviations.
+* Do not include obvious everyday words as key concepts.
+* If a page has no important technical concepts, omit the "## Key Concepts" section for that page.
+* If a page is blank or contains almost no useful content, still create a short note saying that the page has limited content.
+* The markdown field should contain Markdown only.
+* Do not wrap Markdown in markdown fences.
+* Return only the JSON object. Do not add any explanation outside the JSON.
 
 User memory context:
 {memory_section}
 
 Memory rules:
-- Active preference memories must change language, formatting, detail level, examples, and
-  explanation style when requested. They may override the default Main Idea / Key Terms layout.
-- Preferences never override the requirement to return one accurate Markdown note per PDF page.
-- Learning memories may suggest concepts that deserve clearer explanation when those concepts are
-  actually present on a PDF page.
-- Memory never overrides the PDF and must never introduce unsupported facts.
-- Ignore memories unrelated to the PDF page being summarized.
+
+* Active preference memories must change language, formatting, detail level, examples, and explanation style when requested. They may override the default Main Idea / Key Concepts layout.
+* Preferences never override the requirement to return one accurate Markdown note per PDF page.
+* Learning memories may suggest concepts that deserve clearer explanation when those concepts are actually present on a PDF page.
+* Memory never overrides the PDF and must never introduce unsupported facts.
+* Ignore memories unrelated to the PDF page being summarized.
 """.strip()
+
+
+def _format_memory_context(memory_context: list[dict[str, Any]]) -> str:
+    if not memory_context:
+        return "(none)"
+
+    preferences: list[str] = []
+    learning: list[str] = []
+    for memory in memory_context:
+        content = str(memory.get("content") or "").strip()
+        if not content:
+            continue
+        if memory.get("preferenceKey"):
+            preferences.append(f"- {content}")
+        else:
+            learning.append(f"- {content}")
+
+    sections: list[str] = []
+    if preferences:
+        sections.append("Preferences:\n" + "\n".join(preferences))
+    if learning:
+        sections.append("Learning context:\n" + "\n".join(learning))
+    return "\n\n".join(sections) if sections else "(none)"
 
 
 def _extract_output_text(response: Any) -> str:
@@ -298,21 +349,15 @@ def _summary_memories(
     *, uid: str, course_id: str, lecture_id: str
 ) -> list[dict[str, Any]]:
     service = MemoryService()
-    preferences = service.list_active(
+    memories = service.list_active(
         uid=uid,
-        domains={"preference"},
         course_id=course_id,
         lecture_id=lecture_id,
-        limit=12,
+        limit=24,
     )
-    learning = service.list_active(
-        uid=uid,
-        domains={"learning"},
-        course_id=course_id,
-        lecture_id=lecture_id,
-        limit=12,
-    )
-    return [item.to_dict() for item in [*preferences, *learning]]
+    results = [item.to_dict() for item in memories]
+    results.sort(key=lambda item: 0 if item.get("preferenceKey") else 1)
+    return results
 
 
 def _batch_document(job_ref: Any, batch: PdfBatch):

@@ -5,7 +5,6 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Literal
 
 from firebase_admin import firestore
@@ -16,31 +15,23 @@ from pydantic import BaseModel, Field, model_validator
 from function_common import openai_client
 
 
-MemoryDomain = Literal["learning", "preference"]
 MemoryScope = Literal["global", "course", "lecture"]
 MemoryStatus = Literal["active", "resolved", "superseded", "deleted"]
 
 
 class MemoryWrite(BaseModel):
-    domain: MemoryDomain
-    kind: str = Field(min_length=1, max_length=80)
     content: str = Field(min_length=1, max_length=4000)
     scope: MemoryScope = "global"
     course_id: str | None = None
     lecture_id: str | None = None
     preference_key: str | None = None
-    importance: float = Field(default=0.5, ge=0, le=1)
-    explicit: bool = False
-    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def validate_scope_and_preference(self) -> "MemoryWrite":
+    def validate_scope(self) -> "MemoryWrite":
         if self.scope in {"course", "lecture"} and not self.course_id:
             raise ValueError("course_id is required for course or lecture memory")
         if self.scope == "lecture" and not self.lecture_id:
             raise ValueError("lecture_id is required for lecture memory")
-        if self.domain == "preference" and not self.preference_key:
-            raise ValueError("preference_key is required for preference memory")
         return self
 
 
@@ -53,8 +44,7 @@ class MemorySearchResult:
     def to_dict(self) -> dict[str, Any]:
         return {
             "memory_id": self.memory_id,
-            **_without_embedding(self.data),
-            "distance": self.distance,
+            **_public_memory_fields(self.data),
         }
 
 
@@ -63,15 +53,12 @@ def normalize_memory_text(value: str) -> str:
 
 
 def memory_document_id(uid: str, memory: MemoryWrite) -> str:
-    if memory.domain == "preference" and memory.preference_key:
-        identity = memory.preference_key
-    else:
-        identity = normalize_memory_text(memory.content)
+    identity_type = "preference" if memory.preference_key else "memory"
+    identity = memory.preference_key or normalize_memory_text(memory.content)
     raw = "|".join(
         [
             uid,
-            memory.domain,
-            memory.kind,
+            identity_type,
             memory.scope,
             memory.course_id or "",
             memory.lecture_id or "",
@@ -81,22 +68,33 @@ def memory_document_id(uid: str, memory: MemoryWrite) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
-def _without_embedding(data: dict[str, Any]) -> dict[str, Any]:
+def _public_memory_fields(data: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {"content": str(data.get("content") or "").strip()}
+    if data.get("preferenceKey"):
+        result["preferenceKey"] = data["preferenceKey"]
+    if data.get("scope"):
+        result["scope"] = data["scope"]
+    if data.get("courseId"):
+        result["courseId"] = data["courseId"]
+    if data.get("lectureId"):
+        result["lectureId"] = data["lectureId"]
+    return result
+
+
+def _legacy_field_deletes() -> dict[str, Any]:
     return {
-        key: _json_safe(value)
-        for key, value in data.items()
-        if key not in {"embedding", "confidence"}
+        "confidence": firestore.DELETE_FIELD,
+        "domain": firestore.DELETE_FIELD,
+        "kind": firestore.DELETE_FIELD,
+        "importance": firestore.DELETE_FIELD,
+        "explicit": firestore.DELETE_FIELD,
+        "lastSource": firestore.DELETE_FIELD,
+        "normalizedContent": firestore.DELETE_FIELD,
+        "evidenceCount": firestore.DELETE_FIELD,
+        "metadata": firestore.DELETE_FIELD,
+        "embeddingModel": firestore.DELETE_FIELD,
+        "embeddingDimensions": firestore.DELETE_FIELD,
     }
-
-
-def _json_safe(value: Any) -> Any:
-    if isinstance(value, datetime):
-        return value.isoformat()
-    if isinstance(value, dict):
-        return {key: _json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_safe(item) for item in value]
-    return value
 
 
 class MemoryService:
@@ -110,13 +108,21 @@ class MemoryService:
         )
 
     def _collection(self, uid: str):
-        return self._database.collection("users").document(uid).collection("memories")
+        return self._user_document(uid).collection("memories")
 
     def _evidence_collection(self, uid: str):
-        return (
-            self._database.collection("users")
-            .document(uid)
-            .collection("memory_evidence")
+        return self._user_document(uid).collection("memory_evidence")
+
+    def _user_document(self, uid: str):
+        return self._database.collection("users").document(uid)
+
+    def _ensure_user_document(self, uid: str) -> None:
+        self._user_document(uid).set(
+            {
+                "hasMemory": True,
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
         )
 
     def _embed(self, text: str) -> list[float]:
@@ -132,21 +138,21 @@ class MemoryService:
         *,
         uid: str,
         memory: MemoryWrite,
-        source: str,
         source_ref: str | None = None,
     ) -> dict[str, Any]:
-        embedding = self._embed(memory.content)
+        content = memory.content.strip()
+        embedding = self._embed(content)
         target_id = memory_document_id(uid, memory)
+        self._ensure_user_document(uid)
 
-        if memory.domain == "learning":
+        if not memory.preference_key:
             duplicates = self.search(
                 uid=uid,
-                query=memory.content,
-                domains={"learning"},
+                query=content,
                 statuses={"active"},
                 course_id=memory.course_id,
                 lecture_id=memory.lecture_id,
-                limit=3,
+                limit=6,
                 query_embedding=embedding,
             )
             semantic_match = next(
@@ -155,8 +161,8 @@ class MemoryService:
                     for item in duplicates
                     if item.distance is not None
                     and item.distance <= 0.15
-                    and item.data.get("kind") == memory.kind
                     and item.data.get("scope") == memory.scope
+                    and not item.data.get("preferenceKey")
                 ),
                 None,
             )
@@ -165,59 +171,47 @@ class MemoryService:
 
         memory_ref = self._collection(uid).document(target_id)
         snapshot = memory_ref.get()
-        existing = snapshot.to_dict() if snapshot.exists else {}
-        evidence_count = int(existing.get("evidenceCount", 0)) + 1
         status: MemoryStatus = "active"
 
         data = {
-            "domain": memory.domain,
-            "kind": memory.kind,
-            "content": memory.content.strip(),
-            "normalizedContent": normalize_memory_text(memory.content),
+            "content": content,
             "scope": memory.scope,
             "courseId": memory.course_id,
             "lectureId": memory.lecture_id,
             "preferenceKey": memory.preference_key,
-            "confidence": firestore.DELETE_FIELD,
-            "importance": max(float(existing.get("importance", 0)), memory.importance),
-            "explicit": bool(existing.get("explicit", False)) or memory.explicit,
-            "evidenceCount": evidence_count,
             "status": status,
             "embedding": Vector(embedding),
-            "embeddingModel": self._embedding_model,
-            "embeddingDimensions": self._embedding_dimensions,
-            "lastSource": source,
-            "metadata": {**existing.get("metadata", {}), **memory.metadata},
             "updatedAt": firestore.SERVER_TIMESTAMP,
-            "lastUsedAt": existing.get("lastUsedAt"),
+            "lastUsedAt": firestore.SERVER_TIMESTAMP,
+            **_legacy_field_deletes(),
         }
         if not snapshot.exists:
             data["createdAt"] = firestore.SERVER_TIMESTAMP
         memory_ref.set(data, merge=True)
 
-        evidence_ref = self._evidence_collection(uid).document()
-        evidence_ref.set(
+        self._evidence_collection(uid).document().set(
             {
                 "memoryId": target_id,
-                "domain": memory.domain,
-                "kind": memory.kind,
-                "content": memory.content.strip(),
-                "source": source,
+                "content": content,
+                "scope": memory.scope,
+                "courseId": memory.course_id,
+                "lectureId": memory.lecture_id,
+                "preferenceKey": memory.preference_key,
                 "sourceRef": source_ref,
-                "importance": memory.importance,
-                "explicit": memory.explicit,
-                "metadata": memory.metadata,
                 "createdAt": firestore.SERVER_TIMESTAMP,
             }
         )
-        return {"memory_id": target_id, **_without_embedding(data)}
+        return {
+            "memory_id": target_id,
+            **_public_memory_fields(data),
+            "status": status,
+        }
 
     def search(
         self,
         *,
         uid: str,
         query: str,
-        domains: set[str] | None = None,
         statuses: set[str] | None = None,
         course_id: str | None = None,
         lecture_id: str | None = None,
@@ -227,7 +221,6 @@ class MemoryService:
         if not query.strip():
             return self.list_active(
                 uid=uid,
-                domains=domains,
                 course_id=course_id,
                 lecture_id=lecture_id,
                 limit=limit,
@@ -262,7 +255,6 @@ class MemoryService:
             for item in candidates
             if self._matches(
                 item.data,
-                domains=domains,
                 statuses=statuses or {"active"},
                 course_id=course_id,
                 lecture_id=lecture_id,
@@ -275,7 +267,6 @@ class MemoryService:
         self,
         *,
         uid: str,
-        domains: set[str] | None = None,
         course_id: str | None = None,
         lecture_id: str | None = None,
         limit: int = 20,
@@ -285,7 +276,6 @@ class MemoryService:
             for document in self._collection(uid).limit(100).stream()
             if self._matches(
                 document.to_dict(),
-                domains=domains,
                 statuses={"active"},
                 course_id=course_id,
                 lecture_id=lecture_id,
@@ -318,17 +308,16 @@ class MemoryService:
         self,
         data: dict[str, Any],
         *,
-        domains: set[str] | None,
         statuses: set[str],
         course_id: str | None,
         lecture_id: str | None,
     ) -> bool:
         status = data.get("status")
-        if status == "candidate" and data.get("domain") == "preference":
+        if status == "candidate" and (
+            data.get("preferenceKey") or data.get("domain") == "preference"
+        ):
             status = "active"
         if status not in statuses:
-            return False
-        if domains and data.get("domain") not in domains:
             return False
         scope = data.get("scope")
         if scope == "course" and data.get("courseId") != course_id:
@@ -341,13 +330,11 @@ class MemoryService:
         for memory in memories:
             update: dict[str, Any] = {
                 "lastUsedAt": firestore.SERVER_TIMESTAMP,
-                "confidence": firestore.DELETE_FIELD,
+                **_legacy_field_deletes(),
             }
-            if (
-                memory.data.get("status") == "candidate"
-                and memory.data.get("domain") == "preference"
+            if memory.data.get("status") == "candidate" and (
+                memory.data.get("preferenceKey")
+                or memory.data.get("domain") == "preference"
             ):
                 update["status"] = "active"
-            self._collection(uid).document(memory.memory_id).set(
-                update, merge=True
-            )
+            self._collection(uid).document(memory.memory_id).set(update, merge=True)

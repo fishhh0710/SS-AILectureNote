@@ -36,6 +36,49 @@ class FunctionContractTests(unittest.TestCase):
             segments[-9:],
         )
 
+    def test_realtime_agent_has_no_tools(self):
+        self.assertEqual(realtime_agent.realtime_agent.tools, [])
+
+    def test_realtime_prompt_includes_all_page_summaries(self):
+        prompt = realtime_agent.build_realtime_prompt(
+            page_summaries={2: "Second page", 1: "First page"},
+            recent_segments=["older"],
+            latest_segment="latest",
+            last_teacher_page=2,
+        )
+        self.assertIn('"page_number": 1', prompt)
+        self.assertIn('"canonical_slide_summary": "First page"', prompt)
+        self.assertIn('"page_number": 2', prompt)
+        self.assertIn('"canonical_slide_summary": "Second page"', prompt)
+        self.assertIn('"last_teacher_page": 2', prompt)
+
+    def test_realtime_prompt_uses_only_canonical_slide_summary(self):
+        prompt = realtime_agent.build_realtime_prompt(
+            page_summaries={
+                36: (
+                    "# Page 36: Execution for Branch Instruction\n\n"
+                    "## Main Idea\nBranch instruction content.\n\n"
+                    "### Professor Additions\n"
+                    "- Cache and Multiplexer content from page 19.\n\n"
+                    "### Professor Questions\n"
+                    "- What differs between page 21 and 24?"
+                )
+            },
+            recent_segments=[],
+            latest_segment="latest",
+            last_teacher_page=36,
+        )
+        self.assertIn("Branch instruction content", prompt)
+        self.assertNotIn("Professor Additions", prompt)
+        self.assertNotIn("Cache and Multiplexer", prompt)
+        self.assertNotIn("Professor Questions", prompt)
+
+    def test_realtime_instructions_prioritize_recent_transcript_and_page_mentions(self):
+        instructions = realtime_agent.REALTIME_AGENT_INSTRUCTIONS
+        self.assertIn("latest_segment is the newest", instructions)
+        self.assertIn("refer back to a page", instructions)
+        self.assertIn("canonical slide content", instructions)
+
     def test_normalize_realtime_output_enforces_summary_exclusivity(self):
         output = realtime_agent.RealtimeAgentOutput(
             page_number=3,
@@ -81,7 +124,7 @@ class FunctionContractTests(unittest.TestCase):
         self.assertFalse(gate["interval_ready"])
         self.assertEqual(gate["check_interval_seconds"], 25)
 
-    def test_attention_gate_runs_after_ten_seconds_in_background(self):
+    def test_attention_gate_uses_twenty_five_seconds_in_background(self):
         now = datetime(2026, 6, 15, tzinfo=timezone.utc)
         gate = attention_agent.attention_gate(
             student_state={
@@ -95,10 +138,8 @@ class FunctionContractTests(unittest.TestCase):
             session_state={},
             now=now,
         )
-        self.assertTrue(gate["should_run"])
-        self.assertEqual(gate["check_interval_seconds"], 10)
-        self.assertEqual(gate["background_duration_seconds"], 16)
-        self.assertTrue(gate["signals"]["strong_background_signal"])
+        self.assertFalse(gate["should_run"])
+        self.assertEqual(gate["check_interval_seconds"], 25)
         self.assertTrue(gate["signals"]["behind_signal"])
 
     def test_attention_gate_runs_for_mismatch_after_interval(self):
@@ -150,20 +191,20 @@ class FunctionContractTests(unittest.TestCase):
             ],
         )
 
-    def test_notification_cooldown_is_sixty_seconds(self):
+    def test_notification_cooldown_is_one_hundred_eighty_seconds(self):
         now = datetime(2026, 6, 15, tzinfo=timezone.utc)
         self.assertFalse(
             attention_agent._notification_ready(
-                {"lastNotificationAt": now - timedelta(seconds=59)}, now
+                {"lastNotificationAt": now - timedelta(seconds=179)}, now
             )
         )
         self.assertTrue(
             attention_agent._notification_ready(
-                {"lastNotificationAt": now - timedelta(seconds=60)}, now
+                {"lastNotificationAt": now - timedelta(seconds=180)}, now
             )
         )
 
-    def test_notification_requires_background_and_combined_evidence(self):
+    def test_notification_requires_evidence_token_and_completed_cooldown(self):
         now = datetime(2026, 6, 15, tzinfo=timezone.utc)
         student_state = {
             "currentPage": 1,
@@ -204,26 +245,20 @@ class FunctionContractTests(unittest.TestCase):
             (True, "ready"),
         )
 
-        context.gate["signals"]["strong_background_signal"] = False
+        context.notification_token = ""
         self.assertEqual(
             attention_agent._notification_decision(context, "distracted"),
-            (False, "insufficient_combined_evidence"),
+            (False, "missing_notification_token"),
         )
 
     def test_memory_preference_id_is_stable_across_content_changes(self):
         first = memory_service.MemoryWrite(
-            domain="preference",
-            kind="summary_format",
-            content="Use bullet points",
+            content="The user wants summaries written as bullet points.",
             preference_key="summary.format",
-            explicit=True,
         )
         second = memory_service.MemoryWrite(
-            domain="preference",
-            kind="summary_format",
-            content="Use concise numbered points",
+            content="The user wants summaries written as concise numbered points.",
             preference_key="summary.format",
-            explicit=True,
         )
         self.assertEqual(
             memory_service.memory_document_id("user-1", first),
@@ -232,13 +267,9 @@ class FunctionContractTests(unittest.TestCase):
 
     def test_memory_learning_id_normalizes_text(self):
         first = memory_service.MemoryWrite(
-            domain="learning",
-            kind="confusion",
             content="  Binary   Search ",
         )
         second = memory_service.MemoryWrite(
-            domain="learning",
-            kind="confusion",
             content="binary search",
         )
         self.assertEqual(
@@ -249,15 +280,67 @@ class FunctionContractTests(unittest.TestCase):
     def test_memory_scope_requires_identifiers(self):
         with self.assertRaisesRegex(ValueError, "course_id"):
             memory_service.MemoryWrite(
-                domain="learning",
-                kind="confusion",
                 content="Recursion",
                 scope="course",
             )
 
-    def test_memory_schema_has_no_confidence_field(self):
+    def test_memory_schema_has_no_removed_fields(self):
+        self.assertNotIn("domain", memory_service.MemoryWrite.model_fields)
         self.assertNotIn("confidence", memory_service.MemoryWrite.model_fields)
+        self.assertNotIn("kind", memory_service.MemoryWrite.model_fields)
+        self.assertNotIn("importance", memory_service.MemoryWrite.model_fields)
+        self.assertNotIn("explicit", memory_service.MemoryWrite.model_fields)
+        self.assertNotIn("metadata", memory_service.MemoryWrite.model_fields)
         self.assertNotIn("confidence", attention_agent.AttentionAgentOutput.model_fields)
+
+    def test_memory_service_ensures_parent_user_document(self):
+        database = Mock()
+        service = memory_service.MemoryService(database=database)
+
+        service._ensure_user_document("user-1")
+
+        user_document = database.collection.return_value.document.return_value
+        database.collection.assert_called_once_with("users")
+        database.collection.return_value.document.assert_called_once_with("user-1")
+        user_document.set.assert_called_once()
+        data, = user_document.set.call_args.args
+        self.assertTrue(data["hasMemory"])
+        self.assertIn("updatedAt", data)
+        self.assertTrue(user_document.set.call_args.kwargs["merge"])
+
+    def test_memory_serialization_hides_removed_canonical_fields(self):
+        result = memory_service.MemorySearchResult(
+            memory_id="memory-1",
+            data={
+                "content": "The user wants explanations with concrete examples.",
+                "preferenceKey": "explanation.examples",
+                "scope": "global",
+                "kind": "legacy_kind",
+                "importance": 0.8,
+                "explicit": True,
+                "lastSource": "chat_agent",
+                "updatedAt": datetime(2026, 6, 15, tzinfo=timezone.utc),
+            },
+        ).to_dict()
+        self.assertEqual(
+            result,
+            {
+                "memory_id": "memory-1",
+                "content": "The user wants explanations with concrete examples.",
+                "preferenceKey": "explanation.examples",
+                "scope": "global",
+            },
+        )
+        self.assertNotIn("kind", result)
+        self.assertNotIn("importance", result)
+        self.assertNotIn("explicit", result)
+        self.assertNotIn("lastSource", result)
+        self.assertNotIn("updatedAt", result)
+
+    def test_attention_output_has_no_confused_summary_field(self):
+        self.assertNotIn(
+            "confused_summary", attention_agent.AttentionAgentOutput.model_fields
+        )
 
     def test_legacy_candidate_preference_is_effectively_active(self):
         service = memory_service.MemoryService.__new__(memory_service.MemoryService)
@@ -265,30 +348,31 @@ class FunctionContractTests(unittest.TestCase):
             service._matches(
                 {
                     "status": "candidate",
-                    "domain": "preference",
+                    "preferenceKey": "summary.language",
                     "scope": "global",
                 },
-                domains={"preference"},
                 statuses={"active"},
                 course_id="course-1",
                 lecture_id="lecture-1",
             )
         )
 
-    def test_attention_output_creates_learning_memory_evidence(self):
+    def test_attention_output_only_creates_missed_content_memory(self):
         output = attention_agent.AttentionAgentOutput(
-            status="confused",
+            status="behind",
             page_relevance="same_topic",
             reasoning_summary="Student stayed on a relevant concept.",
             missed_content=["The base case stops recursion."],
-            confused_summary="The student may not understand the recursion base case.",
         )
         writes = attention_agent.attention_memory_writes(
             output,
             course_id="course-1",
             lecture_id="lecture-1",
         )
-        self.assertEqual([item.kind for item in writes], ["missed_content", "confusion"])
+        self.assertEqual(
+            [item.content for item in writes],
+            ["The student likely missed: The base case stops recursion."],
+        )
         self.assertTrue(all(item.scope == "lecture" for item in writes))
 
     def test_chat_prompt_includes_memory_and_course_context(self):
@@ -299,42 +383,52 @@ class FunctionContractTests(unittest.TestCase):
             question="Use examples when explaining",
             memories=[
                 {
-                    "domain": "preference",
                     "preferenceKey": "explanation.examples",
-                    "content": "Use concrete examples",
+                    "content": "The user wants explanations with concrete examples.",
+                    "scope": "global",
                 }
             ],
         )
-        self.assertIn("Use concrete examples", prompt)
+        self.assertIn("The user wants explanations with concrete examples.", prompt)
+        self.assertIn("preference: explanation.examples", prompt)
         self.assertIn("Recursion notes", prompt)
         self.assertIn("Use examples when explaining", prompt)
+        self.assertNotIn('"preferenceKey"', prompt)
 
-    def test_memory_serialization_converts_firestore_timestamps(self):
+    def test_memory_serialization_keeps_only_public_fields(self):
         result = memory_service.MemorySearchResult(
             memory_id="memory-1",
             data={
-                "content": "Use examples",
+                "content": "The user wants explanations with concrete examples.",
                 "updatedAt": datetime(2026, 6, 15, tzinfo=timezone.utc),
             },
         ).to_dict()
-        self.assertEqual(result["updatedAt"], "2026-06-15T00:00:00+00:00")
+        self.assertEqual(
+            result,
+            {
+                "memory_id": "memory-1",
+                "content": "The user wants explanations with concrete examples.",
+            },
+        )
 
     def test_pdf_prompt_applies_memory_without_overriding_source(self):
         prompt = lecture_ai._pdf_notes_prompt(
             [
                 {
-                    "domain": "preference",
-                    "content": "Use concise numbered points",
+                    "preferenceKey": "summary.format",
+                    "content": "The user wants summaries written as concise numbered points.",
                 },
                 {
-                    "domain": "learning",
-                    "content": "The student struggles with recursion base cases",
+                    "content": "The student struggles with recursion base cases.",
                 },
             ]
         )
-        self.assertIn("Use concise numbered points", prompt)
+        self.assertIn("Preferences:", prompt)
+        self.assertIn("The user wants summaries written as concise numbered points.", prompt)
+        self.assertIn("Learning context:", prompt)
         self.assertIn("recursion base cases", prompt)
         self.assertIn("Memory never overrides the PDF", prompt)
+        self.assertNotIn('"preferenceKey"', prompt)
 
     def test_pdf_batch_prompt_preserves_original_page_numbers_in_heading(self):
         prompt = lecture_ai._pdf_notes_prompt(start_page=6, end_page=10)

@@ -3,10 +3,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 from typing import Any, Literal
 
-from agents import Agent, RunContextWrapper, Runner, function_tool
+from agents import Agent, Runner
 from firebase_functions import https_fn
 from pydantic import BaseModel, Field
 
@@ -36,77 +35,36 @@ class RealtimeAgentOutput(BaseModel):
     update_note_at: Literal["summary", "slides", "none"] = "none"
 
 
-class RealtimeAgentContext:
-    def __init__(
-        self,
-        *,
-        page_summaries: dict[int, str],
-        recent_segments: list[str],
-        latest_segment: str,
-        last_teacher_page: int | None,
-    ) -> None:
-        self.page_summaries = page_summaries
-        self.recent_segments = recent_segments
-        self.latest_segment = latest_segment
-        self.last_teacher_page = last_teacher_page
-        self.inspection_complete = False
-
-
-def _search_terms(query: str) -> set[str]:
-    normalized = query.lower()
-    latin_terms = re.findall(r"[a-z0-9][a-z0-9_-]+", normalized)
-    cjk = "".join(re.findall(r"[\u4e00-\u9fff]", normalized))
-    cjk_terms = [cjk[index : index + 2] for index in range(max(0, len(cjk) - 1))]
-    return {term for term in [*latin_terms, *cjk_terms] if len(term) >= 2}
-
-
-def _context_tool_enabled(
-    ctx: RunContextWrapper[RealtimeAgentContext], agent: Any
-) -> bool:
-    return not ctx.context.inspection_complete
-
-
-@function_tool(is_enabled=_context_tool_enabled)
-def inspect_lecture_context(
-    ctx: RunContextWrapper[RealtimeAgentContext], query: str
-) -> str:
-    """Search slide summaries and return candidate pages plus ten transcript segments."""
-    ctx.context.inspection_complete = True
-    terms = _search_terms(query)
-    ranked: list[tuple[int, int, str]] = []
-    for page_number, markdown in ctx.context.page_summaries.items():
-        lowered = markdown.lower()
-        score = sum(lowered.count(term) for term in terms)
-        if ctx.context.last_teacher_page == page_number:
-            score += 1
-        if score > 0:
-            ranked.append((score, page_number, markdown))
-    ranked.sort(key=lambda item: (-item[0], item[1]))
-    segments = [*ctx.context.recent_segments, ctx.context.latest_segment]
-    return json.dumps(
-        {
-            "last_teacher_page": ctx.context.last_teacher_page,
-            "candidate_pages": [
-                {"page_number": page, "summary": markdown[:5000]}
-                for _, page, markdown in ranked[:5]
-            ],
-            "transcript_segments": segments[-10:],
-        },
-        ensure_ascii=False,
-    )
-
-
 REALTIME_AGENT_INSTRUCTIONS = """
 You are the teacher-progress agent for a live lecture-note application.
 
-You receive only the latest transcript segment and the teacher page you inferred last time.
-You never receive the page currently viewed by the student. Infer the teacher's page yourself.
+You receive all available page summaries, up to ten recent transcript segments, and the teacher
+page you inferred last time. You never receive the page currently viewed by the student. Infer the
+teacher's page from the transcript and summaries yourself.
 
-Call inspect_lecture_context exactly once. It returns relevant slide summaries and up to ten
-recent transcript segments. After it returns, make the final structured decision without calling
-another tool. The last teacher page is only a weak continuity hint. Do not copy it when the
-transcript points elsewhere. If the page cannot be identified reliably, return page_number null
-and update_note_at "none".
+For page inference, use only canonical slide content:
+- slide title;
+- original slide text;
+- visual/layout summary;
+- formulas, diagrams, tables, labels.
+
+Do not use previously generated lecture notes, Professor Additions, Professor Questions,
+new_points, questions, or other lecture-derived annotations as evidence for page inference. Those
+annotations may be useful only for avoiding duplicate note-taking, not for identifying the current
+page.
+
+The last teacher page is only a weak continuity hint. Do not copy it when the transcript points
+elsewhere. If the page cannot be identified reliably, return page_number null and update_note_at
+"none".
+
+Transcript order matters. transcript_segments is chronological, and later items are more recent and
+more important. latest_segment is the newest and should carry the most weight.
+
+Page-number mentions are strong evidence only when the teacher is moving to, looking at, or
+discussing that page now, such as "let's look at page 23." They are weak or negative evidence when
+the teacher says to refer back to a page, compare with another page, remember a previous page, or
+asks how this page differs from another page. In those cases, infer the current page from the
+current explanation and slide content instead of jumping to the referenced page number.
 
 Evaluate only genuinely new information from the latest segment. Older segments are context and
 must not be written again. Ignore filler, transitions, repeated explanations, and uncertain text.
@@ -124,13 +82,12 @@ specific visible slide element. Never request both summary and slides for the sa
 """.strip()
 
 
-realtime_agent = Agent[RealtimeAgentContext](
+realtime_agent = Agent(
     name="Realtime Lecture Agent",
     model=os.getenv("OPENAI_REALTIME_AGENT_MODEL")
     or os.getenv("OPENAI_MODEL")
     or "gpt-4o-mini",
     instructions=REALTIME_AGENT_INSTRUCTIONS,
-    tools=[inspect_lecture_context],
     output_type=RealtimeAgentOutput,
 )
 
@@ -159,6 +116,77 @@ def parse_recent_segments(value: Any) -> list[str]:
 
 def _parse_optional_page(value: Any) -> int | None:
     return value if isinstance(value, int) and value > 0 else None
+
+
+def _canonical_slide_summary(markdown: str) -> str:
+    removed_headings = {
+        "professor additions",
+        "professor questions",
+        "new context",
+        "new points",
+        "new_points",
+    }
+    lines = markdown.splitlines()
+    kept: list[str] = []
+    skip_until_level: int | None = None
+
+    for line in lines:
+        stripped = line.strip()
+        heading_level = len(stripped) - len(stripped.lstrip("#"))
+        is_heading = (
+            heading_level > 0
+            and heading_level <= 6
+            and len(stripped) > heading_level
+            and stripped[heading_level] == " "
+        )
+
+        if is_heading:
+            heading_text = stripped[heading_level:].strip().casefold()
+            if any(label in heading_text for label in removed_headings):
+                skip_until_level = heading_level
+                continue
+            if skip_until_level is not None and heading_level <= skip_until_level:
+                skip_until_level = None
+
+        if skip_until_level is None:
+            kept.append(line)
+
+    return "\n".join(kept).strip()
+
+
+def _page_summaries_for_prompt(page_summaries: dict[int, str]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for page_number, markdown in sorted(page_summaries.items()):
+        canonical = _canonical_slide_summary(markdown)
+        if canonical:
+            items.append(
+                {
+                    "page_number": page_number,
+                    "canonical_slide_summary": canonical,
+                }
+            )
+    return items
+
+
+def build_realtime_prompt(
+    *,
+    page_summaries: dict[int, str],
+    recent_segments: list[str],
+    latest_segment: str,
+    last_teacher_page: int | None,
+) -> str:
+    payload = {
+        "last_teacher_page": last_teacher_page,
+        "page_summaries": _page_summaries_for_prompt(page_summaries),
+        "transcript_segments": [*recent_segments, latest_segment][-10:],
+        "latest_segment": latest_segment,
+    }
+    return (
+        "Analyze the latest transcript segment and infer the teacher's current page. "
+        "All canonical slide summaries are provided directly; do not ask for tools. "
+        "Remember that transcript_segments is chronological and latest_segment is newest.\n\n"
+        f"{json.dumps(payload, ensure_ascii=False)}"
+    )
 
 
 def _clean_text_items(items: list[str]) -> list[str]:
@@ -226,22 +254,17 @@ def realtime_agent_handler(req: https_fn.Request) -> https_fn.Response:
         latest_segment = required_string(payload, "latestSegment")
         page_summaries = _parse_page_summaries(payload.get("pageSummaries"))
         recent_segments = parse_recent_segments(payload.get("recentSegments"))
-        context = RealtimeAgentContext(
+        last_teacher_page = _parse_optional_page(payload.get("lastTeacherPage"))
+        prompt = build_realtime_prompt(
             page_summaries=page_summaries,
             recent_segments=recent_segments,
             latest_segment=latest_segment,
-            last_teacher_page=_parse_optional_page(payload.get("lastTeacherPage")),
-        )
-        prompt = (
-            "Analyze the latest transcript segment. Use tools before choosing a page.\n\n"
-            f"Last inferred teacher page: {context.last_teacher_page or 'unknown'}\n"
-            f"Latest transcript segment:\n---\n{latest_segment}\n---"
+            last_teacher_page=last_teacher_page,
         )
         run_result = Runner.run_sync(
             realtime_agent,
             prompt,
-            context=context,
-            max_turns=5,
+            max_turns=3,
         )
         output = run_result.final_output
         if not isinstance(output, RealtimeAgentOutput):

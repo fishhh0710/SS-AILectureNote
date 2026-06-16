@@ -39,21 +39,35 @@ class ChatAgentContext:
 
 
 def _serialize_memories(items: list[Any]) -> str:
-    return json.dumps([item.to_dict() for item in items], ensure_ascii=False)
+    if not items:
+        return "(none)"
+    lines: list[str] = []
+    for item in items:
+        data = item.to_dict() if hasattr(item, "to_dict") else dict(item)
+        content = str(data.get("content") or "").strip()
+        if not content:
+            continue
+        labels: list[str] = []
+        if data.get("preferenceKey"):
+            labels.append(f"preference: {data['preferenceKey']}")
+        if data.get("scope"):
+            labels.append(f"scope: {data['scope']}")
+        suffix = f" ({', '.join(labels)})" if labels else ""
+        memory_id = data.get("memory_id")
+        prefix = f"- [{memory_id}] " if memory_id else "- "
+        lines.append(f"{prefix}{content}{suffix}")
+    return "\n".join(lines) if lines else "(none)"
 
 
 @function_tool
 def search_memories(
     ctx: RunContextWrapper[ChatAgentContext],
     query: str,
-    domain: Literal["learning", "preference", "all"] = "all",
 ) -> str:
     """Search durable user memories relevant to the current study question."""
-    domains = None if domain == "all" else {domain}
     results = ctx.context.memory_service.search(
         uid=ctx.context.uid,
         query=query,
-        domains=domains,
         course_id=ctx.context.course_id,
         lecture_id=ctx.context.lecture_id,
         limit=8,
@@ -69,21 +83,18 @@ def remember_preference(
     scope: Literal["global", "course", "lecture"] = "global",
 ) -> str:
     """Store a durable preference only when the user explicitly states it."""
+    if not preference_key.strip():
+        raise ValueError("preference_key is required for preference memory")
     memory = MemoryWrite(
-        domain="preference",
-        kind="user_preference",
         content=content,
         scope=scope,
         course_id=ctx.context.course_id if scope != "global" else None,
         lecture_id=ctx.context.lecture_id if scope == "lecture" else None,
         preference_key=preference_key,
-        importance=0.8,
-        explicit=True,
     )
     stored = ctx.context.memory_service.remember(
         uid=ctx.context.uid,
         memory=memory,
-        source="chat_agent",
         source_ref=ctx.context.lecture_id,
     )
     return json.dumps(
@@ -94,23 +105,17 @@ def remember_preference(
 @function_tool
 def remember_learning_state(
     ctx: RunContextWrapper[ChatAgentContext],
-    kind: Literal["confusion", "weak_topic", "mastery_progress"],
     content: str,
 ) -> str:
     """Store an important learning state revealed by the conversation."""
     memory = MemoryWrite(
-        domain="learning",
-        kind=kind,
         content=content,
         scope="course",
         course_id=ctx.context.course_id,
-        importance=0.75,
-        metadata={"lectureId": ctx.context.lecture_id},
     )
     stored = ctx.context.memory_service.remember(
         uid=ctx.context.uid,
         memory=memory,
-        source="chat_agent",
         source_ref=ctx.context.lecture_id,
     )
     return json.dumps(
@@ -153,8 +158,8 @@ Memory policy:
   language, explanation style, examples, notification frequency, or desired level of detail.
 - Call remember_learning_state only for an important, reusable learning state. Do not store every
   question, temporary task, greeting, answer, or sensitive personal information.
-- Use kind confusion or weak_topic when the student still lacks understanding. Use mastery_progress
-  when the conversation provides meaningful evidence that a prior weakness has improved.
+- Store memory content as one complete natural-language sentence, such as "The user wants PDF
+  summaries written in Traditional Chinese." Do not store a single keyword like "Chinese".
 - Call resolve_learning_state only when a retrieved memory is clearly resolved by new evidence.
 - Call forget_memory only after an explicit user request to forget or remove a memory.
 - Search memories when the prefetched set is insufficient. Never invent a memory ID.
@@ -195,7 +200,7 @@ def build_chat_prompt(
 ) -> str:
     return f"""
 Prefetched durable memories:
-{json.dumps(memories, ensure_ascii=False)}
+{_serialize_memories(memories)}
 
 AI lecture notes:
 {_limit(notes, 24000) or "(none)"}
@@ -224,7 +229,6 @@ def chat_handler(req: https_fn.Request) -> https_fn.Response:
         prefetched = memory_service.search(
             uid=uid,
             query=question,
-            domains={"learning", "preference"},
             course_id=course_id,
             lecture_id=lecture_id,
             limit=8,

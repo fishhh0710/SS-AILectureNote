@@ -14,21 +14,18 @@ from pydantic import BaseModel, Field
 from memory_service import MemoryService, MemoryWrite
 
 
-BACKGROUND_CHECK_SECONDS = 10
-FOREGROUND_CHECK_SECONDS = 25
-NOTIFICATION_COOLDOWN_SECONDS = 60
-BACKGROUND_DURATION_NOTIFY_SECONDS = 15
+CHECK_SECONDS = 25
+NOTIFICATION_COOLDOWN_SECONDS = 180
 STAGNANT_SECONDS = 20
 
 
 class AttentionAgentOutput(BaseModel):
-    status: Literal["following", "confused", "behind", "distracted", "unclear"]
+    status: Literal["following", "behind", "distracted"]
     page_relevance: Literal[
         "same_topic", "related_previous_content", "unrelated", "unknown"
     ]
     reasoning_summary: str
     missed_content: list[str] = Field(default_factory=list)
-    confused_summary: str | None = None
 
 
 @dataclass
@@ -70,28 +67,10 @@ def attention_memory_writes(
     if missed:
         writes.append(
             MemoryWrite(
-                domain="learning",
-                kind="missed_content",
-                content="\n".join(f"- {item}" for item in missed),
+                content="The student likely missed: " + "; ".join(missed),
                 scope="lecture",
                 course_id=course_id,
                 lecture_id=lecture_id,
-                importance=0.75,
-                metadata={"attentionStatus": output.status},
-            )
-        )
-    confused = (output.confused_summary or "").strip()
-    if confused:
-        writes.append(
-            MemoryWrite(
-                domain="learning",
-                kind="confusion",
-                content=confused,
-                scope="lecture",
-                course_id=course_id,
-                lecture_id=lecture_id,
-                importance=0.85,
-                metadata={"attentionStatus": output.status},
             )
         )
     return writes
@@ -125,20 +104,12 @@ def attention_gate(
     current_page = _positive_int(student_state.get("currentPage"))
     duration = student_state.get("currentPageDurationSeconds")
     duration_seconds = duration if isinstance(duration, int) and duration >= 0 else 0
-    lifecycle = student_state.get("appLifecycle")
-    lifecycle = lifecycle if lifecycle in {"foreground", "background"} else "foreground"
 
     last_checked_at = _parse_datetime(session_state.get("lastAttentionCheckedAt"))
     session_started_at = _parse_datetime(student_state.get("sessionStartedAt"))
     reference = last_checked_at or session_started_at
-    check_interval = (
-        BACKGROUND_CHECK_SECONDS
-        if lifecycle == "background"
-        else FOREGROUND_CHECK_SECONDS
-    )
     interval_ready = (
-        reference is not None
-        and (now - reference).total_seconds() >= check_interval
+        reference is None or (now - reference).total_seconds() >= CHECK_SECONDS
     )
 
     last_checked_teacher_page = _positive_int(
@@ -150,16 +121,6 @@ def attention_gate(
         last_checked_teacher_page is not None
         and abs(teacher_page - last_checked_teacher_page) >= 1
     )
-    app_background = lifecycle == "background"
-    backgrounded_at = _parse_datetime(student_state.get("backgroundedAt"))
-    background_duration_seconds = (
-        max(0, int((now - backgrounded_at).total_seconds()))
-        if app_background and backgrounded_at is not None
-        else 0
-    )
-    strong_background_signal = (
-        background_duration_seconds >= BACKGROUND_DURATION_NOTIFY_SECONDS
-    )
     behind_signal = (
         current_page is not None
         and current_page < teacher_page
@@ -169,19 +130,15 @@ def attention_gate(
         "page_mismatch": page_mismatch,
         "student_stagnant": student_stagnant,
         "teacher_moved": teacher_moved,
-        "app_background": app_background,
-        "strong_background_signal": strong_background_signal,
         "behind_signal": behind_signal,
     }
     return {
-        "should_run": interval_ready and any(signals.values()),
+        "should_run": interval_ready and (current_page is not None or any(signals.values())),
         "interval_ready": interval_ready,
-        "check_interval_seconds": check_interval,
+        "check_interval_seconds": CHECK_SECONDS,
         "signals": signals,
         "current_page": current_page,
         "duration_seconds": duration_seconds,
-        "background_duration_seconds": background_duration_seconds,
-        "app_lifecycle": lifecycle,
     }
 
 
@@ -220,9 +177,6 @@ def _attention_evidence(context: AttentionContext) -> dict[str, Any]:
             context.student_state.get("pageHistory"), 20
         ),
         "current_page_duration_seconds": context.gate["duration_seconds"],
-        "background_duration_seconds": context.gate["background_duration_seconds"],
-        "app_lifecycle": context.gate["app_lifecycle"],
-        "backgrounded_at": context.student_state.get("backgroundedAt"),
         "previous_status": context.session_state.get("lastAttentionStatus"),
         "trigger_signals": context.gate["signals"],
     }
@@ -242,25 +196,10 @@ def _notification_decision(
         return False, "attention_evidence_required"
     if status != "distracted":
         return False, "status_not_distracted"
-    if context.gate["app_lifecycle"] != "background":
-        return False, "app_not_background"
     if not context.notification_token:
         return False, "missing_notification_token"
     if not _notification_ready(context.session_state, context.now):
         return False, "notification_cooldown"
-
-    signals = context.gate["signals"]
-    secondary_signal = any(
-        signals.get(name, False)
-        for name in (
-            "page_mismatch",
-            "student_stagnant",
-            "teacher_moved",
-            "behind_signal",
-        )
-    )
-    if not signals.get("strong_background_signal") or not secondary_signal:
-        return False, "insufficient_combined_evidence"
     return True, "ready"
 
 
@@ -269,7 +208,7 @@ def _send_distraction_notification(token: str, teacher_page: int) -> str:
         token=token,
         notification=messaging.Notification(
             title="課堂仍在進行",
-            body=f"你似乎暫時離開了課程，老師目前正在講第 {teacher_page} 頁。",
+            body=f"你目前看的內容可能和老師進度不同，老師目前正在講第 {teacher_page} 頁。",
         ),
         data={
             "type": "attention_distraction",
@@ -300,19 +239,17 @@ def _persist_learning_memories(
             stored = service.remember(
                 uid=context.uid,
                 memory=memory,
-                source="attention_agent",
                 source_ref=context.session_id,
             )
             context.memory_writes.append(
                 {
                     "memory_id": stored["memory_id"],
-                    "kind": memory.kind,
                     "status": stored["status"],
                 }
             )
         except Exception as error:
             logging.exception("Failed to persist attention memory")
-            context.memory_writes.append({"kind": memory.kind, "error": str(error)})
+            context.memory_writes.append({"error": str(error)})
     return context.memory_writes
 
 
@@ -419,11 +356,10 @@ def get_attention_evidence(
 @function_tool
 def remember_learning_state(
     ctx: RunContextWrapper[AttentionContext],
-    status: Literal["following", "confused", "behind", "distracted", "unclear"],
+    status: Literal["following", "behind", "distracted"],
     missed_content: list[str],
-    confused_summary: str | None,
 ) -> list[dict[str, Any]]:
-    """Store missed lecture content or a confusion summary in long-term learning memory."""
+    """Store missed lecture content in long-term learning memory."""
     if not ctx.context.evidence_loaded:
         return [{"error": "get_attention_evidence_required_first"}]
     output = AttentionAgentOutput(
@@ -431,7 +367,6 @@ def remember_learning_state(
         page_relevance="unknown",
         reasoning_summary="Stored through the attention agent memory tool.",
         missed_content=missed_content,
-        confused_summary=confused_summary,
     )
     return _persist_learning_memories(ctx.context, output)
 
@@ -439,22 +374,21 @@ def remember_learning_state(
 @function_tool
 def send_distraction_notification(
     ctx: RunContextWrapper[AttentionContext],
-    status: Literal["following", "confused", "behind", "distracted", "unclear"],
+    status: Literal["following", "behind", "distracted"],
 ) -> dict[str, Any]:
-    """Send a distraction notification when server-side safety conditions allow it."""
+    """Send a distraction notification when server-side cooldown and token checks allow it."""
     return _try_distraction_notification(ctx.context, status)
 
 
 @function_tool
 def save_attention_result(
     ctx: RunContextWrapper[AttentionContext],
-    status: Literal["following", "confused", "behind", "distracted", "unclear"],
+    status: Literal["following", "behind", "distracted"],
     page_relevance: Literal[
         "same_topic", "related_previous_content", "unrelated", "unknown"
     ],
     reasoning_summary: str,
     missed_content: list[str],
-    confused_summary: str | None,
 ) -> dict[str, Any]:
     """Save the classified attention result into the current lecture session."""
     if not ctx.context.evidence_loaded:
@@ -464,7 +398,6 @@ def save_attention_result(
         page_relevance=page_relevance,
         reasoning_summary=reasoning_summary,
         missed_content=missed_content,
-        confused_summary=confused_summary,
     )
     return _save_result(ctx.context, output)
 
@@ -484,36 +417,58 @@ def save_attention_event(
 
 
 ATTENTION_AGENT_INSTRUCTIONS = """
-You are an Attention and Lecture Progress Evaluation Agent. You classify the student as:
-- following: viewing the same or closely related material and keeping pace.
-- confused: focused on relevant material but apparently stuck on a concept.
-- behind: reviewing older related material while the teacher has moved ahead.
-- distracted: strong combined evidence shows the student left or disengaged from the lecture.
-- unclear: evidence is insufficient or contradictory.
+You are an Attention and Lecture Progress Evaluation Agent.
 
-Required workflow:
+Your job is to classify the student's current lecture state using the available evidence.
+There are only three valid status values:
+- following: The student is viewing the same topic or closely related lecture content and appears to be keeping pace with the teacher.
+- behind: The student is viewing older but still relevant lecture content while the teacher has moved ahead.
+- distracted: The student is viewing content that is unrelated to what the teacher is currently explaining, or the student is **viewing non-core course pages such as Topics or Outlines**.
+
+Treat the following as distracted when supported by the page content, teacher page, transcript, or page history:
+- the student's current page is unrelated to the teacher's current page or recent transcript;
+- **THIS IS IMPORTANT**: the student's current page is a **syllabus, outline, agenda, title page, cover page, table of contents, course information page, grading policy page**, or other non-core lecture page while the teacher is explaining actual lecture content;
+- the student's page history suggests they are not following the lecture flow;
+- the student remains on unrelated, unknown, or non-core content while the teacher continues the lecture.
+
+Treat the following as behind rather than distracted:
+- the student's page is older than the teacher's page but still directly related to the lecture topic;
+- the student appears to be reviewing previous lecture content that is necessary for understanding the current teacher explanation.
+
+Treat the following as following:
+- the student's page is the same as the teacher's page;
+- the student's page is not exactly the same but is semantically close to the teacher's current page or recent transcript;
+- the student's page is nearby and relevant, with no clear evidence of unrelated or non-core content.
+
+
+Special rules: 
+- If the student's current page is a syllabus, outline, agenda, title page, cover page, table of contents, course information page, grading policy page, just treat it as the student being distracted.
+
+Page relevance values:
+- same_topic: The student's page is the same as, or semantically close to, the teacher's current content.
+- related_previous_content: The student's page is older but still relevant to the current lecture.
+- unrelated: The student's page is unrelated or is non-core course content such as syllabus, outline, title page, cover page, or course information.
+- unknown: The evidence is too limited to determine page relevance.
+
+Required tool workflow:
 1. Call evaluate_attention_gate first.
 2. Call get_attention_evidence before classifying.
-3. Use all page, transcript, timing, lifecycle, and history evidence together.
-4. If missed_content or confused_summary is non-empty, call remember_learning_state once.
-5. Only for status distracted, call send_distraction_notification. The tool applies the final
-   background, combined-evidence, token, and cooldown safety checks.
-6. Call save_attention_result with the exact classification you will return.
+3. Use all available evidence together: student page, teacher page, page content, transcript, page history, current page duration, previous status, and trigger signals.
+4. If missed_content is non-empty, call remember_learning_state exactly once.
+5. If and only if the final status is distracted, call send_distraction_notification. The tool will enforce token availability and notification cooldown.
+6. Call save_attention_result with the exact classification that you will return.
 7. Call save_attention_event after save_attention_result.
-8. Return the same structured classification passed to save_attention_result.
+8. Return the same structured classification that was passed to save_attention_result.
 
-Be more sensitive than before:
-- Background state is checked after 10 seconds, and 15 seconds in background is strong evidence.
-- Page mismatch plus teacher movement is meaningful evidence.
-- Long stagnation on unrelated content is strong evidence.
-- Do not classify distraction from one weak signal. Staying on a relevant page may mean careful
-  reading, confusion, or being behind.
+Memory rules:
+- missed_content should contain concise lecture points the student likely missed. Use an empty list if none can be inferred.
+- Do not invent detailed missed content that is not supported by the page content or transcript.
 
-Always provide useful future-memory fields:
-- missed_content: concise lecture points likely missed, otherwise an empty list.
-- confused_summary: concise likely misunderstanding, otherwise null.
-
-Do not recommend actions. Return only the structured output after completing the tool workflow.
+Output rules:
+- Do not recommend actions.
+- Do not write a notification message yourself.
+- Do not include extra prose outside the structured output.
+- The final output must match the AttentionAgentOutput schema exactly.
 """.strip()
 
 
@@ -621,12 +576,12 @@ def evaluate_attention(
         output = context.saved_output
     if not context.evidence_loaded:
         output = AttentionAgentOutput(
-            status="unclear",
+            status="following",
             page_relevance="unknown",
-            reasoning_summary="The agent did not inspect attention evidence.",
+            reasoning_summary="The agent did not inspect attention evidence, so the result defaults to following without notification.",
         )
 
-    has_learning_memory = bool(output.missed_content or output.confused_summary)
+    has_learning_memory = bool(output.missed_content)
     if has_learning_memory and not context.memory_attempted:
         _persist_learning_memories(context, output)
     if output.status == "distracted" and not context.notification_attempted:
