@@ -6,12 +6,14 @@ class SlidePage extends StatelessWidget {
   final int pageNumber;
   final Widget child;
   final ValueListenable<List<Annotation>>? annotationListenable;
+  final bool isProcessing;
 
   const SlidePage({
     super.key,
     required this.pageNumber,
     required this.child,
     this.annotationListenable,
+    this.isProcessing = false,
   });
 
   @override
@@ -64,6 +66,34 @@ class SlidePage extends StatelessWidget {
                       ),
                     ),
                   ),
+                  // Top right processing indicator
+                  if (isProcessing)
+                    Positioned(
+                      top: 16,
+                      right: 16,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          shape: BoxShape.circle,
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 4,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF8E9775),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -172,9 +202,15 @@ class PageAnnotationPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Pass 1: Draw all bounding box outlines
     for (final annotation in annotations) {
       final showLabel = tappedIds.contains(annotation.id);
-      annotation.draw(canvas, size, showLabel: showLabel);
+      annotation.draw(canvas, size, showLabel: showLabel, rectOnly: true);
+    }
+    // Pass 2: Draw all labels and text annotations on top of outlines
+    for (final annotation in annotations) {
+      final showLabel = tappedIds.contains(annotation.id);
+      annotation.draw(canvas, size, showLabel: showLabel, labelOnly: true);
     }
   }
 

@@ -27,7 +27,13 @@ abstract class Annotation {
     }
   }
 
-  void draw(Canvas canvas, Size size, {bool showLabel = false});
+  void draw(
+    Canvas canvas,
+    Size size, {
+    bool showLabel = false,
+    bool rectOnly = false,
+    bool labelOnly = false,
+  });
 }
 
 // 1. Rectangle Annotation (using relative coordinates 0.0 ~ 1.0)
@@ -56,7 +62,7 @@ class RectAnnotation extends Annotation {
     'id': id,
     'pageIndex': pageIndex,
     'type': type,
-    'color': '#${color.value.toRadixString(16).padLeft(8, '0')}',
+    'color': '#${color.toARGB32().toRadixString(16).padLeft(8, '0')}',
     'x': x,
     'y': y,
     'width': width,
@@ -80,55 +86,108 @@ class RectAnnotation extends Annotation {
   }
 
   @override
-  void draw(Canvas canvas, Size size, {bool showLabel = false}) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth;
+  void draw(
+    Canvas canvas,
+    Size size, {
+    bool showLabel = false,
+    bool rectOnly = false,
+    bool labelOnly = false,
+  }) {
+    final double scale = size.width / 850.0;
 
-    final rect = Rect.fromLTWH(
-      x * size.width,
-      y * size.height,
-      width * size.width,
-      height * size.height,
-    );
-    canvas.drawRect(rect, paint);
+    if (!labelOnly) {
+      final rect = Rect.fromLTWH(
+        x * size.width,
+        y * size.height,
+        width * size.width,
+        height * size.height,
+      );
 
-    if (showLabel && label != null && label!.isNotEmpty) {
-      final double scaledFontSize = 10.0 * (size.width / 850.0);
+      final double radius = 6.0 * scale;
+      final double minRadius = 4.0;
+      final double finalRadius = radius > minRadius ? radius : minRadius;
+      final rrect = RRect.fromRectAndRadius(rect, Radius.circular(finalRadius));
+
+      // Draw subtle fill inside bounding box
+      final fillPaint = Paint()
+        ..color = color.withValues(alpha: showLabel ? 0.12 : 0.04)
+        ..style = PaintingStyle.fill;
+      canvas.drawRRect(rrect, fillPaint);
+
+      // Draw stroke outline
+      final strokePaint = Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = showLabel ? (strokeWidth + 1.0) : strokeWidth;
+      canvas.drawRRect(rrect, strokePaint);
+    }
+
+    if (showLabel && !rectOnly && label != null && label!.isNotEmpty) {
+      final double scaledFontSize = 13.0 * scale;
+      final double minFontSize = 11.0;
+      final double finalFontSize = scaledFontSize > minFontSize ? scaledFontSize : minFontSize;
+
       final textPainter = TextPainter(
         text: TextSpan(
           text: label,
           style: TextStyle(
             color: Colors.white,
-            fontSize: scaledFontSize > 8.0 ? scaledFontSize : 8.0,
-            fontWeight: FontWeight.bold,
+            fontSize: finalFontSize,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
           ),
         ),
         textDirection: TextDirection.ltr,
       );
 
-      final bgPaint = Paint()..color = color;
-      final double maxAllowedWidth = size.width * (1.0 - x);
+      final double horizontalPadding = 8.0 * scale;
+      final double minHorizontalPadding = 6.0;
+      final double finalHPadding = horizontalPadding > minHorizontalPadding ? horizontalPadding : minHorizontalPadding;
+
+      final double verticalPadding = 4.0 * scale;
+      final double minVerticalPadding = 3.0;
+      final double finalVPadding = verticalPadding > minVerticalPadding ? verticalPadding : minVerticalPadding;
+
+      final double maxAllowedWidth = (size.width * (1.0 - x)) - (finalHPadding * 2);
       textPainter.layout(
         maxWidth: maxAllowedWidth > 50.0 ? maxAllowedWidth : 50.0,
       );
 
-      double textY = (y * size.height) - textPainter.height - 4;
-      if (textY < 2) {
-        textY = (y * size.height) + 4;
+      final double badgeWidth = textPainter.width + (finalHPadding * 2);
+      final double badgeHeight = textPainter.height + (finalVPadding * 2);
+
+      double textY = (y * size.height) - badgeHeight - (4.0 * scale);
+      if (textY < 2.0) {
+        textY = (y * size.height) + (height * size.height) + (4.0 * scale);
       }
 
-      final textOffset = Offset(x * size.width, textY);
-      final bgRect = Rect.fromLTWH(
-        textOffset.dx,
-        textOffset.dy,
-        textPainter.width + 4,
-        textPainter.height + 2,
-      );
+      double textX = x * size.width;
+      if (textX + badgeWidth > size.width) {
+        textX = size.width - badgeWidth - 4.0;
+      }
+      if (textX < 4.0) {
+        textX = 4.0;
+      }
 
-      canvas.drawRect(bgRect, bgPaint);
-      textPainter.paint(canvas, textOffset.translate(2, 1));
+      final bgRect = Rect.fromLTWH(
+        textX,
+        textY,
+        badgeWidth,
+        badgeHeight,
+      );
+      final badgeRRect = RRect.fromRectAndRadius(bgRect, Radius.circular(5.0 * scale));
+
+      // Draw subtle shadow under label badge
+      final shadowPath = Path()..addRRect(badgeRRect);
+      canvas.drawShadow(shadowPath, const Color(0x66000000), 4.0, true);
+
+      final bgPaint = Paint()..color = color;
+      canvas.drawRRect(badgeRRect, bgPaint);
+
+      textPainter.paint(
+        canvas,
+        Offset(textX + finalHPadding, textY + finalVPadding),
+      );
     }
   }
 }
@@ -159,7 +218,7 @@ class TextAnnotation extends Annotation {
     'id': id,
     'pageIndex': pageIndex,
     'type': type,
-    'color': '#${color.value.toRadixString(16).padLeft(8, '0')}',
+    'color': '#${color.toARGB32().toRadixString(16).padLeft(8, '0')}',
     'x': x,
     'y': y,
     'text': text,
@@ -183,9 +242,16 @@ class TextAnnotation extends Annotation {
   }
 
   @override
-  void draw(Canvas canvas, Size size, {bool showLabel = false}) {
-    // 💡 根據投影片當前寬度與基準寬度 (850.0) 進行比例縮放，避免縮放時文字尺寸錯位
-    final double scaledFontSize = fontSize * (size.width / 850.0);
+  void draw(
+    Canvas canvas,
+    Size size, {
+    bool showLabel = false,
+    bool rectOnly = false,
+    bool labelOnly = false,
+  }) {
+    if (rectOnly) return;
+    final double scale = size.width / 850.0;
+    final double scaledFontSize = fontSize * scale;
 
     final textPainter = TextPainter(
       text: TextSpan(
@@ -194,21 +260,62 @@ class TextAnnotation extends Annotation {
           color: color,
           fontSize: scaledFontSize,
           fontFamily: fontFamily,
-          backgroundColor: const Color(
-            0xAAFFFFFF,
-          ), // semi-transparent background to prevent overlaps
         ),
       ),
       textDirection: TextDirection.ltr,
     );
 
+    final double horizontalPadding = 10.0 * scale;
+    final double minHorizontalPadding = 8.0;
+    final double finalHPadding = horizontalPadding > minHorizontalPadding ? horizontalPadding : minHorizontalPadding;
+
+    final double verticalPadding = 6.0 * scale;
+    final double minVerticalPadding = 4.0;
+    final double finalVPadding = verticalPadding > minVerticalPadding ? verticalPadding : minVerticalPadding;
+
     double? constrainedWidth;
     if (autoWrap) {
-      final double maxAllowedWidth = size.width * (1.0 - x);
-      constrainedWidth = maxAllowedWidth > 0 ? maxAllowedWidth : size.width;
+      final double maxAllowedWidth = (size.width * (1.0 - x)) - (finalHPadding * 2);
+      constrainedWidth = maxAllowedWidth > 0 ? maxAllowedWidth : (size.width - (finalHPadding * 2));
     }
 
     textPainter.layout(maxWidth: constrainedWidth ?? double.infinity);
-    textPainter.paint(canvas, Offset(x * size.width, y * size.height));
+
+    final double textX = x * size.width;
+    final double textY = y * size.height;
+
+    final cardRect = Rect.fromLTWH(
+      textX,
+      textY,
+      textPainter.width + (finalHPadding * 2),
+      textPainter.height + (finalVPadding * 2),
+    );
+
+    final cardRRect = RRect.fromRectAndRadius(cardRect, Radius.circular(8.0 * scale));
+
+    // Determine adaptive background card color based on luminance of the text color
+    final double luminance = color.computeLuminance();
+    final Color cardBgColor;
+    if (luminance > 0.5) {
+      // Light text color -> Dark background card
+      cardBgColor = const Color(0xEE1E1E24);
+    } else {
+      // Dark text color -> Light background card
+      cardBgColor = const Color(0xF4F5F7F9);
+    }
+
+    // Draw card drop shadow
+    final shadowPath = Path()..addRRect(cardRRect);
+    canvas.drawShadow(shadowPath, const Color(0x66000000), 3.0, true);
+
+    // Draw card background
+    final bgPaint = Paint()..color = cardBgColor;
+    canvas.drawRRect(cardRRect, bgPaint);
+
+    // Draw text inside the card with padding offset
+    textPainter.paint(
+      canvas,
+      Offset(textX + finalHPadding, textY + finalVPadding),
+    );
   }
 }

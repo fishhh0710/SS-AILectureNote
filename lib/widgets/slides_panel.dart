@@ -9,7 +9,6 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../services/annotation_manager.dart';
 import '../viewmodels/slides_view_model.dart';
-import 'annotation_test_controls.dart';
 import 'panel_header.dart';
 import 'slide_page.dart';
 
@@ -64,7 +63,18 @@ class SlidesPanelState extends State<SlidesPanel> {
   void _onScroll() {
     if (!_scrollController.hasClients || _document == null) return;
     final double offset = _scrollController.offset;
-    final int estimatedPage = (offset / 600.0).round() + 1;
+
+    final page = _document?.pages.firstOrNull;
+    double itemHeight = 600.0;
+    if (page != null) {
+      final double slideWidth = widget.width - 96.0; // horizontal padding is 48 * 2
+      final double aspectRatio = page.width / page.height;
+      if (aspectRatio > 0) {
+        itemHeight = (slideWidth / aspectRatio) + 48.0; // bottom margin is 48
+      }
+    }
+
+    final int estimatedPage = (offset / itemHeight).round() + 1;
     final totalPages = _document?.pages.length ?? 1;
     final finalPage = estimatedPage.clamp(1, totalPages);
     if (widget.currentPageNotifier != null &&
@@ -338,19 +348,7 @@ class SlidesPanelState extends State<SlidesPanel> {
             ),
             const Divider(height: 1, color: Color(0xFFEAE7DC)),
             Expanded(
-              child: Stack(
-                children: [
-                  _buildContent(),
-                  if (_annotationManager != null)
-                    Positioned(
-                      bottom: 16,
-                      right: 16,
-                      child: SlideAnnotationTestControls(
-                        manager: _annotationManager!,
-                      ),
-                    ),
-                ],
-              ),
+              child: _buildContent(),
             ),
           ],
         ),
@@ -439,22 +437,8 @@ class SlidesPanelState extends State<SlidesPanel> {
           annotationListenable: _showAnnotations
               ? _annotationManager?.getPageNotifier(pageNum)
               : null,
-          child: Stack(
-            children: [
-              PdfPageView(document: document, pageNumber: pageNum),
-              if (isPageProcessing)
-                Positioned.fill(
-                  child: Container(
-                    color: Colors.black.withValues(alpha: 0.15),
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF8E9775),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+          isProcessing: isPageProcessing,
+          child: PdfPageView(document: document, pageNumber: pageNum),
         );
       },
     );

@@ -524,6 +524,7 @@ class _LectureViewState extends State<LectureView> {
           completedBatches: _notesViewModel.completedBatches,
           onRetry: _notesViewModel.canRetry ? _retryGeneratingNotes : null,
           segmentStream: _segmentStreamController.stream,
+          currentPageNotifier: _currentPageNotifier,
         );
         break;
       case "chatbot":

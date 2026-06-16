@@ -224,37 +224,6 @@ class _DashboardState extends State<Dashboard>
                         color: Color(0xFF3D3D3D),
                       ),
                     ),
-                    ElevatedButton.icon(
-                      onPressed: _viewModel.isBackingUp
-                          ? null
-                          : _uploadToFirebase,
-                      icon: _viewModel.isBackingUp
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.cloud_upload, size: 18),
-                      label: const Text(
-                        '備份到 Firebase',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF8E9775),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -461,7 +430,10 @@ class _DashboardState extends State<Dashboard>
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFFA8A08E),
             ),
-            child: const Text('取消', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              '取消',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -482,7 +454,10 @@ class _DashboardState extends State<Dashboard>
                 _showErrorSnackBar(e.toString());
               }
             },
-            child: const Text('儲存', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              '儲存',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -516,7 +491,10 @@ class _DashboardState extends State<Dashboard>
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFFA8A08E),
             ),
-            child: const Text('取消', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              '取消',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -537,7 +515,13 @@ class _DashboardState extends State<Dashboard>
                 _showErrorSnackBar(e.toString());
               }
             },
-            child: const Text('刪除', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text(
+              '刪除',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -641,7 +625,11 @@ class _DashboardState extends State<Dashboard>
                     value: 'rename',
                     child: Row(
                       children: const [
-                        Icon(Icons.edit_outlined, size: 18, color: Color(0xFF3D3D3D)),
+                        Icon(
+                          Icons.edit_outlined,
+                          size: 18,
+                          color: Color(0xFF3D3D3D),
+                        ),
                         SizedBox(width: 10),
                         Text(
                           '重新命名',
@@ -658,7 +646,11 @@ class _DashboardState extends State<Dashboard>
                     value: 'delete',
                     child: Row(
                       children: const [
-                        Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
+                        Icon(
+                          Icons.delete_outline_rounded,
+                          size: 18,
+                          color: Colors.redAccent,
+                        ),
                         SizedBox(width: 10),
                         Text(
                           '刪除',

@@ -47,8 +47,8 @@ class SlidesViewModel extends ChangeNotifier {
     try {
       // 1. Render the page to a high-resolution raw pixel buffer
       final pdfImage = await page.render(
-        width: (page.width * 1.5).toInt(),
-        height: (page.height * 1.5).toInt(),
+        fullWidth: page.width * 1.5,
+        fullHeight: page.height * 1.5,
       );
       if (pdfImage == null) return;
 
@@ -102,7 +102,9 @@ class SlidesViewModel extends ChangeNotifier {
       }
 
       // Sort candidates by area ascending
-      candidates.sort((a, b) => (a['area'] as double).compareTo(b['area'] as double));
+      candidates.sort(
+        (a, b) => (a['area'] as double).compareTo(b['area'] as double),
+      );
 
       final Set<int> removedIndices = {};
       for (int i = 0; i < candidates.length; i++) {
@@ -117,12 +119,14 @@ class SlidesViewModel extends ChangeNotifier {
           if (overlaps[0] > 0.30 && overlaps[1] > 0.30) {
             // j is the larger/equal box (since candidates is sorted ascending by area). Remove it.
             removedIndices.add(j);
-            debugPrint("Overlap filter: Removing larger box '${candidates[j]['label']}' because it overlaps >30% mutually with '${candidates[i]['label']}'.");
+            debugPrint(
+              "Overlap filter: Removing larger box '${candidates[j]['label']}' because it overlaps >30% mutually with '${candidates[i]['label']}'.",
+            );
           }
         }
       }
 
-      for (int k = 0; k < candidates.length; k++) {
+      for (int k = candidates.length - 1; k >= 0; k--) {
         if (removedIndices.contains(k)) continue;
 
         final candidate = candidates[k];
@@ -206,8 +210,8 @@ class SlidesViewModel extends ChangeNotifier {
 
       // 1. Render the page to a high-resolution raw pixel buffer
       final pdfImage = await page.render(
-        width: (page.width * 1.5).toInt(),
-        height: (page.height * 1.5).toInt(),
+        fullWidth: page.width * 1.5,
+        fullHeight: page.height * 1.5,
       );
       if (pdfImage == null) return;
 
@@ -264,7 +268,9 @@ class SlidesViewModel extends ChangeNotifier {
       }
 
       // Sort candidates by area ascending
-      candidates.sort((a, b) => (a['area'] as double).compareTo(b['area'] as double));
+      candidates.sort(
+        (a, b) => (a['area'] as double).compareTo(b['area'] as double),
+      );
 
       final Set<int> removedIndices = {};
       for (int i = 0; i < candidates.length; i++) {
@@ -279,12 +285,14 @@ class SlidesViewModel extends ChangeNotifier {
           if (overlaps[0] > 0.30 && overlaps[1] > 0.30) {
             // j is the larger/equal box. Remove it.
             removedIndices.add(j);
-            debugPrint("Overlap filter: Removing larger box '${candidates[j]['label']}' because it overlaps >30% mutually with '${candidates[i]['label']}'.");
+            debugPrint(
+              "Overlap filter: Removing larger box '${candidates[j]['label']}' because it overlaps >30% mutually with '${candidates[i]['label']}'.",
+            );
           }
         }
       }
 
-      for (int k = 0; k < candidates.length; k++) {
+      for (int k = candidates.length - 1; k >= 0; k--) {
         if (removedIndices.contains(k)) continue;
 
         final candidate = candidates[k];
@@ -364,42 +372,57 @@ class SlidesViewModel extends ChangeNotifier {
     }
   }
 
-  /// Processes all pages in the PDF document concurrently using Future.wait
+  /// Processes all pages in the PDF document concurrently with a sliding window/pipeline of max 10 requests
   Future<void> processAllPages({
     required PdfDocument document,
     required PageAnnotationManager annotationManager,
     required Function(int pageNum, bool isDone) onPageProgress,
   }) async {
-    final List<Future<void>> tasks = [];
+    const int maxConcurrency = 8;
+    int nextPageIndex = 0;
 
-    for (int i = 0; i < document.pages.length; i++) {
-      final pageNum = i + 1;
-      onPageProgress(
-        pageNum,
-        false,
-      ); // Mark this page index as currently loading
+    // Worker function: continuously grabs the next slide in queue and processes it
+    Future<void> runWorker() async {
+      while (true) {
+        final int currentIdx = nextPageIndex;
+        nextPageIndex++;
 
-      final task =
-          processPage(
-                page: document.pages[i],
-                pageIndex: pageNum,
-                annotationManager: annotationManager,
-              )
-              .then((_) {
-                onPageProgress(pageNum, true); // Loading finished
-              })
-              .catchError((error) {
-                debugPrint('Error while auto-annotating page $pageNum: $error');
-                onPageProgress(
-                  pageNum,
-                  true,
-                ); // Turn off spinner even if it failed
-              });
+        if (currentIdx >= document.pages.length) {
+          break; // No more pages to process
+        }
 
-      tasks.add(task);
+        final pageNum = currentIdx + 1;
+        onPageProgress(
+          pageNum,
+          false,
+        ); // Mark this page index as currently loading
+
+        try {
+          await processPage(
+            page: document.pages[currentIdx],
+            pageIndex: pageNum,
+            annotationManager: annotationManager,
+          );
+        } catch (error) {
+          debugPrint('Error while auto-annotating page $pageNum: $error');
+        } finally {
+          onPageProgress(pageNum, true); // Turn off spinner even if it failed
+        }
+      }
     }
 
-    await Future.wait(tasks);
+    // Launch up to 10 workers in parallel
+    final List<Future<void>> workers = [];
+    final int workerCount = document.pages.length < maxConcurrency
+        ? document.pages.length
+        : maxConcurrency;
+
+    for (int w = 0; w < workerCount; w++) {
+      workers.add(runWorker());
+    }
+
+    // Wait for all workers to finish
+    await Future.wait(workers);
   }
 
   List<double> _calculateOverlapFraction(List<double> boxA, List<double> boxB) {
