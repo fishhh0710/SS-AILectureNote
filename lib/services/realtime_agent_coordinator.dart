@@ -4,7 +4,6 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../services/annotation_manager.dart';
 import '../services/firebase_function_client.dart';
-import '../services/notification_service.dart';
 import '../viewmodels/lecture_notes_view_model.dart';
 import '../viewmodels/slides_view_model.dart';
 
@@ -211,10 +210,15 @@ class RealtimeAgentCoordinator {
     if (attention['checked'] != true || attention['status'] != 'distracted') {
       return;
     }
-    if (attention['notification_sent'] == true) return;
-    await NotificationService.instance.showDistractionNotification(
-      teacherPage: teacherPage,
-    );
+    // Notification delivery is owned by the backend so the Firestore cooldown
+    // remains authoritative. Foreground display is handled by FCM onMessage.
+    if (attention['notification_sent'] != true) {
+      // ignore: avoid_print
+      print(
+        'DEBUG [Attention]: Notification skipped by backend: '
+        '${attention['notification_reason'] ?? 'unknown'}',
+      );
+    }
   }
 
   int? _positiveInt(Object? value) {
