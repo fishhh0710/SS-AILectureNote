@@ -13,7 +13,10 @@ class SummaryPanel extends StatefulWidget {
   final String? errorMessage;
   final VoidCallback? onRetry;
   final Stream<Map<String, dynamic>>? segmentStream;
-  final ValueNotifier<int>? currentPageNotifier;
+  final int totalPages;
+  final int completedPages;
+  final int totalBatches;
+  final int completedBatches;
 
   const SummaryPanel({
     super.key,
@@ -25,7 +28,10 @@ class SummaryPanel extends StatefulWidget {
     this.errorMessage,
     this.onRetry,
     this.segmentStream,
-    this.currentPageNotifier,
+    this.totalPages = 0,
+    this.completedPages = 0,
+    this.totalBatches = 0,
+    this.completedBatches = 0,
   });
 
   @override
@@ -104,11 +110,14 @@ class _SummaryPanelState extends State<SummaryPanel> {
   }
 
   Widget _buildContent() {
-    if (widget.isGenerating && widget.notes.isEmpty) {
-      return const _CenteredMessage(
+    final progressText = totalPages > 0
+        ? '已完成 $completedPages / $totalPages 頁'
+        : '正在驗證登入並上傳 PDF，完成後會顯示逐頁進度';
+    if (isGenerating && notes.isEmpty) {
+      return _CenteredMessage(
         icon: Icons.auto_awesome,
         title: '正在生成 AI 筆記',
-        subtitle: '每頁簡報會各自產生一份 Markdown note',
+        subtitle: progressText,
         showProgress: true,
       );
     }
@@ -133,10 +142,16 @@ class _SummaryPanelState extends State<SummaryPanel> {
 
     return Column(
       children: [
-        if (widget.isGenerating)
-          const _StatusBanner(text: '正在更新 AI 筆記...', showProgress: true),
-        if (!widget.isGenerating && widget.errorMessage != null)
-          _StatusBanner(text: widget.errorMessage!, isError: true),
+        if (isGenerating)
+          _StatusBanner(
+            text: totalBatches > 0
+                ? '正在更新 AI 筆記：$completedPages / $totalPages 頁，'
+                      '$completedBatches / $totalBatches 批'
+                : '正在更新 AI 筆記...',
+            showProgress: true,
+          ),
+        if (!isGenerating && errorMessage != null)
+          _StatusBanner(text: errorMessage!, isError: true),
         Expanded(
           child: SingleChildScrollView(
             controller: _scrollController,

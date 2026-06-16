@@ -18,11 +18,19 @@ class LectureNotesViewModel extends ChangeNotifier {
   bool _isGenerating = false;
   String? _errorMessage;
   String? _lastPdfPath;
+  int _totalPages = 0;
+  int _completedPages = 0;
+  int _totalBatches = 0;
+  int _completedBatches = 0;
 
   List<AiPageNote> get notes => _notes;
   bool get isGenerating => _isGenerating;
   String? get errorMessage => _errorMessage;
   String? get lastPdfPath => _lastPdfPath;
+  int get totalPages => _totalPages;
+  int get completedPages => _completedPages;
+  int get totalBatches => _totalBatches;
+  int get completedBatches => _completedBatches;
   bool get canRetry => _lastPdfPath != null && !_isGenerating;
 
   Future<void> loadSaved(String storageId) async {
@@ -61,6 +69,10 @@ class LectureNotesViewModel extends ChangeNotifier {
     _isGenerating = state.isGenerating;
     _errorMessage = state.errorMessage;
     _lastPdfPath = state.lastPdfPath ?? _lastPdfPath;
+    _totalPages = state.totalPages;
+    _completedPages = state.completedPages;
+    _totalBatches = state.totalBatches;
+    _completedBatches = state.completedBatches;
     notifyListeners();
   }
 

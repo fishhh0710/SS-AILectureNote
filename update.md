@@ -373,6 +373,29 @@ firebase deploy --only functions:python
 - 讀取舊版 `candidate` preference 時會視為 `active` 並回寫狀態，同時移除 canonical memory 的舊 confidence 欄位。
 - 語音辨識服務本身的 confidence 屬於 Azure／speech recognition 結果，不是 Memory 信心程度，因此維持不變。
 
+## 33. PDF Summary 分批並行與即時顯示
+
+- `generateNotesFromPdf` 使用 `pypdf` 將 PDF 每 5 頁拆成一批。
+- 使用固定最多 3 個 worker 並行呼叫 OpenAI，不會隨 PDF 頁數無限制增加 concurrency。
+- 每批模型輸出都驗證頁數，並由後端重新映射成原始 PDF 頁碼，不直接相信模型回傳頁碼。
+- 單批失敗會自動重試一次；仍失敗時將 batch 與 parent job 標記失敗。
+- Job 改存於 `users/{uid}/ai_note_jobs/{jobId}`，每批存於 `batches/{batchIndex}`。
+- 每批完成時，batch pages 與 parent completed counters 使用同一個 Firestore atomic write batch 更新。
+- Flutter 新增 `cloud_firestore`，只監聽登入 UID 下目前 job 的 batches。
+- `NoteGenerationManager` 收到 completed batch 後立即合併、保存本機 `notes.json`／Markdown，並通知 Summary Panel。
+- Partial merge 只替換該批已完成頁面，其他舊頁不變。
+- PDF batch 與 Realtime Professor updates 共用同一條序列化 mutation queue，避免同時寫入時互相覆蓋。
+- Summary Panel 顯示完成頁數與完成批次，例如 `15 / 38 頁，3 / 8 批`。
+- Firestore rules 只允許登入使用者讀取自己的 `ai_note_jobs/**`；client 不可直接寫入。
+- 本機驗證：Python 22 tests、Flutter 11 tests、Dart analyze 無 error、Android debug APK build 成功。
+- 正式環境以 38 頁 PDF 驗證：8 批全部成功，觀察到最多 3 批同時 running；第一批約 31 秒完成，全部約 123 秒完成。
+
+## 34. Android Gradle cache 修復
+
+- `flutter run` 失敗原因為本機 Gradle cache 多個 AAR/JAR ZIP 損壞，不是 App source code。
+- 清除並重建 Gradle caches、專案 `build/.cxx` 與 Pub native plugin `.cxx`。
+- 修復後 `flutter build apk --debug` 成功。
+
 ## 33. Android 實機 PDFium 與錄音關閉修正
 
 - Android 實機啟動時，`pdfrx 2.3.x` 可能拋出 `Failed to load PDFium module: Native assets file not found`。

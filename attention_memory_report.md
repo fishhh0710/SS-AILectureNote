@@ -1,6 +1,6 @@
 # Attention Agent 與 Memory 系統技術報告
 
-更新日期：2026-06-15  
+更新日期：2026-06-16
 目標閱讀時間：約 20 分鐘  
 Firebase project：`ai-notes-555a6`
 
@@ -9,13 +9,13 @@ Firebase project：`ai-notes-555a6`
 本次工作把原本的 Realtime Agent 延伸成完整但彼此隔離的兩階段流程：
 
 1. Realtime Agent 只根據投影片摘要、最近 10 份逐字稿與上次老師頁面，判斷老師目前在第幾頁，以及本段應更新 Summary、建立 bbox 或不處理。
-2. 老師頁面確定後，Attention Agent 才取得學生頁面、停留時間、頁面歷史與 App lifecycle，判斷學生是跟上、困惑、落後、分心或資訊不足。
+2. 老師頁面確定後，Attention Agent 才取得學生頁面、停留時間與頁面歷史，判斷學生是跟上、落後或分心。
 3. 只有真正判為 `distracted` 時才可能送出 FCM 通知，不再因 App 單純進入背景就通知。
-4. Attention 的 `missed_content` 與 `confused_summary` 會保存到長期 Memory。
+4. Attention 的 `missed_content` 會保存到長期 Memory。
 5. Chatbot 已改為 Agent，可自行判斷是否呼叫 Memory tools。
 6. PDF Summary 生成前會讀取使用者的摘要偏好與相關學習狀況。
 
-這不是只存一個字串的簡化版 Memory。系統同時保存來源證據與整理後的 canonical memory，支援 scope、狀態、信心、重要度、向量搜尋、語意去重、解決與刪除，後續可以加入帳號系統、Memory 管理 UI、複習 Agent 或跨課程個人化。
+這不是只存一個字串的簡化版 Memory。系統同時保存來源證據與整理後的 canonical memory，支援 scope、狀態、向量搜尋、語意去重、解決與刪除，後續可以加入帳號系統、Memory 管理 UI、複習 Agent 或跨課程個人化。
 
 ## 2. 系統架構
 
@@ -48,8 +48,8 @@ Firebase HTTP Functions (Python 3.13, 2nd Gen)
   └─ azureSpeechToken
 
 Firestore
-  ├─ ai_note_jobs
   └─ users/{uid}
+       ├─ ai_note_jobs/{jobId}/batches
        ├─ lecture_sessions
        ├─ attention_events
        ├─ devices
@@ -159,16 +159,20 @@ Realtime 輸出：
 
 不是每個 10 秒 segment 都呼叫 Attention。後端先做 deterministic gate，避免成本與誤判。
 
-必要條件一：距離 session 開始或上次 Attention 檢查至少 30 秒。
+必要條件一：App 在背景時距離 session 開始或上次檢查至少 10 秒；前景時至少 25 秒。
 
 必要條件二：至少出現一項訊號。
 
 - 老師頁面與學生頁面不同。
-- 學生停留同一頁至少 30 秒。
-- 老師相較上次 Attention 檢查移動至少 2 頁。
+- 學生停留同一頁至少 20 秒。
+- 老師相較上次 Attention 檢查移動至少 1 頁。
 - App 在背景。
+- App 在背景且目前頁面停留至少 15 秒，標記為強背景訊號。
+- 學生落後老師至少 2 頁。
 
 這些訊號只決定是否值得判斷，不直接決定結果。例如 App 在背景是證據，但不是分心的充分條件；停留過久也可能是認真閱讀。
+
+Attention 現在是 Agents SDK tool workflow。Agent 依序使用 `evaluate_attention_gate`、`get_attention_evidence`，並視結果呼叫 `remember_learning_state`、`send_distraction_notification`、`save_attention_result` 與 `save_attention_event`。通知與資料寫入仍有後端驗證與冪等保護，不能只靠模型自行保證。
 
 ## 8. Attention Agent 輸出
 
@@ -181,7 +185,6 @@ Realtime 輸出：
   "missed_content": [
     "老師補充的 cache hit rate 與平均存取時間關係"
   ],
-  "confused_summary": null,
   "gate": {
     "should_run": true,
     "interval_ready": true,
@@ -189,7 +192,9 @@ Realtime 輸出：
       "page_mismatch": true,
       "student_stagnant": true,
       "teacher_moved": false,
-      "app_background": true
+      "app_background": true,
+      "strong_background_signal": true,
+      "behind_signal": true
     }
   },
   "notification_sent": false,
@@ -197,7 +202,6 @@ Realtime 輸出：
   "memory_writes": [
     {
       "memory_id": "...",
-      "kind": "missed_content",
       "status": "active"
     }
   ]
@@ -207,12 +211,10 @@ Realtime 輸出：
 `status` 定義：
 
 - `following`：學生正在相同或緊密相關內容並跟上進度。
-- `confused`：仍專注於相關內容，但看起來卡在概念上。
 - `behind`：正在複習相關舊內容，老師已往前。
-- `distracted`：多項證據支持學生已離開課堂內容或注意力中斷。
-- `unclear`：證據不足或互相矛盾。
+- `distracted`：學生正在看與老師內容無關或非核心的課程頁面。
 
-`missed_content` 與 `confused_summary` 現在不直接改 UI，但會保存到 Memory，供未來複習、個人化摘要與學習分析使用。
+`missed_content` 現在不直接改 UI，但會保存到 Memory，供未來複習、個人化摘要與學習分析使用。
 
 ## 9. 通知規則
 
@@ -220,16 +222,14 @@ Realtime 輸出：
 
 1. Attention 實際執行。
 2. `status == distracted`。
-3. `appLifecycle == background`。
-4. request 有有效 FCM token。
-5. 距離同一 session 上次通知至少 120 秒。
+3. request 有有效 FCM token。
+4. 距離同一 session 上次通知至少 180 秒。
 
 因此下列情況不通知：
 
-- 使用者只是切到背景，但 AI 判定仍跟上或只是落後。
 - 學生停在同頁閱讀，但沒有足夠分心證據。
-- 狀態為 `confused` 或 `behind`。
-- 前一次通知後尚未滿 120 秒。
+- 狀態為 `following` 或 `behind`。
+- 前一次通知後尚未滿 180 秒。
 - 沒有可用的裝置 token。
 
 Android 已加入通知權限並可編譯。iOS 已宣告 `remote-notification` background mode，但正式推播仍要在 Apple Developer 與 Firebase Console 設定 APNs key，並在 Xcode 開啟 Push Notifications capability。
@@ -269,26 +269,27 @@ canonical memory 主要欄位：
 
 ```json
 {
-  "domain": "learning",
-  "kind": "confusion",
   "content": "學生容易混淆 cache hit rate 與 latency",
   "scope": "lecture",
   "courseId": "course-id",
   "lectureId": "lecture-id",
   "preferenceKey": null,
-  "importance": 0.85,
-  "explicit": false,
-  "evidenceCount": 1,
   "status": "active",
-  "provenance": [],
-  "metadata": {},
   "embedding": "Firestore Vector(768)",
   "createdAt": "server timestamp",
   "updatedAt": "server timestamp"
 }
 ```
 
-### Domain
+Current schema note:
+
+- `content` is the main memory text and should be one complete readable sentence.
+- `preferenceKey` being present means the memory is a user preference; missing `preferenceKey` means it is a learning-state memory.
+- `scope`, `courseId`, and `lectureId` decide whether the memory applies globally, to a course, or to one lecture.
+- `status`, timestamps, and `embedding` are internal fields for lifecycle, search, and dedupe. They are not sent to AI prompts as raw JSON.
+- Removed canonical fields: `domain`, `kind`, `importance`, `explicit`, `lastSource`, `metadata`, `evidenceCount`, `normalizedContent`, `embeddingModel`, and `embeddingDimensions`.
+
+### Preference Key
 
 - `learning`：不熟、錯過、困惑、已掌握等學習狀況。
 - `preference`：摘要格式、回答風格、詳細度等使用者偏好。
@@ -314,16 +315,15 @@ canonical memory 主要欄位：
 
 學習狀況先用正規化文字形成穩定 ID。若文字不同，系統再以 `text-embedding-3-small` 建立 768 維 embedding，透過 Firestore cosine KNN 搜尋相似項目；距離小於等於 0.15 時合併成既有 memory。
 
-偏好收到第一份 evidence 就成為 `active`。`evidenceCount` 仍會累積，用於追蹤來源次數與後續稽核，但不再作為偏好啟用門檻。為避免一次對話造成不必要的個人化，Chat Agent 的 policy 仍限制只保存明確、持久且可重用的偏好。
+偏好收到第一份 evidence 就成為 `active`，但 canonical memory 不再保存 `evidenceCount`。為避免一次對話造成不必要的個人化，Chat Agent 的 policy 仍限制只保存明確、持久且可重用的偏好。
 
 ## 13. Attention 如何寫入 Memory
 
-Attention 不把所有輸出都保存成長期 Memory，只保存具未來價值的兩類資料：
+Attention 不把所有輸出都保存成長期 Memory，只保存具未來價值的錯過內容：
 
-- `missed_content`：合併成 lecture-scoped、kind=`missed_content` 的 learning memory，importance 0.75。
-- `confused_summary`：寫成 lecture-scoped、kind=`confusion` 的 learning memory，importance 0.85。
+- `missed_content`：合併成 lecture-scoped learning memory。
 
-兩者的 metadata 保存當時的 attention status，source 為 `attention_agent`，source reference 為 session ID。系統不再保存或使用 Memory 信心程度。
+Attention evidence 保留 source reference，例如 session ID；canonical memory 不再保存 metadata、信心程度、kind、importance 或 lastSource。
 
 ## 14. Chatbot Agent 與 Tools
 
@@ -360,7 +360,7 @@ Response contract 維持簡單：
 
 ## 15. Summary 如何使用 Memory
 
-`NoteGenerationManager` 在 request 中傳送 `courseId` 與 `lectureId`。`generateNotesFromPdf` 驗證 UID 後，搜尋：
+`NoteGenerationManager` 在 request 中傳送 `courseId`、`lectureId` 與唯一 `jobId`。`generateNotesFromPdf` 驗證 UID 後，搜尋：
 
 - active preference memories。
 - 與目前課程／講次相關的 active learning memories。
@@ -372,7 +372,7 @@ Response contract 維持簡單：
 - 把其他課程內容混入目前講義。
 - 取代 PDF 本身作為主要內容來源。
 
-Function response 與 Firestore job 會保存 `memoryCount`，便於確認本次生成實際使用幾筆 Memory。
+PDF 會每 5 頁拆成一批，最多 3 批並行；每批完成即寫入 `users/{uid}/ai_note_jobs/{jobId}/batches`，讓 Summary Panel 先顯示部分頁面。Function response 與 Firestore job 會保存 `memoryCount`，便於確認本次生成實際使用幾筆 Memory。
 
 ## 16. 未來可直接擴充的 Memory 使用點
 
@@ -380,7 +380,7 @@ Function response 與 Firestore job 會保存 `memoryCount`，便於確認本次
 
 - 複習 Agent：依 unresolved learning memory 產生個人化題目。
 - 課前預習：在新講次開始前找出同課程相關弱點。
-- 課後摘要：將本次 missed/confused 項目整理成補課清單。
+- 課後摘要：將本次 missed content 整理成補課清單。
 - Chat 回答深度：依使用者偏好選擇簡短、詳細或例子導向回答。
 - 教材導航：學生問問題時優先定位曾經困惑的頁面。
 - 分心模式分析：統計哪些教材型態或時段最容易 behind/distracted。
@@ -448,23 +448,23 @@ firebase functions:list --project ai-notes-555a6
 
 1. 開啟 Lecture 並開始 Demo 或麥克風逐字稿。
 2. 學生停在老師正在講的同一頁。
-3. 等待超過 30 秒。
-4. 確認 Attention 可判為 following/unclear，沒有通知。
+3. 前景等待超過 25 秒。
+4. 確認 Attention 判為 following，沒有通知。
 
 ### 情境 B：落後但不應通知
 
 1. 老師內容前進到第 4 頁。
 2. 學生留在相關的第 2 或第 3 頁閱讀。
 3. 等待下一個 segment。
-4. 確認狀態偏向 behind/confused，不應只因頁面不同就通知。
+4. 確認狀態判為 behind，不應只因頁面不同就通知。
 
 ### 情境 C：真正分心
 
 1. 在 Android 實機允許通知權限並確認取得 FCM token。
 2. 讓老師內容前進數頁。
-3. 學生停在無關頁面或把 App 放到背景，並維持足夠長的歷史證據。
+3. 學生停在無關或非核心課程頁面。
 4. 確認 Attention 回傳 distracted。
-5. 確認背景收到 FCM，且 120 秒內不重複通知。
+5. 確認收到 FCM，且 180 秒內不重複通知。
 
 ### 情境 D：Memory 偏好
 
@@ -476,7 +476,7 @@ firebase functions:list --project ai-notes-555a6
 
 ### 情境 E：學習狀況
 
-1. 讓 Attention 產生 confused 或 missed content。
+1. 讓 Attention 產生 missed content。
 2. 檢查 `users/{uid}/memories` 有 lecture-scoped learning memory。
 3. 在 Chat 詢問自己可能不熟的內容。
 4. 確認 Chat 能搜尋並利用該 Memory。
@@ -489,7 +489,7 @@ firebase functions:list --project ai-notes-555a6
 - 目前沒有 Memory 管理 UI；Chat Agent 已有 forget/resolve tools，但使用者無法從列表管理。
 - 目前沒有排程式離線 Memory curator；每次寫入會即時做 evidence、canonical upsert 與語意去重。
 - Dashboard Firebase 備份仍使用固定 userId，尚未與匿名 Auth UID 統一。
-- App Check、CORS 限制、正式 Storage/Firestore rules 與 per-user rate limit 尚未完成。
+- Firestore 已限制使用者只能讀取自己的 AI note jobs；App Check、CORS 限制、Storage rules 稽核與 per-user rate limit 尚未完成。
 - Attention 準確率仍需真實課堂資料評估；目前 prompt 已避免由單一背景或停留訊號直接判為分心。
 
 ## 21. Commit 列表

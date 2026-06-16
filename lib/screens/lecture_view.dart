@@ -250,8 +250,6 @@ class _LectureViewState extends State<LectureView> {
             : 'Transcript saved to: $savedDir';
       });
 
-
-
       Future.delayed(const Duration(seconds: 3), () {
         if (!mounted) return;
         setState(() {
@@ -327,7 +325,9 @@ class _LectureViewState extends State<LectureView> {
     if (_isDemoMode) {
       _demoAccumulatedText = _liveTranscript;
       _demoCurrentActiveText = "";
-      final allSections = chapter4_1TranscriptData.expand((page) => page.sections).toList();
+      final allSections = chapter4_1TranscriptData
+          .expand((page) => page.sections)
+          .toList();
       if (_demoSectionIndex >= allSections.length) {
         _demoSectionIndex = 0;
       }
@@ -518,6 +518,10 @@ class _LectureViewState extends State<LectureView> {
           notes: _notesViewModel.notes,
           isGenerating: _notesViewModel.isGenerating,
           errorMessage: _notesViewModel.errorMessage,
+          totalPages: _notesViewModel.totalPages,
+          completedPages: _notesViewModel.completedPages,
+          totalBatches: _notesViewModel.totalBatches,
+          completedBatches: _notesViewModel.completedBatches,
           onRetry: _notesViewModel.canRetry ? _retryGeneratingNotes : null,
           segmentStream: _segmentStreamController.stream,
           currentPageNotifier: _currentPageNotifier,
