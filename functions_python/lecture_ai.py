@@ -166,11 +166,13 @@ User memory context:
 
 Memory rules:
 
-* Active preference memories must change language, formatting, detail level, examples, and explanation style when requested. They may override the default Main Idea / Key Concepts layout.
-* Preferences never override the requirement to return one accurate Markdown note per PDF page.
-* Learning memories may suggest concepts that deserve clearer explanation when those concepts are actually present on a PDF page.
-* Memory never overrides the PDF and must never introduce unsupported facts.
-* Ignore memories unrelated to the PDF page being summarized.
+* Please absolutely follow the PREFERENCE!!! DO NOT make ANY mistakes!!!!
+* Especially the language requirements.
+* Please absolutely follow the PREFERENCE!!! DO NOT make ANY mistakes!!!!
+* Especially the language requirements.
+* Please absolutely follow the PREFERENCE!!! DO NOT make ANY mistakes!!!!
+* Especially the language requirements.
+
 """.strip()
 
 
